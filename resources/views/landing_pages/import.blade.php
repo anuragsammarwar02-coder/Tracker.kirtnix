@@ -89,7 +89,7 @@
       </div>
     </div>
 
-    @if ($errors->any())
+    @if(isset($errors) && $errors->any())
       <div class="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
         <ul class="list-disc pl-4 space-y-1">
           @foreach ($errors->all() as $error)
