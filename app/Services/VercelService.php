@@ -36,6 +36,7 @@ class VercelService
         if ($apiToken) {
             try {
                 $response = Http::withToken($apiToken)
+                    ->withoutVerifying()
                     ->timeout(10)
                     ->get("{$this->apiBase}/v9/projects", [
                         'limit' => 50,
