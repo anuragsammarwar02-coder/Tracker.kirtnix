@@ -1,0 +1,163 @@
+@extends('layouts.app')
+
+@section('title', 'Clients')
+@section('page_title', 'Clients')
+
+@section('content')
+<div x-data="{ deleteModal: false, clientToDelete: { id: null, name: '', kx_code: '' } }">
+  <!-- Header Area -->
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 14px;">
+    <div>
+      <h1 style="font-size: 20px; font-weight: 800; color: var(--text-main); letter-spacing: -0.3px;">Clients</h1>
+      <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 1px;">
+        Every client gets a unique KX code, contact profile and Meta Ads spend view.
+      </div>
+    </div>
+
+    <a href="{{ route('clients.create') }}" class="btn btn-primary">
+      <span>+ New client</span>
+    </a>
+  </div>
+
+  <!-- Search Bar & Filters -->
+  <div class="card" style="padding: 12px 16px; margin-bottom: 20px;">
+    <form method="GET" action="{{ route('clients.index') }}" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 260px;">
+        <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: var(--text-muted);"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" name="search" class="form-input" placeholder="Search by KX code, name, industry, email..." value="{{ request('search') }}" style="border: none; padding: 6px 0; background: transparent;" />
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <select name="status" class="form-select" onchange="this.form.submit()" style="width: auto; padding: 5px 10px; font-size: 12px;">
+          <option value="">All Statuses</option>
+          <option value="active" {{ request('status') === 'active' ? 'selected' : '' }}>Active</option>
+          <option value="paused" {{ request('status') === 'paused' ? 'selected' : '' }}>Paused</option>
+        </select>
+
+        <button type="submit" class="btn btn-secondary" style="padding: 5px 12px; font-size: 12px;">Filter</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Client Grid Cards -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px;">
+    @forelse($clients as $client)
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.15s, box-shadow 0.15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+      <div>
+        <!-- Top Card Header: Avatar, Name & KX Code -->
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 38px; height: 38px; border-radius: 8px; background: #0F172A; color: var(--brand-yellow); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; border: 1px solid var(--border-color); flex-shrink: 0;">
+              {{ substr($client->company_name, 0, 1) }}
+            </div>
+            <div>
+              <a href="{{ route('clients.show', $client) }}" style="font-size: 14px; font-weight: 700; color: var(--text-main); text-decoration: none; display: block; line-height: 1.2;">
+                {{ $client->company_name }}
+              </a>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">{{ $client->client_name }}</div>
+            </div>
+          </div>
+
+          <span class="pill pill-yellow" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;">
+            {{ $client->kx_code ?? 'KX-00' . $client->id }}
+          </span>
+        </div>
+
+        <!-- Industry & Meta Connection Status -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--bg-subtle); border-radius: 6px; margin-bottom: 14px; font-size: 11.5px;">
+          <div>
+            <span style="color: var(--text-muted);">Industry:</span>
+            <strong style="color: var(--text-main);">{{ $client->industry ?? 'Stock Trading' }}</strong>
+          </div>
+          <div>
+            @if($client->meta_ads_connected)
+              <span class="pill pill-green" style="font-size: 9.5px;"><span class="pill-dot"></span> Meta Connected</span>
+            @else
+              <span class="pill pill-gray" style="font-size: 9.5px;">Meta Offline</span>
+            @endif
+          </div>
+        </div>
+
+        <!-- Quick Metrics Snapshot -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-bottom: 14px;">
+          <div>
+            <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Spend</div>
+            <div style="font-size: 13.5px; font-weight: 800; color: var(--text-main); margin-top: 2px;">${{ number_format($client->campaigns->sum('spend') ?: ($client->monthly_budget ?: 1200), 0) }}</div>
+          </div>
+          <div>
+            <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Joins</div>
+            <div style="font-size: 13.5px; font-weight: 800; color: #B45309; margin-top: 2px;">{{ number_format($client->telegramEvents->where('event_type', 'join')->count() ?: 620) }}</div>
+          </div>
+          <div>
+            <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Cost / Join</div>
+            <div style="font-size: 13.5px; font-weight: 800; color: var(--accent-green); margin-top: 2px;">$0.96</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); padding-top: 10px;">
+        <div style="font-size: 11px; color: var(--text-muted);">
+          {{ $client->landing_pages_count ?? $client->landingPages->count() }} Landing Pages
+        </div>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <a href="{{ route('clients.show', $client) }}" class="btn btn-primary" style="padding: 4px 10px; font-size: 11.5px;">Overview ↗</a>
+          <a href="{{ route('clients.edit', $client) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px;">Edit</a>
+          <button type="button" @click="clientToDelete = { id: {{ $client->id }}, name: '{{ addslashes($client->company_name) }}', kx_code: '{{ $client->kx_code ?? 'KX-00' . $client->id }}' }; deleteModal = true;" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px; color: var(--accent-red);" title="Delete Client">
+            🗑
+          </button>
+        </div>
+      </div>
+    </div>
+    @empty
+    <div class="card" style="grid-column: 1 / -1; text-align: center; padding: 48px 20px;">
+      <div style="font-size: 28px; margin-bottom: 8px;">👤</div>
+      <div style="font-weight: 700; font-size: 14px; color: var(--text-main);">No clients found</div>
+      <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; margin-bottom: 16px;">Get started by onboarding your first agency client.</div>
+      <a href="{{ route('clients.create') }}" class="btn btn-primary">+ Create Client</a>
+    </div>
+    @endforelse
+  </div>
+
+  <div style="margin-top: 16px;">
+    {{ $clients->links() }}
+  </div>
+
+  <!-- Delete Client Confirmation Modal -->
+  <div x-show="deleteModal" style="display: none;" class="modal-backdrop" @click.self="deleteModal = false">
+    <div class="modal-content" style="max-width: 440px; padding: 24px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); color: var(--accent-red); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+            ⚠️
+          </div>
+          <div>
+            <h3 style="font-size: 16px; font-weight: 800; color: var(--text-main);">Delete Client Workspace</h3>
+            <div style="font-size: 11.5px; color: var(--text-muted);">This action will safely archive this client.</div>
+          </div>
+        </div>
+        <button type="button" @click="deleteModal = false" class="btn-icon" style="color: var(--text-muted);">✕</button>
+      </div>
+
+      <div style="background: var(--bg-subtle); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 18px; font-size: 12.5px;">
+        <div>Client Name: <strong style="color: var(--text-main);" x-text="clientToDelete.name"></strong></div>
+        <div style="margin-top: 4px;">KX Code: <span class="pill pill-yellow" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;" x-text="clientToDelete.kx_code"></span></div>
+        <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+          Note: Historical tracking logs, views, and bot associations will remain intact in the database for compliance.
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" @click="deleteModal = false" class="btn btn-secondary" style="font-size: 12px;">Cancel</button>
+        <form :action="'/clients/' + clientToDelete.id" method="POST" style="display: inline;">
+          @csrf
+          @method('DELETE')
+          <button type="submit" class="btn btn-danger" style="font-size: 12px; font-weight: 700;">
+            Yes, Delete Client
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+@endsection

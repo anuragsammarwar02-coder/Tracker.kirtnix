@@ -1,0 +1,314 @@
+I will provide you with an existing landing page HTML.
+
+Your job is to make this existing landing page compatible with my own landing-page platform, KirtnixTracker.
+
+IMPORTANT:
+This is an integration/refactoring task, NOT a redesign task.
+
+DO NOT redesign the landing page.
+DO NOT change its visual appearance.
+DO NOT change its layout.
+DO NOT change its colors.
+DO NOT change its typography.
+DO NOT change its copy/text.
+DO NOT remove sections.
+DO NOT add unnecessary sections.
+DO NOT change existing animations.
+DO NOT change the mobile responsive design.
+DO NOT replace the existing design with your own design.
+
+Preserve the landing page exactly as much as technically possible.
+
+==================================================
+ABOUT THE INTEGRATION
+==================================================
+
+KirtnixTracker is my own landing-page and Telegram tracking software.
+
+Landing pages are imported into KirtnixTracker and served through the platform.
+
+KirtnixTracker has a JavaScript integration:
+
+https://kirtnixtracker.app/api/public/kx.js
+
+The landing page contains Telegram CTA elements.
+
+KirtnixTracker's kx.js identifies Telegram CTA elements using:
+
+data-kx-cta
+
+When the page loads, KirtnixTracker handles the Telegram CTA destination dynamically.
+
+Therefore the landing page must NOT contain a hardcoded Telegram invite URL.
+
+The landing page itself must NOT generate Telegram invites.
+
+The landing page itself must NOT call the Telegram Bot API.
+
+The landing page only needs to expose the CTA elements correctly so KirtnixTracker can handle them.
+
+==================================================
+STEP 1 — FIND ALL TELEGRAM CTAs
+==================================================
+
+Scan the ENTIRE HTML document.
+
+Find every element that is intended to send the visitor to Telegram.
+
+Check all of these locations, including but not limited to:
+
+- Header
+- Navigation
+- Mobile navigation
+- Hero section
+- Main CTA
+- Secondary CTA
+- Service cards
+- Feature cards
+- Pricing sections
+- Testimonials
+- Bottom CTA
+- Footer
+- Sticky CTA
+- Floating CTA
+- Popup/modal CTA
+- Any dynamically-created Telegram CTA
+- Any element containing a Telegram URL
+
+Do not assume there are only one or two CTAs.
+
+Audit the complete document.
+
+==================================================
+STEP 2 — REMOVE HARDCODED TELEGRAM INVITE URLs
+==================================================
+
+For every Telegram CTA that contains a hardcoded invite URL such as:
+
+https://t.me/+XXXXXXXX
+
+remove the hardcoded invite URL.
+
+Do NOT replace it with another Telegram invite URL.
+
+Do NOT invent a Telegram URL.
+
+Do NOT use an old Telegram invite as a fallback.
+
+The final landing page must not depend on a campaign-specific hardcoded Telegram invite.
+
+If the original Telegram CTA has:
+
+href="https://t.me/+XXXXXXXX"
+
+convert it to a CTA compatible with KirtnixTracker.
+
+==================================================
+STEP 3 — ADD THE KIRTNIX CTA HOOK
+==================================================
+
+Every Telegram CTA must contain:
+
+data-kx-cta
+
+Example:
+
+<a class="existing-button-class" data-kx-cta>
+    Existing CTA Text
+</a>
+
+IMPORTANT:
+
+Preserve all existing classes.
+
+Preserve all existing styling.
+
+Preserve the existing CTA text.
+
+Preserve icons.
+
+Preserve SVGs.
+
+Preserve accessibility attributes.
+
+Preserve target/rel attributes where appropriate.
+
+Only modify what is necessary for KirtnixTracker compatibility.
+
+==================================================
+STEP 4 — DO NOT CREATE YOUR OWN TRACKING SYSTEM
+==================================================
+
+Do NOT add:
+
+- Telegram Bot API calls
+- invite generation code
+- tracking APIs
+- custom redirect systems
+- cookies
+- fingerprinting
+- hidden tracking links
+- URL obfuscation
+- cloaking logic
+- user-agent detection
+- ad-platform detection
+- referrer manipulation
+- campaign hiding
+- fake Telegram URLs
+- custom invite-generation logic
+
+KirtnixTracker handles the Telegram integration.
+
+The landing page only needs the CTA hooks.
+
+==================================================
+STEP 5 — LOAD KIRTNIX KX.JS
+==================================================
+
+Add this exact script once, immediately before the closing </body> tag:
+
+<script src="https://kirtnixtracker.app/api/public/kx.js"></script>
+
+Do NOT add it multiple times.
+
+Do NOT modify the URL.
+
+Do NOT place it inside another script.
+
+Do NOT load another copy of kx.js.
+
+==================================================
+STEP 6 — PRESERVE EXISTING JAVASCRIPT
+==================================================
+
+The existing landing page may contain JavaScript for:
+
+- menus
+- sliders
+- carousels
+- animations
+- tabs
+- accordions
+- counters
+- forms
+- UI interactions
+
+Do NOT remove or rewrite existing JavaScript unless absolutely necessary.
+
+Make sure adding kx.js does not break the existing JavaScript.
+
+Do not create a second implementation of functionality that already exists.
+
+==================================================
+STEP 7 — HANDLE DIFFERENT TYPES OF LANDING PAGES
+==================================================
+
+The supplied landing page may be:
+
+- plain HTML
+- HTML + CSS
+- HTML + JavaScript
+- a full standalone HTML document
+- a landing page with inline SVG
+- a landing page with external assets
+- a landing page with multiple Telegram CTAs
+- a landing page with buttons instead of <a> elements
+- a landing page with dynamically-created CTA elements
+
+Adapt to the existing structure.
+
+Do not force the page into a new design or framework.
+
+If a Telegram CTA is a <button> rather than an <a>, keep it visually unchanged and make it compatible with data-kx-cta without breaking its existing functionality.
+
+==================================================
+STEP 8 — DO NOT BREAK NON-TELEGRAM LINKS
+==================================================
+
+Do NOT modify:
+
+- internal navigation
+- #section links
+- privacy policy links
+- terms links
+- refund links
+- contact forms
+- email links
+- external non-Telegram links
+- social media links
+
+Only Telegram CTA destinations should be modified.
+
+==================================================
+STEP 9 — PERFORMANCE
+==================================================
+
+Keep the landing page fast.
+
+Do not add unnecessary libraries.
+
+Do not add frameworks.
+
+Do not add heavy JavaScript.
+
+Do not add unnecessary images.
+
+Do not add unnecessary animations.
+
+Load kx.js only once.
+
+Do not block the page unnecessarily.
+
+The CTA should remain compatible with KirtnixTracker without making the landing page unnecessarily heavy.
+
+==================================================
+STEP 10 — FINAL AUDIT
+==================================================
+
+Before returning the final HTML, perform a complete audit.
+
+Confirm:
+
+1. Every Telegram CTA has data-kx-cta.
+2. No hardcoded Telegram invite URL remains.
+3. No old campaign-specific invite remains.
+4. kx.js is included exactly once.
+5. kx.js URL is exactly:
+
+https://kirtnixtracker.app/api/public/kx.js
+
+6. Existing design is preserved.
+7. Existing non-Telegram links are preserved.
+8. Existing JavaScript functionality is preserved.
+9. No Telegram Bot API code was added to the landing page.
+10. No custom tracking or cloaking logic was added.
+11. The final document remains valid HTML.
+12. The page remains responsive.
+13. All Telegram CTAs can be detected using:
+
+document.querySelectorAll('[data-kx-cta]')
+
+==================================================
+VERY IMPORTANT
+==================================================
+
+Do not give me a redesigned landing page.
+
+Do not simplify the landing page.
+
+Do not replace the existing design.
+
+Do not remove content.
+
+Only make the supplied landing page technically compatible with KirtnixTracker.
+
+Return the COMPLETE corrected HTML file.
+
+Do not return explanations instead of the HTML.
+
+After the HTML, provide a very short audit:
+
+- Telegram CTAs found: X
+- data-kx-cta added: X
+- hardcoded Telegram invite URLs remaining: 0
+- kx.js instances: 1
