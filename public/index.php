@@ -32,6 +32,12 @@ if (!file_exists($envPath)) {
     }
 }
 
+if (empty($_ENV['APP_KEY']) && empty(getenv('APP_KEY'))) {
+    putenv('APP_KEY=base64:r8qB7Xq0xV5yW9p3zL1m0vK4jH8tG2eF6dC4bA2s9U=');
+    $_ENV['APP_KEY'] = 'base64:r8qB7Xq0xV5yW9p3zL1m0vK4jH8tG2eF6dC4bA2s9U=';
+    $_SERVER['APP_KEY'] = 'base64:r8qB7Xq0xV5yW9p3zL1m0vK4jH8tG2eF6dC4bA2s9U=';
+}
+
 // Auto-initialize SQLite database
 $sqlitePath = $basePath . '/database/database.sqlite';
 if (!file_exists($sqlitePath)) {
