@@ -40,10 +40,14 @@ if (!file_exists($sqlitePath)) {
     }
     @touch($sqlitePath);
 }
+@chmod($sqlitePath, 0666);
+@chmod(dirname($sqlitePath), 0777);
 
 // Ensure writable storage directories
 $storageDirs = [
+    $basePath . '/storage',
     $basePath . '/storage/app',
+    $basePath . '/storage/framework',
     $basePath . '/storage/framework/cache',
     $basePath . '/storage/framework/cache/data',
     $basePath . '/storage/framework/sessions',
@@ -55,6 +59,7 @@ foreach ($storageDirs as $dir) {
     if (!is_dir($dir)) {
         @mkdir($dir, 0777, true);
     }
+    @chmod($dir, 0777);
 }
 
 // Determine if in maintenance mode
