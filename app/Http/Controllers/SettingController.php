@@ -29,7 +29,7 @@ class SettingController extends Controller
         // Meta connection & accounts
         $metaConnection = MetaConnection::with(['businesses', 'adAccounts'])->first();
         $adAccounts = AdAccount::with(['metaBusiness', 'client'])->latest('id')->paginate(15);
-        $totalSyncedAccounts = AdAccount::count() ?: 92;
+        $totalSyncedAccounts = AdAccount::count();
 
         // Telegram webhook health
         $totalBots = TelegramBot::count();
@@ -40,8 +40,8 @@ class SettingController extends Controller
             'api_health' => '100% Operational',
             'database_status' => $dbStatus,
             'telegram_webhook_status' => "{$activeWebhooks}/{$totalBots} Webhooks Active",
-            'meta_sync_status' => $metaConnection ? ($metaConnection->sync_status === 'completed' ? 'Synced (100%)' : ucfirst($metaConnection->sync_status)) : 'Active',
-            'last_sync_timestamp' => $metaConnection?->last_sync_at ? $metaConnection->last_sync_at->diffForHumans() : 'Just now',
+            'meta_sync_status' => $metaConnection ? ($metaConnection->sync_status === 'completed' ? 'Synced (100%)' : ucfirst($metaConnection->sync_status)) : 'Disconnected',
+            'last_sync_timestamp' => $metaConnection?->last_sync_at ? $metaConnection->last_sync_at->diffForHumans() : 'Never',
             'failed_sync_count' => 0,
             'php_version' => PHP_VERSION,
             'laravel_version' => app()->version(),

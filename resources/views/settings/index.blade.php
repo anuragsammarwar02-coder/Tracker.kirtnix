@@ -47,6 +47,7 @@
     <!-- TAB 1: META INTEGRATION (MATCHES SCREENSHOT SPEC) -->
     <div x-show="currentTab === 'meta'" class="space-y-6">
         <!-- Main Meta Connection Card -->
+        @if($metaConnection)
         <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div class="flex items-start gap-3.5">
@@ -70,15 +71,15 @@
                 <div class="flex items-center gap-2">
                     <form action="{{ route('meta.sync') }}" method="POST">
                         @csrf
-                        <button type="submit" class="px-3.5 py-2 text-xs font-bold text-slate-900 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-1.5">
+                        <button type="submit" class="px-3.5 py-2 text-xs font-bold text-slate-900 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
                             <svg class="w-4 h-4" style="width: 16px; height: 16px; min-width: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             Sync accounts
                         </button>
                     </form>
 
-                    <form action="{{ route('meta.disconnect') }}" method="POST" onsubmit="return confirm('Disconnect agency Meta connection?');">
+                    <form action="{{ route('meta.disconnect') }}" method="POST" onsubmit="return confirm('Are you sure you want to disconnect your Meta account? All synced ad accounts will be removed.');">
                         @csrf
-                        <button type="submit" class="px-3 py-2 text-xs font-semibold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg transition">
+                        <button type="submit" class="px-3 py-2 text-xs font-semibold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg transition cursor-pointer">
                             Disconnect
                         </button>
                     </form>
@@ -89,7 +90,7 @@
             <div class="mt-6 pt-4 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                 <div>
                     <span class="text-slate-400 font-medium block">Connected Facebook User</span>
-                    <span class="text-slate-900 font-bold text-sm">{{ $metaConnection->facebook_name ?? 'KirtniX Performance Agency' }}</span>
+                    <span class="text-slate-900 font-bold text-sm">{{ $metaConnection->facebook_name ?? 'Connected User' }}</span>
                 </div>
                 <div>
                     <span class="text-slate-400 font-medium block">Synced Status</span>
@@ -105,6 +106,67 @@
                 </div>
             </div>
         </div>
+        @else
+        <!-- Connect Meta Form Card -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            <div class="flex items-start gap-3.5 mb-5">
+                <div class="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm" style="width: 48px; height: 48px; min-width: 48px; min-height: 48px;">
+                    <svg class="w-6 h-6 fill-current" style="width: 24px; height: 24px; min-width: 24px; min-height: 24px;" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-base font-bold text-slate-900">Connect Meta Marketing & Ads</h2>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                            Disconnected
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-1 max-w-xl">
+                        Enter your Meta System User Access Token to sync your Business Manager ad accounts, live spend, and Conversions API.
+                    </p>
+                </div>
+            </div>
+
+            <form action="{{ route('meta.connect') }}" method="POST" class="space-y-4 max-w-2xl">
+                @csrf
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Meta System User Access Token (EAAB...)</label>
+                    <textarea 
+                        name="access_token" 
+                        rows="2" 
+                        required 
+                        placeholder="Paste your EAAB... permanent access token here"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-xs text-slate-900 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                    >{{ \App\Models\Setting::get('meta_system_user_token') }}</textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Meta App ID</label>
+                        <input 
+                            type="text" 
+                            name="app_id" 
+                            value="{{ \App\Models\Setting::get('meta_app_id', '4520673831531016') }}" 
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Meta App Secret</label>
+                        <input 
+                            type="password" 
+                            name="app_secret" 
+                            value="{{ \App\Models\Setting::get('meta_app_secret', '4400729382f0cf94b61599e165019281') }}" 
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        />
+                    </div>
+                </div>
+
+                <button type="submit" class="px-5 py-2.5 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                    Connect & Sync Meta Accounts
+                </button>
+            </form>
+        </div>
+        @endif
 
         <!-- Synced Ad Accounts Table (Matches Reference Screenshot) -->
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
