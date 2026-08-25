@@ -271,10 +271,11 @@
                   type="email" 
                   id="email" 
                   name="email" 
-                  value="{{ old('email', 'admin@kirtnix.agency') }}" 
+                  value="{{ old('email') }}" 
                   required 
                   autofocus 
-                  placeholder="admin@kirtnix.agency"
+                  autocomplete="username"
+                  placeholder="admin@kirtnix.in"
                   class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400 transition-all duration-150 font-medium"
                 />
               </div>
@@ -283,19 +284,30 @@
               <div>
                 <div class="flex items-center justify-between mb-1">
                   <label for="password" class="text-xs font-semibold text-slate-700">Password</label>
-                  <a href="javascript:void(0)" onclick="alert('Please contact the KirtniX agency administrator to reset your password or generate new workspace credentials.')" class="text-[11px] font-semibold text-yellow-600 hover:text-yellow-700 transition">
+                  <a href="javascript:void(0)" onclick="alert('Please contact the KirtniX agency administrator to reset your password.')" class="text-[11px] font-semibold text-yellow-600 hover:text-yellow-700 transition">
                     Forgot password?
                   </a>
                 </div>
-                <input 
-                  type="password" 
-                  id="password" 
-                  name="password" 
-                  value="Kirtnix@2026!" 
-                  required 
-                  placeholder="••••••••••••"
-                  class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400 transition-all duration-150 font-medium"
-                />
+                <div class="relative">
+                  <input 
+                    type="password" 
+                    id="password" 
+                    name="password" 
+                    value="" 
+                    required 
+                    autocomplete="current-password"
+                    placeholder="Enter your password"
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 pr-10 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400/50 focus:border-yellow-400 transition-all duration-150 font-medium"
+                  />
+                  <button 
+                    type="button" 
+                    onclick="const p = document.getElementById('password'); p.type = p.type === 'password' ? 'text' : 'password';"
+                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer text-xs"
+                    title="Show/Hide Password"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  </button>
+                </div>
               </div>
 
               <!-- Submit CTA Button -->

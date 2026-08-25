@@ -33,10 +33,10 @@ class DatabaseSeeder extends Seeder
     {
         // 1. Initial Administrator & Team
         $admin = User::updateOrCreate(
-            ['email' => 'admin@kirtnix.agency'],
+            ['email' => 'admin@kirtnix.in'],
             [
-                'name' => 'Super Admin',
-                'password' => Hash::make('Kirtnix@2026!'),
+                'name' => 'KirtniX Admin',
+                'password' => Hash::make('Kirti#13'),
                 'role' => 'owner',
                 'status' => 'active',
             ]
