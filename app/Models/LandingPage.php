@@ -40,7 +40,12 @@ class LandingPage extends Model
         'meta_test_event_code',
         'gtm_id',
         'custom_head_code',
-        'custom_css',
+        'page_source',
+        'external_url',
+        'vercel_project_name',
+        'tracking_token',
+        'deployment_status',
+        'html_content',
         'is_active',
     ];
 

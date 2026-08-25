@@ -38,13 +38,15 @@ class TrackingApiController extends Controller
     public function recordView(Request $request)
     {
         $landingPageId = $request->input('landing_page_id');
-        $slug = $request->input('slug');
+        $slug = $request->input('slug') ?? $request->input('lp') ?? $request->input('tracking_token');
 
         $landingPage = null;
         if ($landingPageId) {
             $landingPage = LandingPage::find($landingPageId);
         } elseif ($slug) {
-            $landingPage = LandingPage::where('slug', $slug)->first();
+            $landingPage = LandingPage::where('tracking_token', $slug)
+                ->orWhere('slug', $slug)
+                ->first();
         }
 
         if (!$landingPage) {
@@ -75,10 +77,22 @@ class TrackingApiController extends Controller
     public function getInvite(Request $request)
     {
         $landingPageId = $request->input('landing_page_id');
+        $slug = $request->input('slug') ?? $request->input('lp') ?? $request->input('tracking_token');
         $sessionId = $request->input('session_id');
         $visitorId = $request->input('visitor_id') ?? $request->cookie('kx_visitor_id') ?? (string) Str::uuid();
 
-        $landingPage = LandingPage::find($landingPageId) ?? LandingPage::where('is_active', true)->first();
+        $landingPage = null;
+        if ($landingPageId) {
+            $landingPage = LandingPage::find($landingPageId);
+        } elseif ($slug) {
+            $landingPage = LandingPage::where('tracking_token', $slug)
+                ->orWhere('slug', $slug)
+                ->first();
+        }
+
+        if (!$landingPage) {
+            $landingPage = LandingPage::where('is_active', true)->first();
+        }
         if (!$landingPage) {
             return response()->json(['error' => 'Landing page not found'], 404);
         }
@@ -122,9 +136,20 @@ class TrackingApiController extends Controller
         $sessionId = $request->input('session_id');
         $visitorId = $request->input('visitor_id') ?? $request->cookie('kx_visitor_id') ?? (string) Str::uuid();
         $ctaId = $request->input('cta_id');
-        $destinationUrl = $request->input('destination_url', 'https://t.me');
+        $slug = $request->input('slug') ?? $request->input('lp') ?? $request->input('tracking_token');
 
-        $landingPage = LandingPage::find($landingPageId) ?? LandingPage::where('is_active', true)->first();
+        $landingPage = null;
+        if ($landingPageId) {
+            $landingPage = LandingPage::find($landingPageId);
+        } elseif ($slug) {
+            $landingPage = LandingPage::where('tracking_token', $slug)
+                ->orWhere('slug', $slug)
+                ->first();
+        }
+
+        if (!$landingPage) {
+            $landingPage = LandingPage::where('is_active', true)->first();
+        }
         $session = $sessionId ? TrackingSession::find($sessionId) : TrackingSession::where('visitor_id', $visitorId)->latest('id')->first();
         $cta = $ctaId ? Cta::find($ctaId) : $landingPage?->ctas?->first();
 
@@ -134,9 +159,9 @@ class TrackingApiController extends Controller
             ->first();
 
         $isUnique = is_null($existingClick);
-        $metaEventId = 'lead_' . Str::random(16) . '_' . time();
-
+        $destinationUrl = $request->input('destination_url', 'https://t.me');
         $resolvedLinks = $this->telegramService->resolveDeepLinks($destinationUrl);
+        $metaEventId = 'lead_' . Str::random(16) . '_' . time();
 
         $click = CtaClick::create([
             'tracking_session_id' => $session?->id,

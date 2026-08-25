@@ -347,6 +347,39 @@
       color: var(--accent-green);
     }
 
+    .nav-sub-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding-left: 24px;
+      margin-top: 1px;
+      margin-bottom: 3px;
+    }
+    .nav-sub-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 11.5px;
+      font-weight: 600;
+      transition: all 0.15s ease;
+    }
+    .nav-sub-item:hover {
+      color: var(--text-main);
+      background: var(--bg-subtle);
+    }
+    .nav-sub-item.active {
+      color: #854D0E;
+      background: var(--brand-yellow-light);
+      font-weight: 700;
+    }
+    :root[data-theme="dark"] .nav-sub-item.active {
+      color: var(--brand-yellow);
+    }
+
     /* Sidebar Footer / Support & User Profile */
     .sidebar-footer {
       padding: 12px 14px;
@@ -844,13 +877,31 @@
         </div>
       </a>
 
-      <a href="{{ route('landing-pages.index') }}" class="nav-item {{ request()->routeIs('landing-pages.*') ? 'active' : '' }}">
-        <div class="nav-item-left">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-          <span>Landing pages</span>
+      <!-- Landing Pages with Sub-options (Software vs Vercel) -->
+      <div>
+        <a href="{{ route('landing-pages.index') }}" class="nav-item {{ request()->routeIs('landing-pages.index') && !request('source') ? 'active' : (request()->routeIs('landing-pages.*') ? 'text-slate-900 font-bold' : '') }}">
+          <div class="nav-item-left">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            <span>Landing pages</span>
+          </div>
+          <span class="nav-item-badge badge-green">{{ \App\Models\LandingPage::count() }}</span>
+        </a>
+
+        <div class="nav-sub-menu">
+          <a href="{{ route('landing-pages.index', ['source' => 'native']) }}" class="nav-sub-item {{ request('source') === 'native' ? 'active' : '' }}">
+            <span>• Software builder</span>
+            <span class="text-[10px] opacity-70">{{ \App\Models\LandingPage::where('page_source', 'native')->count() }}</span>
+          </a>
+
+          <a href="{{ route('landing-pages.index', ['source' => 'vercel']) }}" class="nav-sub-item {{ request('source') === 'vercel' || request()->routeIs('landing-pages.import') ? 'active' : '' }}">
+            <span class="flex items-center gap-1">
+              <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24"><path d="M24 22.525H0l12-21.05 12 21.05z"/></svg>
+              <span>Vercel pages</span>
+            </span>
+            <span class="text-[10px] opacity-70">{{ \App\Models\LandingPage::where('page_source', 'vercel')->count() }}</span>
+          </a>
         </div>
-        <span class="nav-item-badge badge-green">Live</span>
-      </a>
+      </div>
 
       <a href="{{ route('telegram.index') }}" class="nav-item {{ request()->routeIs('telegram.*') || request()->routeIs('telegram_bots.*') ? 'active' : '' }}">
         <div class="nav-item-left">

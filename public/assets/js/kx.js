@@ -16,7 +16,13 @@
   })();
 
   var scriptEndpoint = currentScript ? (currentScript.getAttribute('data-endpoint') || '') : '';
-  var scriptSlug = currentScript ? (currentScript.getAttribute('data-lp') || currentScript.getAttribute('data-page') || '') : '';
+  var scriptSlug = currentScript ? (currentScript.getAttribute('data-kx-lp') || currentScript.getAttribute('data-lp') || currentScript.getAttribute('data-page') || '') : '';
+  
+  if (!scriptSlug && currentScript && currentScript.src) {
+    var match = currentScript.src.match(/[?&]lp=([^&#]*)/);
+    if (match) scriptSlug = decodeURIComponent(match[1]);
+  }
+  
   var scriptClient = currentScript ? (currentScript.getAttribute('data-client') || '') : '';
 
   var baseUrl = scriptEndpoint.replace(/\/+$/, '') || window.location.origin;

@@ -6,29 +6,54 @@ use App\Models\LandingPage;
 use App\Models\Client;
 use App\Models\Campaign;
 use App\Models\Cta;
+use App\Services\VercelService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class LandingPageController extends Controller
 {
+    public function __construct(protected VercelService $vercelService) {}
+
     public function index(Request $request)
     {
         $query = LandingPage::with(['client', 'campaign', 'ctas'])->withCount(['views', 'clicks']);
 
         if ($search = $request->query('search')) {
-            $query->where('title', 'like', "%{$search}%")
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
                   ->orWhere('slug', 'like', "%{$search}%")
-                  ->orWhere('brand_name', 'like', "%{$search}%");
+                  ->orWhere('brand_name', 'like', "%{$search}%")
+                  ->orWhere('external_url', 'like', "%{$search}%")
+                  ->orWhere('vercel_project_name', 'like', "%{$search}%");
+            });
+        }
+
+        if ($source = $request->query('source')) {
+            if ($source !== 'all') {
+                $query->where('page_source', $source);
+            }
         }
 
         if ($clientId = $request->query('client_id')) {
             $query->where('client_id', $clientId);
         }
 
-        $landingPages = $query->latest('id')->paginate(10)->withQueryString();
+        $landingPages = $query->latest('id')->paginate(12)->withQueryString();
         $clients = Client::orderBy('company_name')->get();
 
-        return view('landing_pages.index', compact('landingPages', 'clients'));
+        // Source counts for badge tabs
+        $counts = [
+            'all' => LandingPage::count(),
+            'native' => LandingPage::where('page_source', 'native')->count(),
+            'vercel' => LandingPage::where('page_source', 'vercel')->count(),
+            'netlify' => LandingPage::where('page_source', 'netlify')->count(),
+            'html_upload' => LandingPage::where('page_source', 'html_upload')->count(),
+        ];
+
+        $currentSource = $request->query('source', 'all');
+        $viewMode = $request->query('view', 'grid'); // default to modern card grid as per screenshot
+
+        return view('landing_pages.index', compact('landingPages', 'clients', 'counts', 'currentSource', 'viewMode'));
     }
 
     public function create(Request $request)
@@ -75,6 +100,8 @@ class LandingPageController extends Controller
         ]);
 
         $validated['is_active'] = $request->boolean('is_active', true);
+        $validated['page_source'] = 'native';
+        $validated['tracking_token'] = (string) Str::uuid();
 
         // Fallback default logo if empty
         if (empty($validated['brand_logo_url'])) {
@@ -98,7 +125,6 @@ class LandingPageController extends Controller
             'is_active' => true,
         ]);
 
-        // Create Default Secondary CTA if text provided
         if (!empty($landingPage->secondary_cta_text)) {
             Cta::create([
                 'landing_page_id' => $landingPage->id,
@@ -116,6 +142,110 @@ class LandingPageController extends Controller
 
         return redirect()->route('landing-pages.show', $landingPage)
             ->with('success', "Landing Page {$landingPage->title} created successfully!");
+    }
+
+    /**
+     * Show external page import screen (Vercel, Netlify, HTML upload)
+     */
+    public function import(Request $request)
+    {
+        $clients = Client::where('status', 'active')->orderBy('company_name')->get();
+        $vercelProjects = $this->vercelService->getProjects();
+        $hasVercelToken = !empty($this->vercelService->getToken());
+        $activeTab = $request->query('tab', 'vercel'); // vercel, html_upload, netlify
+        $importedPage = null;
+
+        if ($importedId = session('imported_page_id')) {
+            $importedPage = LandingPage::find($importedId);
+        }
+
+        return view('landing_pages.import', compact('clients', 'vercelProjects', 'hasVercelToken', 'activeTab', 'importedPage'));
+    }
+
+    /**
+     * Handle Import submission from Vercel, Netlify, or HTML Upload
+     */
+    public function storeImport(Request $request)
+    {
+        $type = $request->input('import_type', 'vercel');
+
+        $validated = $request->validate([
+            'client_id' => ['required', 'exists:clients,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'slug' => ['required', 'string', 'max:255', 'unique:landing_pages,slug'],
+            'telegram_destination' => ['required', 'string'],
+            'vercel_project_name' => ['nullable', 'string', 'max:255'],
+            'production_domain' => ['nullable', 'string', 'max:255'],
+            'external_url' => ['nullable', 'string', 'max:255'],
+            'meta_pixel_id' => ['nullable', 'string'],
+            'meta_access_token' => ['nullable', 'string'],
+            'html_file' => ['nullable', 'file', 'mimes:html,htm,txt', 'max:5120'],
+        ]);
+
+        $trackingToken = (string) Str::uuid();
+        $domain = $request->input('production_domain') ?? $request->input('external_url') ?? ($validated['slug'] . '.vercel.app');
+        if (!str_starts_with($domain, 'http')) {
+            $domain = 'https://' . $domain;
+        }
+
+        $htmlContent = null;
+        if ($request->hasFile('html_file')) {
+            $htmlContent = file_get_contents($request->file('html_file')->getRealPath());
+        }
+
+        $client = Client::find($validated['client_id']);
+
+        $landingPage = LandingPage::create([
+            'client_id' => $validated['client_id'],
+            'title' => $validated['title'],
+            'slug' => $validated['slug'],
+            'page_source' => $type,
+            'external_url' => $domain,
+            'vercel_project_name' => $request->input('vercel_project_name') ?? $validated['title'],
+            'tracking_token' => $trackingToken,
+            'template_type' => 'custom',
+            'brand_name' => $client->company_name ?? $validated['title'],
+            'primary_cta_text' => 'Join Telegram Channel',
+            'telegram_destination' => $validated['telegram_destination'],
+            'meta_pixel_id' => $validated['meta_pixel_id'] ?? null,
+            'meta_access_token' => $validated['meta_access_token'] ?? null,
+            'html_content' => $htmlContent,
+            'deployment_status' => 'published',
+            'is_active' => true,
+        ]);
+
+        // Create tracking CTA for the external site
+        Cta::create([
+            'landing_page_id' => $landingPage->id,
+            'client_id' => $landingPage->client_id,
+            'name' => 'Imported External CTA',
+            'button_text' => 'Join Telegram Channel',
+            'button_type' => 'primary',
+            'tracking_token' => 'kx_' . substr($trackingToken, 0, 8),
+            'telegram_destination' => $landingPage->telegram_destination,
+            'direct_protocol' => 'auto',
+            'is_active' => true,
+        ]);
+
+        return redirect()->route('landing-pages.import', ['tab' => $type])
+            ->with('imported_page_id', $landingPage->id)
+            ->with('success', "Site '{$landingPage->title}' successfully imported from " . ucfirst($type) . "! Tracking script generated below.");
+    }
+
+    /**
+     * Save Vercel API token in settings
+     */
+    public function saveVercelToken(Request $request)
+    {
+        $request->validate(['vercel_token' => ['required', 'string']]);
+        $this->vercelService->setToken($request->input('vercel_token'));
+
+        if ($request->wantsJson()) {
+            $projects = $this->vercelService->getProjects();
+            return response()->json(['success' => true, 'projects' => $projects]);
+        }
+
+        return redirect()->back()->with('success', 'Vercel API token connected successfully! Projects refreshed.');
     }
 
     public function show(LandingPage $landingPage)
@@ -159,7 +289,7 @@ class LandingPageController extends Controller
             'brand_tagline' => ['nullable', 'string', 'max:255'],
             'brand_logo_url' => ['nullable', 'string'],
             'badge_text' => ['nullable', 'string', 'max:255'],
-            'hero_heading' => ['required', 'string'],
+            'hero_heading' => ['nullable', 'string'],
             'hero_subheading' => ['nullable', 'string'],
             'hero_video_url' => ['nullable', 'string'],
             'hero_image_url' => ['nullable', 'string'],
@@ -185,12 +315,10 @@ class LandingPageController extends Controller
 
         $landingPage->update($validated);
 
-        // Synchronize CTAs destination
         $landingPage->ctas()->update([
             'telegram_destination' => $landingPage->telegram_destination,
         ]);
 
-        // Update primary CTA button text
         $primaryCta = $landingPage->ctas()->where('button_type', 'primary')->first();
         if ($primaryCta) {
             $primaryCta->update(['button_text' => $landingPage->primary_cta_text]);

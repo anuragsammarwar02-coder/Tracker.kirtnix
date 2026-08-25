@@ -93,7 +93,10 @@ Route::middleware(['auth'])->group(function () {
     // 4. Campaigns Management
     Route::resource('campaigns', CampaignController::class);
 
-    // 5. Landing Pages Management
+    // 5. Landing Pages Management & External Vercel Import
+    Route::get('/landing-pages/import', [LandingPageController::class, 'import'])->name('landing-pages.import');
+    Route::post('/landing-pages/import', [LandingPageController::class, 'storeImport'])->name('landing-pages.store_import');
+    Route::post('/landing-pages/vercel-token', [LandingPageController::class, 'saveVercelToken'])->name('landing-pages.vercel_token');
     Route::resource('landing-pages', LandingPageController::class);
 
     // 6. Access Management / Team Permissions

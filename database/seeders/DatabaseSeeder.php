@@ -254,6 +254,10 @@ class DatabaseSeeder extends Seeder
                 'client_id' => $client1->id,
                 'campaign_id' => $camp4?->id,
                 'title' => 'gujaratitrdexx',
+                'page_source' => 'vercel',
+                'external_url' => 'https://gujaratitrdexx.vercel.app',
+                'vercel_project_name' => 'gujaratitrde',
+                'tracking_token' => '7b39a48e-289c-4b3d-9f4a-4e892c90df11',
                 'template_type' => 'gujarati_trader',
                 'brand_name' => 'GUJARATI TRADER ALPHA',
                 'brand_tagline' => 'ગુજરાતી ભાષામાં શેરબજાર અને ઓપ્શન શીખો',
@@ -276,6 +280,26 @@ class DatabaseSeeder extends Seeder
                 'telegram_channel_username' => 'gujaratitrdexx',
                 'meta_pixel_id' => '1130260856232291',
                 'gtm_id' => 'GTM-GT01',
+                'is_active' => true,
+            ]
+        );
+
+        $lpVercel = LandingPage::updateOrCreate(
+            ['slug' => 'focusuu'],
+            [
+                'client_id' => $client2->id,
+                'campaign_id' => $camp1?->id,
+                'title' => 'focusuu',
+                'page_source' => 'vercel',
+                'external_url' => 'https://focusuu.vercel.app',
+                'vercel_project_name' => 'focusuu',
+                'tracking_token' => '9c91e175-b0a1-46ac-8d53-78a71205face',
+                'template_type' => 'custom',
+                'brand_name' => 'FocusUU Global',
+                'brand_tagline' => 'High Speed Trading Focus Room',
+                'primary_cta_text' => 'Join Free Telegram Channel',
+                'telegram_destination' => 'https://t.me/+sncMUjBZ9a41ZDll',
+                'meta_pixel_id' => '1130260856232291',
                 'is_active' => true,
             ]
         );
