@@ -145,7 +145,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/telegram/channels/auto-detect', [TelegramChannelController::class, 'autoDetect'])->name('telegram.channels.auto_detect');
     Route::delete('/telegram/channels/{channel}', [TelegramChannelController::class, 'destroy'])->name('telegram.channels.destroy');
 
-    // 10. Meta / Facebook Integration Routes
+    // 10. Meta / Facebook OAuth & Integration Routes
+    Route::get('/meta/oauth/redirect', [MetaIntegrationController::class, 'oauthRedirect'])->name('meta.oauth.redirect');
+    Route::get('/meta/oauth/callback', [MetaIntegrationController::class, 'oauthCallback'])->name('meta.oauth.callback');
     Route::post('/meta/connect', [MetaIntegrationController::class, 'connect'])->name('meta.connect');
     Route::post('/meta/sync', [MetaIntegrationController::class, 'sync'])->name('meta.sync');
     Route::post('/meta/disconnect', [MetaIntegrationController::class, 'disconnect'])->name('meta.disconnect');
