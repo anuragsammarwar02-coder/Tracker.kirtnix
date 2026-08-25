@@ -45,17 +45,31 @@ class VercelService
                 if ($response->successful()) {
                     $projects = $response->json('projects') ?? [];
                     return array_map(function ($p) {
-                        $targets = $p['targets']['production'] ?? null;
-                        $domain = $targets['url'] ?? ($p['name'] . '.vercel.app');
-                        if (!str_starts_with($domain, 'http')) {
-                            $domain = 'https://' . $domain;
+                        $projectName = $p['name'];
+                        $defaultVercelDomain = strtolower($projectName) . '.vercel.app';
+
+                        // Check aliases for clean primary domain or custom domain
+                        $aliasList = $p['targets']['production']['alias'] ?? $p['alias'] ?? [];
+                        $domain = $defaultVercelDomain;
+
+                        if (!empty($aliasList) && is_array($aliasList)) {
+                            // Filter out long deployment preview hashes like -44269p5l2-anuragsammarwar02-coders-projects.vercel.app
+                            $cleanAliases = array_filter($aliasList, function ($a) {
+                                return !str_contains($a, '-projects.vercel.app') && !str_contains($a, '-anuragsammarwar');
+                            });
+                            if (!empty($cleanAliases)) {
+                                $domain = reset($cleanAliases);
+                            }
                         }
+
+                        $domain = preg_replace('#^https?://#', '', $domain);
+                        $domain = rtrim($domain, '/');
 
                         return [
                             'id' => $p['id'],
-                            'name' => $p['name'],
-                            'domain' => str_replace('https://', '', $domain),
-                            'full_url' => $domain,
+                            'name' => $projectName,
+                            'domain' => $domain,
+                            'full_url' => 'https://' . $domain,
                             'framework' => $p['framework'] ?? 'other',
                             'updated_at' => $p['updatedAt'] ?? null,
                         ];

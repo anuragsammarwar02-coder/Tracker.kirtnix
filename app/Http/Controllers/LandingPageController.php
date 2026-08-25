@@ -183,10 +183,22 @@ class LandingPageController extends Controller
         ]);
 
         $trackingToken = (string) Str::uuid();
-        $domain = $request->input('production_domain') ?? $request->input('external_url') ?? ($validated['slug'] . '.vercel.app');
-        if (!str_starts_with($domain, 'http')) {
-            $domain = 'https://' . $domain;
+        $rawDomain = $request->input('production_domain') ?? $request->input('external_url') ?? ($validated['slug'] . '.vercel.app');
+        $domain = preg_replace('#^https?://#', '', trim($rawDomain));
+        $domain = rtrim($domain, '/');
+
+        // Sanitize Vercel preview URLs to clean standard domain
+        if ($type === 'vercel' && str_contains($domain, '.vercel.app')) {
+            $projectName = $request->input('vercel_project_name') ?? $validated['slug'];
+            if (!empty($projectName)) {
+                $cleanPrj = strtolower(trim($projectName));
+                if (str_contains($domain, '-projects.vercel.app') || str_contains($domain, '-anuragsammarwar') || str_contains($domain, '-')) {
+                    $domain = $cleanPrj . '.vercel.app';
+                }
+            }
         }
+
+        $fullUrl = 'https://' . $domain;
 
         $htmlContent = null;
         if ($request->hasFile('html_file')) {
@@ -200,7 +212,7 @@ class LandingPageController extends Controller
             'title' => $validated['title'],
             'slug' => $validated['slug'],
             'page_source' => $type,
-            'external_url' => $domain,
+            'external_url' => $fullUrl,
             'vercel_project_name' => $request->input('vercel_project_name') ?? $validated['title'],
             'tracking_token' => $trackingToken,
             'template_type' => 'custom',
