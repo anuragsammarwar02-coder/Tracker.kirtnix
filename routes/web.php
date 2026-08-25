@@ -28,6 +28,21 @@ use App\Http\Controllers\PublicMarketingController;
 | Public Marketing & Product Landing Pages
 |--------------------------------------------------------------------------
 */
+// Production Health & Diagnostic Check
+Route::get('/healthz', function () {
+    return response()->json([
+        'status' => 'ok',
+        'php_version' => PHP_VERSION,
+        'sqlite_loaded' => extension_loaded('pdo_sqlite'),
+        'database_file_exists' => file_exists(database_path('database.sqlite')),
+        'database_file_size' => file_exists(database_path('database.sqlite')) ? filesize(database_path('database.sqlite')) : 0,
+        'users_count' => \App\Models\User::count(),
+        'clients_count' => \App\Models\Client::count(),
+        'app_key_set' => !empty(config('app.key')),
+        'storage_writable' => is_writable(storage_path('framework/views')),
+    ]);
+});
+
 Route::get('/', [PublicMarketingController::class, 'home'])->name('home');
 Route::get('/analytics', function () {
     if (auth()->check()) {
