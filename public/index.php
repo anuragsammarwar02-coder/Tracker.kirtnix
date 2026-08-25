@@ -89,5 +89,16 @@ if (!file_exists($bootstrapPath)) {
     $bootstrapPath = __DIR__ . '/../bootstrap/app.php';
 }
 
-(require_once $bootstrapPath)
-    ->handleRequest(Request::capture());
+try {
+    (require_once $bootstrapPath)
+        ->handleRequest(Request::capture());
+} catch (\Throwable $e) {
+    http_response_code(500);
+    echo '<!DOCTYPE html><html><head><title>Kirtnix Error Diagnostic</title><style>body{background:#090D14;color:#fff;font-family:sans-serif;padding:30px;line-height:1.6;}pre{background:#121826;padding:20px;border-radius:10px;overflow-x:auto;color:#F87171;border:1px solid #1E293B;font-size:12.5px;}code{background:#161F30;padding:2px 6px;border-radius:4px;color:#FACC15;font-family:monospace;}</style></head><body>';
+    echo '<h1 style="color:#FACC15;font-size:20px;margin-top:0;">⚡ Kirtnix Server Diagnostic</h1>';
+    echo '<p style="color:#F87171;font-size:15px;font-weight:bold;">' . htmlspecialchars($e->getMessage()) . '</p>';
+    echo '<p style="color:#94A3B8;font-size:12px;">File: <code>' . htmlspecialchars($e->getFile()) . ':' . $e->getLine() . '</code></p>';
+    echo '<pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>';
+    echo '</body></html>';
+    exit;
+}
