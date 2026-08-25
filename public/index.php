@@ -28,14 +28,14 @@ if (!file_exists($envPath)) {
     if (file_exists($exampleEnv)) {
         @copy($exampleEnv, $envPath);
     } else {
-        @file_put_contents($envPath, "APP_NAME=\"KirtniX TG Tracker\"\nAPP_ENV=production\nAPP_KEY=base64:r8qB7Xq0xV5yW9p3zL1m0vK4jH8tG2eF6dC4bA2s9U=\nAPP_DEBUG=false\nAPP_TIMEZONE=Asia/Kolkata\nAPP_URL=https://tracker.kirtnix.in\nDB_CONNECTION=sqlite\nSESSION_DRIVER=file\nCACHE_STORE=file\nQUEUE_CONNECTION=database\n");
+        @file_put_contents($envPath, "APP_NAME=\"KirtniX TG Tracker\"\nAPP_ENV=production\nAPP_KEY=base64:1tOIpMzBeUB06EpVrPvstKXeBf6b06MaCIBQEXR+ogQ=\nAPP_DEBUG=false\nAPP_TIMEZONE=Asia/Kolkata\nAPP_URL=https://tracker.kirtnix.in\nDB_CONNECTION=sqlite\nSESSION_DRIVER=file\nCACHE_STORE=file\nQUEUE_CONNECTION=database\n");
     }
 }
 
 if (empty($_ENV['APP_KEY']) && empty(getenv('APP_KEY'))) {
-    putenv('APP_KEY=base64:r8qB7Xq0xV5yW9p3zL1m0vK4jH8tG2eF6dC4bA2s9U=');
-    $_ENV['APP_KEY'] = 'base64:r8qB7Xq0xV5yW9p3zL1m0vK4jH8tG2eF6dC4bA2s9U=';
-    $_SERVER['APP_KEY'] = 'base64:r8qB7Xq0xV5yW9p3zL1m0vK4jH8tG2eF6dC4bA2s9U=';
+    putenv('APP_KEY=base64:1tOIpMzBeUB06EpVrPvstKXeBf6b06MaCIBQEXR+ogQ=');
+    $_ENV['APP_KEY'] = 'base64:1tOIpMzBeUB06EpVrPvstKXeBf6b06MaCIBQEXR+ogQ=';
+    $_SERVER['APP_KEY'] = 'base64:1tOIpMzBeUB06EpVrPvstKXeBf6b06MaCIBQEXR+ogQ=';
 }
 
 // Auto-initialize SQLite database
