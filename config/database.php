@@ -16,7 +16,9 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => (env('DB_CONNECTION') === 'mysql' && (empty(env('DB_DATABASE')) || env('DB_DATABASE') === 'laravel' || str_contains((string)env('DB_USERNAME'), '123456789')))
+        ? 'sqlite'
+        : env('DB_CONNECTION', 'sqlite'),
 
     /*
     |--------------------------------------------------------------------------

@@ -38,6 +38,12 @@ if (empty($_ENV['APP_KEY']) && empty(getenv('APP_KEY'))) {
     $_SERVER['APP_KEY'] = 'base64:1tOIpMzBeUB06EpVrPvstKXeBf6b06MaCIBQEXR+ogQ=';
 }
 
+if (getenv('DB_CONNECTION') === 'mysql' && (str_contains((string)getenv('DB_USERNAME'), '123456789') || empty(getenv('DB_DATABASE')))) {
+    putenv('DB_CONNECTION=sqlite');
+    $_ENV['DB_CONNECTION'] = 'sqlite';
+    $_SERVER['DB_CONNECTION'] = 'sqlite';
+}
+
 // Auto-initialize SQLite database
 $sqlitePath = $basePath . '/database/database.sqlite';
 if (!file_exists($sqlitePath)) {
