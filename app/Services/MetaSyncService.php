@@ -47,7 +47,7 @@ class MetaSyncService
     protected function fetchUserProfile(string $token): ?array
     {
         try {
-            $res = Http::timeout(8)->get("{$this->baseUrl}/{$this->graphApiVersion}/me", [
+            $res = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$this->graphApiVersion}/me", [
                 'access_token' => $token,
                 'fields' => 'id,name,email',
             ]);
@@ -108,7 +108,7 @@ class MetaSyncService
 
         // Attempt live Graph API query
         try {
-            $res = Http::timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/businesses", [
+            $res = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/businesses", [
                 'access_token' => $token,
                 'fields' => 'id,name,verification_status',
                 'limit' => 50,
@@ -120,12 +120,15 @@ class MetaSyncService
                         ['business_id' => $b['id']],
                         [
                             'meta_connection_id' => $connection->id,
-                            'name' => $b['name'] ?? 'Meta Business Portfolio',
+                            'name' => $b['name'] ?? ('Meta Business ' . $b['id']),
                             'verification_status' => $b['verification_status'] ?? 'verified',
                         ]
                     );
                 }
-                return $results;
+
+                if (!empty($results)) {
+                    return $results;
+                }
             }
         } catch (\Exception $e) {
             Log::warning('Meta Graph API Businesses Error: ' . $e->getMessage());
@@ -166,7 +169,7 @@ class MetaSyncService
 
         // Attempt live Graph API query for Ad Accounts
         try {
-            $res = Http::timeout(12)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/adaccounts", [
+            $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/adaccounts", [
                 'access_token' => $token,
                 'fields' => 'id,account_id,name,currency,account_status,spend_limit,balance,amount_spent,daily_budget,funding_source_details',
                 'limit' => 100,
