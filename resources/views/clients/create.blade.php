@@ -64,20 +64,13 @@
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-        <div class="form-group">
-          <label class="form-label" for="monthly_budget">Monthly Ad Budget ($)</label>
-          <input type="number" step="0.01" id="monthly_budget" name="monthly_budget" class="form-input" placeholder="4500.00" value="{{ old('monthly_budget', '3500.00') }}" />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="status">Account Status *</label>
-          <select id="status" name="status" class="form-select" required>
-            <option value="active" {{ old('status') === 'active' ? 'selected' : '' }}>Active</option>
-            <option value="paused" {{ old('status') === 'paused' ? 'selected' : '' }}>Paused</option>
-            <option value="archived" {{ old('status') === 'archived' ? 'selected' : '' }}>Archived</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label class="form-label" for="status">Account Status *</label>
+        <select id="status" name="status" class="form-select" required>
+          <option value="active" {{ old('status') === 'active' ? 'selected' : '' }}>Active</option>
+          <option value="paused" {{ old('status') === 'paused' ? 'selected' : '' }}>Paused</option>
+          <option value="archived" {{ old('status') === 'archived' ? 'selected' : '' }}>Archived</option>
+        </select>
       </div>
 
       <div style="margin: 10px 0 16px;">

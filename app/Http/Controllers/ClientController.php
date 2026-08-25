@@ -33,21 +33,29 @@ class ClientController extends Controller
 
     public function create()
     {
-        $nextId = (Client::max('id') ?? 0) + 1;
-        $suggestedKxCode = 'KX-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        $count = Client::count() + 1;
+        $suggestedKxCode = 'KX-' . str_pad($count, 3, '0', STR_PAD_LEFT);
+        while (Client::where('kx_code', $suggestedKxCode)->exists()) {
+            $count++;
+            $suggestedKxCode = 'KX-' . str_pad($count, 3, '0', STR_PAD_LEFT);
+        }
         return view('clients.create', compact('suggestedKxCode'));
     }
 
     public function store(Request $request)
     {
+        if ($request->filled('kx_code')) {
+            // Clean up any soft-deleted legacy record holding this code
+            Client::withTrashed()->where('kx_code', trim($request->kx_code))->whereNotNull('deleted_at')->forceDelete();
+        }
+
         $validated = $request->validate([
-            'kx_code' => ['nullable', 'string', 'max:32', 'unique:clients,kx_code'],
+            'kx_code' => ['nullable', 'string', 'max:32', \Illuminate\Validation\Rule::unique('clients', 'kx_code')->whereNull('deleted_at')],
             'company_name' => ['required', 'string', 'max:255'],
             'client_name' => ['required', 'string', 'max:255'],
             'industry' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'monthly_budget' => ['nullable', 'numeric', 'min:0'],
             'meta_ads_connected' => ['nullable', 'boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
             'status' => ['required', 'in:active,paused,archived'],
@@ -56,8 +64,13 @@ class ClientController extends Controller
         ]);
 
         if (empty($validated['kx_code'])) {
-            $nextId = (Client::max('id') ?? 0) + 1;
-            $validated['kx_code'] = 'KX-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+            $count = Client::count() + 1;
+            $code = 'KX-' . str_pad($count, 3, '0', STR_PAD_LEFT);
+            while (Client::where('kx_code', $code)->exists()) {
+                $count++;
+                $code = 'KX-' . str_pad($count, 3, '0', STR_PAD_LEFT);
+            }
+            $validated['kx_code'] = $code;
         }
 
         if ($request->hasFile('logo')) {
@@ -113,13 +126,12 @@ class ClientController extends Controller
     public function update(Request $request, Client $client)
     {
         $validated = $request->validate([
-            'kx_code' => ['required', 'string', 'max:32', 'unique:clients,kx_code,' . $client->id],
+            'kx_code' => ['required', 'string', 'max:32', \Illuminate\Validation\Rule::unique('clients', 'kx_code')->ignore($client->id)->whereNull('deleted_at')],
             'company_name' => ['required', 'string', 'max:255'],
             'client_name' => ['required', 'string', 'max:255'],
             'industry' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'monthly_budget' => ['nullable', 'numeric', 'min:0'],
             'meta_ads_connected' => ['nullable', 'boolean'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
             'status' => ['required', 'in:active,paused,archived'],
@@ -176,8 +188,8 @@ class ClientController extends Controller
             // 5. Unassign Ad Accounts
             \App\Models\AdAccount::where('client_id', $clientId)->update(['client_id' => null]);
 
-            // 6. Delete the client itself
-            $client->delete();
+            // 6. Delete the client permanently
+            $client->forceDelete();
         });
 
         return redirect()->route('clients.index')
