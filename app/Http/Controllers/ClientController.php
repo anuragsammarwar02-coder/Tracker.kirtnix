@@ -146,9 +146,41 @@ class ClientController extends Controller
     public function destroy(Client $client)
     {
         $name = $client->company_name;
-        $client->delete();
+        $clientId = $client->id;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($client, $clientId) {
+            // 1. Delete associated Landing Pages and their CTAs, Views, Clicks, Invites
+            $landingPageIds = \App\Models\LandingPage::where('client_id', $clientId)->pluck('id');
+            \App\Models\LandingPageView::whereIn('landing_page_id', $landingPageIds)->orWhere('client_id', $clientId)->delete();
+            \App\Models\CtaClick::whereIn('landing_page_id', $landingPageIds)->orWhere('client_id', $clientId)->delete();
+            \App\Models\Cta::whereIn('landing_page_id', $landingPageIds)->orWhere('client_id', $clientId)->delete();
+            \App\Models\TelegramInvite::whereIn('landing_page_id', $landingPageIds)->orWhere('client_id', $clientId)->delete();
+            \App\Models\LandingPage::where('client_id', $clientId)->delete();
+
+            // 2. Delete Campaigns and Insights
+            $campaignIds = \App\Models\Campaign::where('client_id', $clientId)->pluck('id');
+            \App\Models\CampaignInsight::whereIn('campaign_id', $campaignIds)->delete();
+            \App\Models\Campaign::where('client_id', $clientId)->delete();
+
+            // 3. Delete Telegram Bots, Channels, Events & Conversions
+            \App\Models\TelegramEvent::where('client_id', $clientId)->delete();
+            \App\Models\Conversion::where('client_id', $clientId)->delete();
+            \App\Models\TelegramChannel::where('client_id', $clientId)->delete();
+            \App\Models\TelegramBot::where('client_id', $clientId)->delete();
+
+            // 4. Delete Tracking Sessions, Reports, Notifications
+            \App\Models\TrackingSession::where('client_id', $clientId)->delete();
+            \App\Models\Report::where('client_id', $clientId)->delete();
+            \App\Models\Notification::where('client_id', $clientId)->delete();
+
+            // 5. Unassign Ad Accounts
+            \App\Models\AdAccount::where('client_id', $clientId)->update(['client_id' => null]);
+
+            // 6. Delete the client itself
+            $client->delete();
+        });
 
         return redirect()->route('clients.index')
-            ->with('success', "Client {$name} removed successfully.");
+            ->with('success', "Client '{$name}' and all associated tracking data, campaigns & landing pages removed successfully.");
     }
 }

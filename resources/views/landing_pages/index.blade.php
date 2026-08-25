@@ -64,8 +64,12 @@
             <div style="font-size: 11px; color: var(--text-muted);">{{ $lp->brand_name }}</div>
           </td>
           <td>
-            <strong>{{ $lp->client?->company_name }}</strong>
-            <div style="font-size: 10.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">{{ $lp->client?->kx_code ?? 'KX-00' . $lp->client_id }}</div>
+            @if($lp->client)
+              <strong>{{ $lp->client->company_name }}</strong>
+              <div style="font-size: 10.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">{{ $lp->client->kx_code ?? 'KX-00' . $lp->client_id }}</div>
+            @else
+              <span style="color: var(--text-muted); font-style: italic;">Unassigned</span>
+            @endif
           </td>
           <td><span class="pill pill-gray">{{ ucfirst(str_replace('_', ' ', $lp->template_type)) }}</span></td>
           <td>
@@ -84,15 +88,22 @@
             @endif
           </td>
           <td>
-            <div>{{ number_format($lp->views_count ?: 4820) }} views</div>
-            <div style="font-size: 11px; color: #B45309;">{{ number_format($lp->clicks_count ?: 1480) }} clicks</div>
+            <div>{{ number_format($lp->views_count) }} views</div>
+            <div style="font-size: 11px; color: #B45309;">{{ number_format($lp->clicks_count) }} clicks</div>
           </td>
           <td><span class="pill pill-green"><span class="pill-dot"></span> Live</span></td>
           <td style="text-align: right;">
-            <div style="display: inline-flex; gap: 6px;">
+            <div style="display: inline-flex; gap: 6px; align-items: center;">
               <a href="{{ route('analytics.detail', $lp->slug) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; font-weight: 700; color: #854D0E;" title="View Landing Page Analytics">📊 Analytics</a>
               <a href="{{ route('landing-pages.show', $lp) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">View</a>
               <a href="{{ route('landing-pages.edit', $lp) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Edit</a>
+              <form action="{{ route('landing-pages.destroy', $lp) }}" method="POST" onsubmit="return confirm('Permanently delete landing page \'{{ addslashes($lp->title) }}\'?');" style="display: inline;">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; color: var(--accent-red);" title="Delete Landing Page">
+                  🗑
+                </button>
+              </form>
             </div>
           </td>
         </tr>

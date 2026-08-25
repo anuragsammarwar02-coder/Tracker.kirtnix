@@ -15,12 +15,16 @@
       @endif
     </div>
     <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
-      Client: <a href="{{ route('clients.show', $landingPage->client) }}" style="color: var(--brand-yellow); font-weight: 600; text-decoration: none;">{{ $landingPage->client?->company_name }}</a>
+      @if($landingPage->client)
+        Client: <a href="{{ route('clients.show', $landingPage->client) }}" style="color: var(--brand-yellow); font-weight: 600; text-decoration: none;">{{ $landingPage->client->company_name }}</a>
+      @else
+        Client: <span style="color: var(--text-muted); font-style: italic;">Unassigned / Deleted Client</span>
+      @endif
       · Template: <span class="badge badge-info">{{ ucfirst(str_replace('_', ' ', $landingPage->template_type)) }}</span>
     </div>
   </div>
 
-  <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+  <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
     <a href="{{ route('analytics.detail', $landingPage->slug) }}" class="btn btn-secondary" style="font-weight: 700; color: #854D0E;">
       <span>📊 View Analytics</span>
     </a>
@@ -30,6 +34,13 @@
     <a href="{{ route('landing-pages.edit', $landingPage) }}" class="btn btn-secondary">
       <span>Edit Content</span>
     </a>
+    <form action="{{ route('landing-pages.destroy', $landingPage) }}" method="POST" onsubmit="return confirm('Are you sure you want to permanently delete this landing page and its tracking data?');" style="display: inline;">
+      @csrf
+      @method('DELETE')
+      <button type="submit" class="btn btn-secondary" style="color: var(--accent-red); border-color: rgba(239, 68, 68, 0.3);">
+        🗑 Delete Page
+      </button>
+    </form>
   </div>
 </div>
 

@@ -191,7 +191,7 @@
         </tr>
       </thead>
       <tbody>
-        @foreach($clientBreakdown as $cb)
+        @forelse($clientBreakdown as $cb)
         <tr>
           <td>
             <a href="{{ route('clients.show', $cb['id']) }}" style="font-weight: 700; color: var(--text-main); text-decoration: none;">
@@ -207,7 +207,11 @@
           <td style="color: var(--accent-red);">{{ number_format($cb['exits']) }}</td>
           <td><span class="pill pill-green">${{ number_format($cb['cost_per_join'], 2) }}</span></td>
         </tr>
-        @endforeach
+        @empty
+        <tr>
+          <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">No client report data available yet.</td>
+        </tr>
+        @endforelse
       </tbody>
     </table>
   </div>

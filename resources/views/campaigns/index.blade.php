@@ -46,9 +46,13 @@
             <div style="font-size: 11.5px; color: var(--text-muted);">Slug: {{ $camp->slug }}</div>
           </td>
           <td>
-            <a href="{{ route('clients.show', $camp->client) }}" style="color: var(--text-main); font-weight: 600; text-decoration: none;">
-              {{ $camp->client?->company_name }}
-            </a>
+            @if($camp->client)
+              <a href="{{ route('clients.show', $camp->client) }}" style="color: var(--text-main); font-weight: 600; text-decoration: none;">
+                {{ $camp->client->company_name }}
+              </a>
+            @else
+              <span style="color: var(--text-muted); font-style: italic;">Unassigned Client</span>
+            @endif
           </td>
           <td>
             <div style="font-size: 12px; font-family: 'JetBrains Mono', monospace;">

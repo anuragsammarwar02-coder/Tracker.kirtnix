@@ -125,35 +125,35 @@
 
   <!-- Delete Client Confirmation Modal -->
   <div x-show="deleteModal" style="display: none;" class="modal-backdrop" @click.self="deleteModal = false">
-    <div class="modal-content" style="max-width: 440px; padding: 24px;">
+    <div class="modal-content" style="max-width: 460px; padding: 24px;">
       <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); color: var(--accent-red); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(239, 68, 68, 0.12); color: var(--accent-red); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
             ⚠️
           </div>
           <div>
             <h3 style="font-size: 16px; font-weight: 800; color: var(--text-main);">Delete Client Workspace</h3>
-            <div style="font-size: 11.5px; color: var(--text-muted);">This action will safely archive this client.</div>
+            <div style="font-size: 11.5px; color: var(--accent-red); font-weight: 600;">Permanent deletion & data purge</div>
           </div>
         </div>
-        <button type="button" @click="deleteModal = false" class="btn-icon" style="color: var(--text-muted);">✕</button>
+        <button type="button" @click="deleteModal = false" class="btn-icon" style="color: var(--text-muted); font-size: 14px; cursor: pointer; padding: 4px 8px;">✕</button>
       </div>
 
-      <div style="background: var(--bg-subtle); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 18px; font-size: 12.5px;">
+      <div style="background: var(--bg-subtle); padding: 14px 16px; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 20px; font-size: 12.5px;">
         <div>Client Name: <strong style="color: var(--text-main);" x-text="clientToDelete.name"></strong></div>
-        <div style="margin-top: 4px;">KX Code: <span class="pill pill-yellow" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;" x-text="clientToDelete.kx_code"></span></div>
-        <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted); line-height: 1.4;">
-          Note: Historical tracking logs, views, and bot associations will remain intact in the database for compliance.
+        <div style="margin-top: 5px;">KX Code: <span class="pill pill-yellow" style="font-family: 'JetBrains Mono', monospace; font-size: 10px;" x-text="clientToDelete.kx_code"></span></div>
+        <div style="margin-top: 10px; padding: 8px 10px; background: rgba(239, 68, 68, 0.08); border-radius: 6px; border-left: 3px solid var(--accent-red); font-size: 11.5px; color: var(--text-body); line-height: 1.45;">
+          <strong>Warning:</strong> Deleting this client will permanently purge all associated landing pages, campaigns, tracking sessions, joins and conversions from the dashboard.
         </div>
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
-        <button type="button" @click="deleteModal = false" class="btn btn-secondary" style="font-size: 12px;">Cancel</button>
+        <button type="button" @click="deleteModal = false" class="btn btn-secondary" style="font-size: 12px; padding: 7px 14px;">Cancel</button>
         <form :action="'/clients/' + clientToDelete.id" method="POST" style="display: inline;">
           @csrf
           @method('DELETE')
-          <button type="submit" class="btn btn-danger" style="font-size: 12px; font-weight: 700;">
-            Yes, Delete Client
+          <button type="submit" class="btn btn-danger" style="font-size: 12px; font-weight: 700; padding: 7px 14px;">
+            Yes, Delete Client & All Data
           </button>
         </form>
       </div>

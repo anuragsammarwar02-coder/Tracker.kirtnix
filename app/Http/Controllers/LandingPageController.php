@@ -202,8 +202,19 @@ class LandingPageController extends Controller
 
     public function destroy(LandingPage $landingPage)
     {
-        $landingPage->delete();
+        $title = $landingPage->title;
+        $lpId = $landingPage->id;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($landingPage, $lpId) {
+            \App\Models\LandingPageView::where('landing_page_id', $lpId)->delete();
+            \App\Models\CtaClick::where('landing_page_id', $lpId)->delete();
+            \App\Models\TelegramInvite::where('landing_page_id', $lpId)->delete();
+            \App\Models\Cta::where('landing_page_id', $lpId)->delete();
+            \App\Models\TelegramChannel::where('landing_page_id', $lpId)->update(['landing_page_id' => null]);
+            $landingPage->delete();
+        });
+
         return redirect()->route('landing-pages.index')
-            ->with('success', 'Landing page archived.');
+            ->with('success', "Landing page '{$title}' and its tracking data deleted successfully.");
     }
 }

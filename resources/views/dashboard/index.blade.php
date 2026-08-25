@@ -207,7 +207,7 @@
           </tr>
         </thead>
         <tbody>
-          @foreach($clientPerformance as $cp)
+          @forelse($clientPerformance as $cp)
           <tr>
             <td>
               <a href="{{ route('clients.show', $cp['id']) }}" style="font-weight: 700; color: var(--text-main); text-decoration: none;">
@@ -230,7 +230,13 @@
               <a href="{{ route('clients.show', $cp['id']) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Overview</a>
             </td>
           </tr>
-          @endforeach
+          @empty
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">
+              No active clients onboarded yet. <a href="{{ route('clients.create') }}" style="color: var(--brand-yellow); font-weight: 700;">+ Create Client</a>
+            </td>
+          </tr>
+          @endforelse
         </tbody>
       </table>
     </div>

@@ -15,7 +15,11 @@
       @endif
     </div>
     <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
-      Client: <a href="{{ route('clients.show', $campaign->client) }}" style="color: var(--brand-yellow); font-weight: 600; text-decoration: none;">{{ $campaign->client?->company_name }}</a>
+      @if($campaign->client)
+        Client: <a href="{{ route('clients.show', $campaign->client) }}" style="color: var(--brand-yellow); font-weight: 600; text-decoration: none;">{{ $campaign->client->company_name }}</a>
+      @else
+        Client: <span style="color: var(--text-muted); font-style: italic;">Unassigned Client</span>
+      @endif
       · Slug: <code>{{ $campaign->slug }}</code>
     </div>
   </div>
