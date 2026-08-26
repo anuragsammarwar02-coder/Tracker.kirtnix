@@ -228,7 +228,7 @@ Route::get('/healthz', function () {
                     'meta_connections' => $dbConnected ? \App\Models\MetaConnection::count() : 0,
                     'ad_accounts' => $dbConnected ? \App\Models\AdAccount::count() : 0,
                 ],
-                'bots_data' => $dbConnected ? \App\Models\TelegramBot::select('id', 'name', 'username', 'client_id')->get() : [],
+                'bots_data' => $dbConnected ? \App\Models\TelegramBot::select('id', 'name', 'username', 'client_id', 'webhook_secret', 'is_active', 'is_webhook_active')->get() : [],
                 'channels_data' => $dbConnected ? \App\Models\TelegramChannel::select('id', 'title', 'telegram_chat_id', 'telegram_bot_id', 'client_id')->get() : [],
                 'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email', 'ad_account_id')->get() : [],
                 'users_data' => $dbConnected ? \App\Models\User::select('id', 'name', 'email', 'role')->get() : [],
