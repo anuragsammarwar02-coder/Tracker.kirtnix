@@ -432,8 +432,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/telegram/create', [TelegramBotController::class, 'create'])->name('telegram.create');
     Route::post('/telegram', [TelegramBotController::class, 'store'])->name('telegram.store');
     Route::post('/telegram/{bot}/sync', [TelegramBotController::class, 'syncWebhook'])->name('telegram.sync');
+    Route::post('/telegram/bots/{bot}/sync', [TelegramBotController::class, 'syncWebhook']);
     Route::post('/telegram/{bot}/health', [TelegramBotController::class, 'health'])->name('telegram.health');
+    Route::post('/telegram/bots/{bot}/health', [TelegramBotController::class, 'health']);
     Route::delete('/telegram/{bot}', [TelegramBotController::class, 'destroy'])->name('telegram.destroy');
+    Route::delete('/telegram/bots/{bot}', [TelegramBotController::class, 'destroy']);
 
     // Telegram Tracked Channels & Auto-Detection
     Route::post('/telegram/channels/verify', [TelegramChannelController::class, 'verify'])->name('telegram.channels.verify');
