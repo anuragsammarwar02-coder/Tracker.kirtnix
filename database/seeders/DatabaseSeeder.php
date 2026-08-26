@@ -12,7 +12,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // 1. Initial Super Administrators (supports both admin@kirtnix.in and admin@kirtnix.agency)
-        User::updateOrCreate(
+        User::firstOrCreate(
             ['email' => 'admin@kirtnix.in'],
             [
                 'name' => 'KirtniX Admin',
@@ -22,7 +22,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        User::updateOrCreate(
+        User::firstOrCreate(
             ['email' => 'admin@kirtnix.agency'],
             [
                 'name' => 'KirtniX Agency Admin',
@@ -32,19 +32,31 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 2. Global Brand & System Settings
-        Setting::set('app_name', 'Kirtnix TG Tracker', 'branding');
-        Setting::set('brand_name', 'Kirtnix', 'branding');
-        Setting::set('brand_tagline', 'Performance Marketing & Telegram Conversion Tracking SaaS', 'branding');
-        Setting::set('brand_primary_color', '#EAB308', 'branding');
-        Setting::set('brand_logo_url', '/assets/branding/kirtnix-logo-dark-horizontal.png', 'branding');
-        Setting::set('brand_favicon_url', '/assets/branding/favicon.png', 'branding');
-        Setting::set('hostinger_domain', 'tracker.kirtnix.in', 'general');
-        Setting::set('meta_app_id', '4520673831531016', 'meta');
-        Setting::set('meta_app_secret', '4400729382f0cf94b61599e165019281', 'meta');
-        Setting::set('meta_api_version', 'v19.0', 'meta');
-        Setting::set('support_telegram', '@kirtnixsupport', 'support');
-        Setting::set('working_hours', '10:00 AM - 7:00 PM IST', 'support');
+        // 2. Global Brand & System Settings (Never overwrite user-modified settings)
+        $defaultSettings = [
+            'app_name' => ['Kirtnix TG Tracker', 'branding'],
+            'brand_name' => ['Kirtnix', 'branding'],
+            'brand_tagline' => ['Performance Marketing & Telegram Conversion Tracking SaaS', 'branding'],
+            'brand_primary_color' => ['#EAB308', 'branding'],
+            'brand_logo_url' => ['/assets/branding/kirtnix-logo-dark-horizontal.png', 'branding'],
+            'brand_favicon_url' => ['/assets/branding/favicon.png', 'branding'],
+            'hostinger_domain' => ['tracker.kirtnix.in', 'general'],
+            'meta_app_id' => ['4520673831531016', 'meta'],
+            'meta_app_secret' => ['4400729382f0cf94b61599e165019281', 'meta'],
+            'meta_api_version' => ['v19.0', 'meta'],
+            'support_telegram' => ['@kirtnixsupport', 'support'],
+            'working_hours' => ['10:00 AM - 7:00 PM IST', 'support'],
+        ];
+
+        foreach ($defaultSettings as $key => [$value, $group]) {
+            if (!Setting::where('key', $key)->exists()) {
+                Setting::create([
+                    'key' => $key,
+                    'value' => $value,
+                    'group' => $group,
+                ]);
+            }
+        }
 
         // 3. Baseline Mock Data (ONLY in automated testing environment)
         if (app()->environment('testing')) {
