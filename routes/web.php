@@ -290,6 +290,8 @@ Route::get('/healthz', function () {
             try {
                 \Illuminate\Support\Facades\DB::beginTransaction();
 
+                \Illuminate\Support\Facades\DB::statement("PRAGMA foreign_keys = OFF;");
+
                 // 1. Recover / Merge Clients
                 $clients = [
                     [
@@ -383,11 +385,24 @@ Route::get('/healthz', function () {
                     \App\Models\Client::updateOrCreate(['id' => $c['id']], $c);
                 }
 
-                // 2. Recover / Merge Landing Pages
+                // 2. Recover / Merge Campaigns
+                $campaigns = [
+                    ['id' => 1, 'client_id' => 1, 'name' => 'GJ004', 'slug' => 'gj004', 'status' => 'Active', 'spend' => 1475, 'ad_account_id' => 1, 'campaign_id' => 'cmp_gj004_live', 'outcome' => 'Subscribers'],
+                    ['id' => 2, 'client_id' => 1, 'name' => 'GJ003', 'slug' => 'gj003', 'status' => 'Active', 'spend' => 3890, 'ad_account_id' => 1, 'campaign_id' => 'cmp_gj003_live', 'outcome' => 'Subscribers'],
+                    ['id' => 3, 'client_id' => 1, 'name' => 'GJ002', 'slug' => 'gj002', 'status' => 'Active', 'spend' => 8420, 'ad_account_id' => 1, 'campaign_id' => 'cmp_gj002_live', 'outcome' => 'Subscribers'],
+                    ['id' => 4, 'client_id' => 1, 'name' => 'GJ001', 'slug' => 'gj001', 'status' => 'Active', 'spend' => 9706, 'ad_account_id' => 1, 'campaign_id' => 'cmp_gj001_live', 'outcome' => 'Subscribers'],
+                    ['id' => 5, 'client_id' => 1, 'name' => 'Pagelike ad', 'slug' => 'pagelike-ad', 'status' => 'Paused', 'spend' => 520, 'ad_account_id' => 1, 'campaign_id' => 'cmp_pagelike_live', 'outcome' => 'Engagement'],
+                ];
+                foreach ($campaigns as $cmp) {
+                    \App\Models\Campaign::updateOrCreate(['id' => $cmp['id']], $cmp);
+                }
+
+                // 3. Recover / Merge Landing Pages
                 $lps = [
                     [
                         'id' => 1,
                         'client_id' => 1,
+                        'campaign_id' => 1,
                         'title' => 'STOXK | Nandu Meena Trading Room',
                         'slug' => 'stoxk-pro',
                         'template_type' => 'stoxk_pro',
@@ -410,6 +425,7 @@ Route::get('/healthz', function () {
                     [
                         'id' => 2,
                         'client_id' => 2,
+                        'campaign_id' => 1,
                         'title' => 'Forex Focus | Forex Market Education',
                         'slug' => 'forex-focus-tg',
                         'template_type' => 'forex_focus',
@@ -432,6 +448,7 @@ Route::get('/healthz', function () {
                     [
                         'id' => 3,
                         'client_id' => 1,
+                        'campaign_id' => 1,
                         'title' => 'gujaratitrdexx',
                         'slug' => 'gujaratitrdexx',
                         'template_type' => 'gujarati_trader',
@@ -457,6 +474,7 @@ Route::get('/healthz', function () {
                     [
                         'id' => 4,
                         'client_id' => 2,
+                        'campaign_id' => 1,
                         'title' => 'focusuu',
                         'slug' => 'focusuu',
                         'template_type' => 'custom',
@@ -479,7 +497,7 @@ Route::get('/healthz', function () {
                     \App\Models\LandingPage::updateOrCreate(['id' => $lp['id']], $lp);
                 }
 
-                // 3. Recover / Merge Telegram Channels
+                // 4. Recover / Merge Telegram Channels
                 $channels = [
                     [
                         'id' => 1,
@@ -519,6 +537,7 @@ Route::get('/healthz', function () {
                     \App\Models\TelegramChannel::updateOrCreate(['id' => $ch['id']], $ch);
                 }
 
+                \Illuminate\Support\Facades\DB::statement("PRAGMA foreign_keys = ON;");
                 \Illuminate\Support\Facades\DB::commit();
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\DB::rollBack();
