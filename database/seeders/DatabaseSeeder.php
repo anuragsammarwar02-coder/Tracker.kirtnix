@@ -46,19 +46,20 @@ class DatabaseSeeder extends Seeder
         Setting::set('support_telegram', '@kirtnixsupport', 'support');
         Setting::set('working_hours', '10:00 AM - 7:00 PM IST', 'support');
 
-        // 3. Baseline Client & Landing Page for Tracking Engine (if missing)
-        $clientA = \App\Models\Client::firstOrCreate(
-            ['kx_code' => 'KX-001'],
-            [
-                'company_name' => 'Forex Focus Academy',
-                'client_name' => 'Anurag Sharma',
-                'industry' => 'Forex Trading',
-                'email' => 'client@forexfocus.com',
-                'status' => 'active',
-                'meta_ads_connected' => true,
-                'monthly_budget' => 5000.00,
-            ]
-        );
+        // 3. Baseline Mock Data (ONLY in automated testing environment)
+        if (app()->environment('testing')) {
+            $clientA = \App\Models\Client::firstOrCreate(
+                ['kx_code' => 'KX-001'],
+                [
+                    'company_name' => 'Forex Focus Academy',
+                    'client_name' => 'Anurag Sharma',
+                    'industry' => 'Forex Trading',
+                    'email' => 'client@forexfocus.com',
+                    'status' => 'active',
+                    'meta_ads_connected' => true,
+                    'monthly_budget' => 5000.00,
+                ]
+            );
 
         $clientB = \App\Models\Client::firstOrCreate(
             ['kx_code' => 'KX-002'],
@@ -161,5 +162,6 @@ class DatabaseSeeder extends Seeder
                 'is_bot_admin' => true,
             ]
         );
+        }
     }
 }
