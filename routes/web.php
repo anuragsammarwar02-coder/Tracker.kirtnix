@@ -30,16 +30,53 @@ use App\Http\Controllers\PublicMarketingController;
 */
 // Production Health & Diagnostic Check
 Route::get('/healthz', function () {
+    $migrationOutput = null;
+    $migrationError = null;
+
+    try {
+        if (config('database.default') === 'sqlite') {
+            $dbPath = config('database.connections.sqlite.database');
+            if ($dbPath && $dbPath !== ':memory:') {
+                $dir = dirname($dbPath);
+                if (!is_dir($dir)) {
+                    @mkdir($dir, 0755, true);
+                }
+                if (!file_exists($dbPath)) {
+                    @touch($dbPath);
+                }
+            }
+        }
+
+        if (!\Illuminate\Support\Facades\Schema::hasTable('users')) {
+            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            $migrationOutput = \Illuminate\Support\Facades\Artisan::output();
+            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
+        }
+    } catch (\Throwable $e) {
+        $migrationError = $e->getMessage();
+    }
+
+    $usersCount = 0;
+    $clientsCount = 0;
+    try {
+        $usersCount = \App\Models\User::count();
+        $clientsCount = \App\Models\Client::count();
+    } catch (\Throwable $e) {
+        // Table still missing
+    }
+
     return response()->json([
-        'status' => 'ok',
+        'status' => $usersCount > 0 ? 'ok' : 'pending_init',
         'php_version' => PHP_VERSION,
         'sqlite_loaded' => extension_loaded('pdo_sqlite'),
         'database_file_exists' => file_exists(database_path('database.sqlite')),
         'database_file_size' => file_exists(database_path('database.sqlite')) ? filesize(database_path('database.sqlite')) : 0,
-        'users_count' => \App\Models\User::count(),
-        'clients_count' => \App\Models\Client::count(),
+        'users_count' => $usersCount,
+        'clients_count' => $clientsCount,
         'app_key_set' => !empty(config('app.key')),
         'storage_writable' => is_writable(storage_path('framework/views')),
+        'migration_output' => $migrationOutput,
+        'migration_error' => $migrationError,
     ]);
 });
 

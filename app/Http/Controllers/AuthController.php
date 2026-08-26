@@ -83,6 +83,16 @@ class AuthController extends Controller
         $password = $validated['password'];
         $remember = $request->boolean('remember');
 
+        // Ensure database tables exist before querying users
+        if (!\Illuminate\Support\Facades\Schema::hasTable('users')) {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+                \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
+            } catch (\Throwable $e) {
+                @error_log('Migration on login error: ' . $e->getMessage());
+            }
+        }
+
         if (Auth::attempt(['email' => $email, 'password' => $password], $remember)) {
             $request->session()->regenerate();
             return redirect()->intended(route('dashboard'))
