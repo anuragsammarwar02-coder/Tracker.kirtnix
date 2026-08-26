@@ -47,7 +47,7 @@
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-bottom: 20px;">
   <div class="card" style="padding: 14px 16px;">
     <div style="font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Spend</div>
-    <div style="font-size: 19px; font-weight: 800; color: var(--text-main); margin-top: 4px;">${{ number_format($totalSpend, 2) }}</div>
+    <div style="font-size: 19px; font-weight: 800; color: var(--text-main); margin-top: 4px;">{{ $currencySymbol }}{{ number_format($totalSpend, 2) }}</div>
     <div style="font-size: 10px; color: var(--text-subtle); margin-top: 1px;">Meta Ad Spend</div>
   </div>
 
@@ -89,8 +89,8 @@
 
   <div class="card" style="padding: 14px 16px;">
     <div style="font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Cost / Conv.</div>
-    <div style="font-size: 19px; font-weight: 800; color: var(--text-main); margin-top: 4px;">${{ number_format($costPerConv, 2) }}</div>
-    <div style="font-size: 10px; color: var(--accent-green); font-weight: 600; margin-top: 1px;">Target: &lt; $1.50</div>
+    <div style="font-size: 19px; font-weight: 800; color: var(--text-main); margin-top: 4px;">{{ $currencySymbol }}{{ number_format($costPerConv, 2) }}</div>
+    <div style="font-size: 10px; color: var(--accent-green); font-weight: 600; margin-top: 1px;">Target: &lt; {{ $currencySymbol }}1.50</div>
   </div>
 </div>
 
@@ -174,13 +174,13 @@
             </a>
           </td>
           <td><span style="font-weight: 600;">{{ $cp['client_name'] }}</span></td>
-          <td><strong>${{ number_format($cp['spend'], 2) }}</strong></td>
+          <td><strong>{{ $cp['currency_symbol'] }}{{ number_format($cp['spend'], 2) }}</strong></td>
           <td>{{ number_format($cp['reach']) }}</td>
           <td>{{ number_format($cp['impressions']) }}</td>
           <td>{{ number_format($cp['clicks']) }}</td>
           <td><span class="pill pill-blue" style="font-size: 10px;">{{ $cp['ctr'] }}%</span></td>
           <td><strong style="color: #B45309;">{{ number_format($cp['joins']) }}</strong></td>
-          <td><span class="pill pill-green" style="font-size: 10px;">${{ number_format($cp['cost_per_join'], 2) }}</span></td>
+          <td><span class="pill pill-green" style="font-size: 10px;">{{ $cp['currency_symbol'] }}{{ number_format($cp['cost_per_join'], 2) }}</span></td>
           <td><strong>{{ $cp['conversion_rate'] }}%</strong></td>
         </tr>
         @endforeach
@@ -227,7 +227,7 @@
             <td><strong style="color: var(--brand-yellow-hover);">{{ number_format($pp['telegram_clicks']) }}</strong></td>
             <td><strong style="color: #B45309;">{{ number_format($pp['joins']) }}</strong></td>
             <td><span class="pill pill-green" style="font-size: 9.5px;">{{ $pp['conversion_rate'] }}%</span></td>
-            <td>${{ number_format($pp['cost_per_join'], 2) }}</td>
+            <td>{{ $pp['currency_symbol'] }}{{ number_format($pp['cost_per_join'], 2) }}</td>
           </tr>
           @endforeach
         </tbody>

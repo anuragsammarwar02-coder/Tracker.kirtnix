@@ -151,7 +151,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_spending'] ?: 1627, 0) }}</span>
+                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_spending'], 2) }}</span>
                     </div>
                 </div>
 
@@ -162,7 +162,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_budget'] ?: 23838, 0) }}</span>
+                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_budget'], 2) }}</span>
                         <p class="text-[11px] text-slate-400 mt-1">Live from the connected Meta ad account</p>
                     </div>
                 </div>
@@ -174,7 +174,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['remaining_budget'] ?: 187, 0) }}</span>
+                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['remaining_budget'], 2) }}</span>
                         <p class="text-[11px] text-slate-400 mt-1">Live from Meta ad account</p>
                     </div>
                 </div>
@@ -195,15 +195,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 border-b border-slate-100 bg-[#f8fafc]/80 p-5 gap-4">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">AD ACCOUNT</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount->name ?? 'KX001 - GJ' }} ({{ $adAccount->account_id ?? 'act_2337703703246935' }})</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount->name ?? 'Not Connected' }} ({{ $adAccount->account_id ?? 'None' }})</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">STATUS</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount->status ?? 'Active' }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount->status ?? 'Inactive' }}</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">CURRENCY</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount->currency ?? 'INR' }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount->currency ?? 'INR' }} ({{ $adAccount?->currency_symbol ?? '₹' }})</span>
                     </div>
                 </div>
 
@@ -211,15 +211,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 border-b border-slate-100 p-5 gap-4">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">LIFETIME SPEND</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">₹{{ number_format($adAccount->lifetime_spend ?? 23651, 0) }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($adAccount->lifetime_spend ?? 0, 2) }}</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACCOUNT SPEND LIMIT</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">₹{{ number_format($adAccount->spend_limit ?? 23838, 0) }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($adAccount->spend_limit ?? 0, 2) }}</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACCOUNT BALANCE</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">₹{{ number_format($adAccount->balance ?? 985, 0) }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($adAccount->balance ?? 0, 2) }}</span>
                     </div>
                 </div>
 
@@ -227,11 +227,11 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 border-b border-slate-100 p-5 gap-4">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">PAYMENT METHOD</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount->payment_method ?? 'Available balance (₹220.85 INR)' }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount->payment_method ?? 'Meta Billing' }}</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACTIVE DAILY BUDGET</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">₹{{ number_format($adAccount->active_daily_budget ?? 2314, 0) }} / day</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($adAccount->active_daily_budget ?? 0, 2) }} / day</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">LIFETIME BUDGETS</span>

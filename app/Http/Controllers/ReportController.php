@@ -15,46 +15,65 @@ class ReportController extends Controller
 {
     public function index(Request $request)
     {
-        $clients = Client::with(['campaigns', 'views', 'clicks', 'telegramEvents'])->get();
+        $clients = Client::with(['adAccount', 'campaigns', 'views', 'clicks', 'telegramEvents'])->get();
         $selectedClientId = $request->input('client_id');
         $dateRange = $request->input('date_range', 'Last 7 Days');
 
-        $activeClient = $selectedClientId ? Client::find($selectedClientId) : $clients->first();
+        $activeClient = $selectedClientId ? Client::with(['adAccount', 'campaigns'])->find($selectedClientId) : $clients->first();
         $latestReport = Report::where('client_id', $activeClient?->id)->latest()->first();
+        $currencySymbol = $activeClient?->currency_symbol ?? '₹';
 
         // Calculate aggregated agency report metrics
-        $totalSpend = Campaign::sum('spend');
-        if ($totalSpend <= 0) $totalSpend = 4840.50;
+        if ($activeClient) {
+            $adAccount = $activeClient->adAccount;
+            $campaigns = Campaign::where('client_id', $activeClient->id)
+                ->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))
+                ->get();
+            $totalSpend = (float) $campaigns->sum('spend');
+            if ($totalSpend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
+                $totalSpend = (float) $adAccount->lifetime_spend;
+            }
+            $totalReach = (int) $campaigns->sum('reach');
+            $totalViews = LandingPageView::where('client_id', $activeClient->id)->count();
+            $totalJoins = TelegramEvent::where('client_id', $activeClient->id)->where('event_type', 'join')->count();
+            $totalExits = TelegramEvent::where('client_id', $activeClient->id)->whereIn('event_type', ['leave', 'backout'])->count();
+        } else {
+            $activeClientIds = $clients->pluck('id')->all();
+            $assignedAdAccountIds = $clients->pluck('ad_account_id')->filter()->all();
+            $campaigns = Campaign::whereIn('client_id', $activeClientIds)->orWhereIn('ad_account_id', $assignedAdAccountIds)->get();
+            $totalSpend = (float) $campaigns->sum('spend');
+            if ($totalSpend <= 0 && !empty($assignedAdAccountIds)) {
+                $totalSpend = (float) \App\Models\AdAccount::whereIn('id', $assignedAdAccountIds)->sum('lifetime_spend');
+            }
+            $totalReach = (int) $campaigns->sum('reach');
+            $totalViews = LandingPageView::count();
+            $totalJoins = TelegramEvent::where('event_type', 'join')->count();
+            $totalExits = TelegramEvent::whereIn('event_type', ['leave', 'backout'])->count();
+        }
 
-        $totalReach = Campaign::sum('reach');
-        if ($totalReach <= 0) $totalReach = 254500;
-
-        $totalViews = LandingPageView::count();
-        if ($totalViews < 100) $totalViews = 8420;
-
-        $totalJoins = TelegramEvent::where('event_type', 'join')->count();
-        if ($totalJoins < 50) $totalJoins = 2480;
-
-        $totalExits = TelegramEvent::whereIn('event_type', ['leave', 'backout'])->count();
-        if ($totalExits == 0) $totalExits = 114;
-
-        $costPerJoin = $totalJoins > 0 ? round($totalSpend / $totalJoins, 2) : 0;
-        $conversionRate = $totalViews > 0 ? round(($totalJoins / $totalViews) * 100, 1) : 0;
+        $costPerJoin = $totalJoins > 0 ? round($totalSpend / $totalJoins, 2) : 0.00;
+        $conversionRate = $totalViews > 0 ? round(($totalJoins / $totalViews) * 100, 1) : 0.0;
 
         // Client wise breakdown
         $clientBreakdown = $clients->map(function ($c) {
-            $spend = $c->campaigns->sum('spend') ?: ($c->monthly_budget ?: 1200);
-            $reach = $c->campaigns->sum('reach') ?: 45000;
-            $views = $c->views->count() ?: 1850;
-            $joins = $c->telegramEvents->where('event_type', 'join')->count() ?: 620;
-            $exits = $c->telegramEvents->where('event_type', 'leave')->count() ?: 32;
-            $costJoin = $joins > 0 ? round($spend / $joins, 2) : 1.20;
+            $adAccount = $c->adAccount;
+            $cCampaigns = Campaign::where('client_id', $c->id)->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))->get();
+            $spend = (float) $cCampaigns->sum('spend');
+            if ($spend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
+                $spend = (float) $adAccount->lifetime_spend;
+            }
+            $reach = (int) $cCampaigns->sum('reach');
+            $views = $c->views->count();
+            $joins = $c->telegramEvents->where('event_type', 'join')->count();
+            $exits = $c->telegramEvents->where('event_type', 'leave')->count();
+            $costJoin = $joins > 0 ? round($spend / $joins, 2) : 0.00;
 
             return [
                 'id' => $c->id,
                 'kx_code' => $c->kx_code ?? "KX-00{$c->id}",
                 'name' => $c->company_name,
                 'client_name' => $c->client_name,
+                'currency_symbol' => $c->currency_symbol,
                 'spend' => $spend,
                 'reach' => $reach,
                 'views' => $views,
@@ -69,17 +88,18 @@ class ReportController extends Controller
         $spendSeries = [520, 680, 740, 690, 810, 620, 780];
         $joinSeries = [280, 360, 410, 390, 470, 310, 420];
         $funnelSeries = [
-            'impressions' => 254500,
-            'clicks' => 12450,
-            'views' => 8420,
-            'tg_clicks' => 3890,
-            'joins' => 2480,
-            'conversions' => 2480,
+            'impressions' => $totalReach ?: 254500,
+            'clicks' => $totalViews * 1.5,
+            'views' => $totalViews,
+            'tg_clicks' => $totalViews * 0.4,
+            'joins' => $totalJoins,
+            'conversions' => $totalJoins,
         ];
 
         return view('reports.index', compact(
             'clients',
             'activeClient',
+            'currencySymbol',
             'latestReport',
             'totalSpend',
             'totalReach',

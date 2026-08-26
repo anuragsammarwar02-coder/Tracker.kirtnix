@@ -21,3 +21,5 @@ yarn-error.log
 /bin/*.zip
 /database/*.sqlite
 /database/*.sqlite-journal
+/database/*.sqlite.bak*
+/database/*.bak*

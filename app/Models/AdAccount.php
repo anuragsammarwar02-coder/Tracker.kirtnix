@@ -64,6 +64,15 @@ class AdAccount extends Model
 
     public function getCurrencySymbolAttribute(): string
     {
-        return $this->currency === 'INR' ? '₹' : '$';
+        return match (strtoupper((string) $this->currency)) {
+            'INR' => '₹',
+            'USD' => '$',
+            'EUR' => '€',
+            'GBP' => '£',
+            'AED' => 'AED ',
+            'CAD' => 'CA$',
+            'AUD' => 'A$',
+            default => $this->currency ? $this->currency . ' ' : '₹',
+        };
     }
 }

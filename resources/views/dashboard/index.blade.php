@@ -40,7 +40,7 @@
   <!-- Total Spend -->
   <div class="card" style="padding: 14px 16px;">
     <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Total Spend</div>
-    <div style="font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 4px;">${{ number_format($totalSpend, 2) }}</div>
+    <div style="font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 4px;">{{ $currencySymbol }}{{ number_format($totalSpend, 2) }}</div>
     <div style="font-size: 10.5px; color: var(--text-subtle); margin-top: 2px;">Meta Ad Spend</div>
   </div>
 
@@ -54,7 +54,7 @@
   <!-- Cost per Join -->
   <div class="card" style="padding: 14px 16px;">
     <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cost per Join</div>
-    <div style="font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 4px;">${{ number_format($costPerJoin, 2) }}</div>
+    <div style="font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 4px;">{{ $currencySymbol }}{{ number_format($costPerJoin, 2) }}</div>
     <div style="font-size: 10.5px; color: var(--text-subtle); margin-top: 2px;">Avg. across funnels</div>
   </div>
 
@@ -216,9 +216,9 @@
               <div style="font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">{{ $cp['kx_code'] }} · {{ $cp['client_name'] }}</div>
             </td>
             <td><span class="pill pill-gray" style="font-size: 10px;">{{ $cp['industry'] }}</span></td>
-            <td><strong>${{ number_format($cp['spend'], 2) }}</strong></td>
+            <td><strong>{{ $cp['currency_symbol'] }}{{ number_format($cp['spend'], 2) }}</strong></td>
             <td><span style="color: #B45309; font-weight: 700;">{{ number_format($cp['joins']) }}</span></td>
-            <td>${{ number_format($cp['cost_per_join'], 2) }}</td>
+            <td>{{ $cp['currency_symbol'] }}{{ number_format($cp['cost_per_join'], 2) }}</td>
             <td>
               @if($cp['meta_connected'])
                 <span class="pill pill-green" style="font-size: 10px;"><span class="pill-dot"></span> Connected</span>

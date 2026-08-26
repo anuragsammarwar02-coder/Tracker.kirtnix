@@ -502,9 +502,9 @@
             <tr>
               <td><strong>{{ $rep->title }}</strong></td>
               <td>{{ $rep->date_range }}</td>
-              <td>${{ number_format($rep->spend, 2) }}</td>
+              <td>{{ $client->currency_symbol }}{{ number_format($rep->spend, 2) }}</td>
               <td>{{ number_format($rep->joins) }}</td>
-              <td>${{ number_format($rep->cost_per_join, 2) }}</td>
+              <td>{{ $client->currency_symbol }}{{ number_format($rep->cost_per_join, 2) }}</td>
               <td><span class="pill pill-green">Completed</span></td>
             </tr>
             @empty

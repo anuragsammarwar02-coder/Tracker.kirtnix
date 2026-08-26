@@ -35,9 +35,17 @@ class AnalyticsController extends Controller
         $deviceData = $this->analyticsService->getDeviceBreakdown($clientId);
         $utmData = $this->analyticsService->getUtmPerformance($clientId);
 
-        $clients = Client::all();
-        $campaigns = Campaign::when($clientId, fn($q) => $q->where('client_id', $clientId))->get();
-        $landingPages = LandingPage::when($clientId, fn($q) => $q->where('client_id', $clientId))->get();
+        $selectedClient = $clientId ? Client::with(['adAccount', 'campaigns'])->find($clientId) : null;
+        $clients = Client::with('adAccount')->get();
+
+        if ($selectedClient) {
+            $currencySymbol = $selectedClient->currency_symbol;
+            $currency = $selectedClient->currency;
+        } else {
+            $firstAssigned = AdAccount::whereNotNull('client_id')->first();
+            $currencySymbol = $firstAssigned?->currency_symbol ?? '₹';
+            $currency = $firstAssigned?->currency ?? 'INR';
+        }
 
         $filters = [
             'client_id' => $clientId,
@@ -45,11 +53,42 @@ class AnalyticsController extends Controller
             'date_range' => $dateRange,
         ];
 
-        // 8 Key KPI Cards
-        $totalSpend = (float) Campaign::when($clientId, fn($q) => $q->where('client_id', $clientId))->sum('spend');
-        $impressions = (int) Campaign::when($clientId, fn($q) => $q->where('client_id', $clientId))->sum('impressions');
-        $reach = (int) Campaign::when($clientId, fn($q) => $q->where('client_id', $clientId))->sum('reach');
-        $adClicks = (int) Campaign::when($clientId, fn($q) => $q->where('client_id', $clientId))->sum('clicks') ?: (int) CtaClick::when($clientId, fn($q) => $q->where('client_id', $clientId))->count();
+        // 8 Key KPI Cards Scoped to Client / Assigned Ad Account
+        if ($selectedClient) {
+            $adAccount = $selectedClient->adAccount;
+            $campaignsQuery = Campaign::where(function ($q) use ($selectedClient, $adAccount) {
+                $q->where('client_id', $selectedClient->id);
+                if ($adAccount) {
+                    $q->orWhere('ad_account_id', $adAccount->id);
+                }
+            });
+            $campaigns = $campaignsQuery->get();
+            $totalSpend = (float) $campaigns->sum('spend');
+            if ($totalSpend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
+                $totalSpend = (float) $adAccount->lifetime_spend;
+            }
+            $impressions = (int) $campaigns->sum('impressions');
+            $reach = (int) $campaigns->sum('reach');
+            $adClicks = (int) CtaClick::where('client_id', $selectedClient->id)->count() ?: (int) $campaigns->sum(fn($c) => (int) ($c->getAttributes()['clicks'] ?? $c->clicks()->count()));
+        } else {
+            $activeClientIds = $clients->pluck('id')->all();
+            $assignedAdAccountIds = $clients->pluck('ad_account_id')->filter()->all();
+
+            $campaigns = Campaign::where(function ($q) use ($activeClientIds, $assignedAdAccountIds) {
+                $q->whereIn('client_id', $activeClientIds)
+                  ->orWhereIn('ad_account_id', $assignedAdAccountIds);
+            })->get();
+
+            $totalSpend = (float) $campaigns->sum('spend');
+            if ($totalSpend <= 0 && !empty($assignedAdAccountIds)) {
+                $totalSpend = (float) AdAccount::whereIn('id', $assignedAdAccountIds)->sum('lifetime_spend');
+            }
+            $impressions = (int) $campaigns->sum('impressions');
+            $reach = (int) $campaigns->sum('reach');
+            $adClicks = (int) CtaClick::count() ?: (int) $campaigns->sum(fn($c) => (int) ($c->getAttributes()['clicks'] ?? $c->clicks()->count()));
+        }
+
+        $landingPages = LandingPage::when($clientId, fn($q) => $q->where('client_id', $clientId))->get();
         $lpViews = $metrics['total_views'];
         $uniqueVisitors = $metrics['unique_visitors'];
         $tgClicks = $metrics['total_clicks'];
@@ -97,14 +136,15 @@ class AnalyticsController extends Controller
         ];
 
         // Campaign Performance Table Data
-        $campaignPerformance = $campaigns->map(function ($camp) {
+        $campaignPerformance = $campaigns->map(function ($camp) use ($currencySymbol) {
             $views = $camp->views()->count();
-            $clicks = $camp->clicks()->count();
+            $clicks = $camp->clicks()->count() ?: (int) ($camp->getAttributes()['clicks'] ?? 0);
             $joins = $camp->telegramEvents()->where('event_type', 'join')->count() ?: (int) $camp->subscribers;
             $spend = (float) $camp->spend;
             $cpj = $joins > 0 ? round($spend / $joins, 2) : 0.00;
             $ctr = $views > 0 ? round(($clicks / $views) * 100, 1) : 0.0;
             $convRate = $views > 0 ? round(($joins / $views) * 100, 1) : 0.0;
+            $cSymbol = $camp->adAccount?->currency_symbol ?? ($camp->client?->currency_symbol ?? $currencySymbol);
 
             return [
                 'id' => $camp->id,
@@ -112,6 +152,7 @@ class AnalyticsController extends Controller
                 'client_name' => $camp->client?->company_name ?? 'Client',
                 'status' => $camp->status,
                 'spend' => $spend,
+                'currency_symbol' => $cSymbol,
                 'reach' => (int) $camp->reach,
                 'impressions' => (int) $camp->impressions,
                 'views' => $views,
@@ -125,7 +166,7 @@ class AnalyticsController extends Controller
         });
 
         // Landing Page Performance Data
-        $pagePerformance = $landingPages->map(function ($page) {
+        $pagePerformance = $landingPages->map(function ($page) use ($currencySymbol) {
             $views = $page->views()->count();
             $uniqueVisitors = $page->views()->where('is_unique', true)->count() ?: $views;
             $clicks = $page->clicks()->count();
@@ -134,6 +175,7 @@ class AnalyticsController extends Controller
             $convRate = $views > 0 ? round(($joins / $views) * 100, 1) : 0.0;
             $spend = (float) ($page->campaign?->spend ?? 0);
             $cpj = $joins > 0 ? round($spend / $joins, 2) : 0.00;
+            $cSymbol = $page->client?->currency_symbol ?? $currencySymbol;
 
             return [
                 'title' => $page->title,
@@ -145,12 +187,13 @@ class AnalyticsController extends Controller
                 'joins' => $joins,
                 'conversion_rate' => $convRate,
                 'cost_per_join' => $cpj,
+                'currency_symbol' => $cSymbol,
             ];
         });
 
         // Telegram Performance Metrics
-        $joinRequestsCount = Conversion::when($clientId, fn($q) => $q->where('client_id', $clientId))->where('event_type', 'join_request')->count()
-            + TelegramEvent::when($clientId, fn($q) => $q->where('client_id', $clientId))->where('event_type', 'pending')->count();
+        $joinRequestsCount = (int) (Conversion::when($clientId, fn($q) => $q->where('client_id', $clientId))->where('event_type', 'join_request')->count())
+            + (int) (TelegramEvent::when($clientId, fn($q) => $q->where('client_id', $clientId))->where('event_type', 'pending')->count());
         $metaSentCount = Conversion::when($clientId, fn($q) => $q->where('client_id', $clientId))->where('meta_capi_status', 'sent')->count() ?: $conversions;
 
         $telegramMetrics = [
@@ -168,12 +211,18 @@ class AnalyticsController extends Controller
         // Client Comparison Data
         $clientComparison = $clients->map(function ($c) {
             $joins = $c->telegramEvents()->where('event_type', 'join')->count();
-            $spend = (float) $c->campaigns()->sum('spend');
+            $adAccount = $c->adAccount;
+            $cCampaigns = Campaign::where('client_id', $c->id)->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))->get();
+            $spend = (float) $cCampaigns->sum('spend');
+            if ($spend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
+                $spend = (float) $adAccount->lifetime_spend;
+            }
             return [
                 'name' => $c->company_name,
                 'kx_code' => $c->kx_code,
                 'joins' => $joins,
                 'spend' => $spend,
+                'currency_symbol' => $c->currency_symbol,
                 'cpj' => $joins > 0 ? round($spend / $joins, 2) : 0.00,
             ];
         });
@@ -191,11 +240,14 @@ class AnalyticsController extends Controller
             'deviceData',
             'utmData',
             'clients',
+            'selectedClient',
             'campaigns',
             'landingPages',
             'clicks',
             'filters',
             'totalSpend',
+            'currencySymbol',
+            'currency',
             'impressions',
             'reach',
             'adClicks',

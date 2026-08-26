@@ -106,4 +106,14 @@ class Client extends Model
         }
         return asset('assets/branding/kirtnix-logo-dark-icon.png');
     }
+
+    public function getCurrencyAttribute(): string
+    {
+        return $this->adAccount?->currency ?? 'INR';
+    }
+
+    public function getCurrencySymbolAttribute(): string
+    {
+        return $this->adAccount?->currency_symbol ?? '₹';
+    }
 }

@@ -81,18 +81,26 @@
         </div>
 
         <!-- Quick Metrics Snapshot -->
+        @php
+          $cSpend = (float) $client->campaigns->sum('spend');
+          if ($cSpend <= 0 && $client->adAccount && $client->adAccount->lifetime_spend > 0) {
+              $cSpend = (float) $client->adAccount->lifetime_spend;
+          }
+          $cJoins = $client->telegramEvents->where('event_type', 'join')->count();
+          $cCpj = $cJoins > 0 ? round($cSpend / $cJoins, 2) : 0.00;
+        @endphp
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-bottom: 14px;">
           <div>
             <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Spend</div>
-            <div style="font-size: 13.5px; font-weight: 800; color: var(--text-main); margin-top: 2px;">${{ number_format($client->campaigns->sum('spend') ?: ($client->monthly_budget ?: 1200), 0) }}</div>
+            <div style="font-size: 13.5px; font-weight: 800; color: var(--text-main); margin-top: 2px;">{{ $client->currency_symbol }}{{ number_format($cSpend, 0) }}</div>
           </div>
           <div>
             <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Joins</div>
-            <div style="font-size: 13.5px; font-weight: 800; color: #B45309; margin-top: 2px;">{{ number_format($client->telegramEvents->where('event_type', 'join')->count() ?: 620) }}</div>
+            <div style="font-size: 13.5px; font-weight: 800; color: #B45309; margin-top: 2px;">{{ number_format($cJoins) }}</div>
           </div>
           <div>
             <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Cost / Join</div>
-            <div style="font-size: 13.5px; font-weight: 800; color: var(--accent-green); margin-top: 2px;">$0.96</div>
+            <div style="font-size: 13.5px; font-weight: 800; color: var(--accent-green); margin-top: 2px;">{{ $client->currency_symbol }}{{ number_format($cCpj, 2) }}</div>
           </div>
         </div>
       </div>

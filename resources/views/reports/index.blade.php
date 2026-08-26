@@ -60,7 +60,7 @@
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px;">
   <div class="card" style="padding: 14px 16px;">
     <div style="font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Spend</div>
-    <div style="font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 2px;">${{ number_format($totalSpend, 2) }}</div>
+    <div style="font-size: 20px; font-weight: 800; color: var(--text-main); margin-top: 2px;">{{ $currencySymbol }}{{ number_format($totalSpend, 2) }}</div>
     <div style="font-size: 10px; color: var(--text-subtle);">Meta Ads Budget</div>
   </div>
 
@@ -72,8 +72,8 @@
 
   <div class="card" style="padding: 14px 16px;">
     <div style="font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Cost / Join</div>
-    <div style="font-size: 20px; font-weight: 800; color: var(--accent-green); margin-top: 2px;">${{ number_format($costPerJoin, 2) }}</div>
-    <div style="font-size: 10px; color: var(--text-subtle);">Target: $1.20</div>
+    <div style="font-size: 20px; font-weight: 800; color: var(--accent-green); margin-top: 2px;">{{ $currencySymbol }}{{ number_format($costPerJoin, 2) }}</div>
+    <div style="font-size: 10px; color: var(--text-subtle);">Target: {{ $currencySymbol }}1.20</div>
   </div>
 
   <div class="card" style="padding: 14px 16px;">
@@ -200,12 +200,12 @@
             <div style="font-size: 10.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">{{ $cb['kx_code'] }}</div>
           </td>
           <td>{{ $cb['client_name'] }}</td>
-          <td><strong>${{ number_format($cb['spend'], 2) }}</strong></td>
+          <td><strong>{{ $cb['currency_symbol'] }}{{ number_format($cb['spend'], 2) }}</strong></td>
           <td>{{ number_format($cb['reach']) }}</td>
           <td>{{ number_format($cb['views']) }}</td>
           <td><strong style="color: #B45309;">{{ number_format($cb['joins']) }}</strong></td>
           <td style="color: var(--accent-red);">{{ number_format($cb['exits']) }}</td>
-          <td><span class="pill pill-green">${{ number_format($cb['cost_per_join'], 2) }}</span></td>
+          <td><span class="pill pill-green">{{ $cb['currency_symbol'] }}{{ number_format($cb['cost_per_join'], 2) }}</span></td>
         </tr>
         @empty
         <tr>
