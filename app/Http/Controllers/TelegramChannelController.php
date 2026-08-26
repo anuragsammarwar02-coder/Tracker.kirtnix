@@ -72,6 +72,31 @@ class TelegramChannelController extends Controller
     }
 
     /**
+     * Assign or reassign a channel to a Client Workspace.
+     */
+    public function assignClient(Request $request, TelegramChannel $channel): RedirectResponse|JsonResponse
+    {
+        $request->validate([
+            'client_id' => 'nullable|exists:clients,id',
+        ]);
+
+        $clientId = $request->input('client_id') ? (int) $request->input('client_id') : null;
+        $channel->update(['client_id' => $clientId]);
+
+        $clientName = $channel->fresh()->client ? $channel->fresh()->client->company_name : 'Unassigned';
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => "Channel '{$channel->title}' assigned to {$clientName}.",
+                'channel' => $channel->fresh()->load('client'),
+            ]);
+        }
+
+        return back()->with('success', "Channel '{$channel->title}' assigned to {$clientName}.");
+    }
+
+    /**
      * Disconnect a tracked channel.
      */
     public function destroy(TelegramChannel $channel): RedirectResponse

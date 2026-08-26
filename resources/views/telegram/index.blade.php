@@ -250,13 +250,17 @@
                             {{ $channel->telegram_chat_id }}
                         </td>
                         <td class="py-3.5 px-4">
-                            @if($channel->client)
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-yellow-50 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
-                                    {{ $channel->client->company_name }} ({{ $channel->client->kx_code }})
-                                </span>
-                            @else
-                                <span class="text-slate-400 text-[11px]">Unassigned</span>
-                            @endif
+                            <form action="{{ route('telegram.channels.assign_client', $channel) }}" method="POST" class="inline-flex items-center gap-1.5">
+                                @csrf
+                                <select name="client_id" onchange="this.form.submit()" class="text-[11px] font-semibold bg-slate-50 dark:bg-slate-800 border {{ $channel->client ? 'border-yellow-300 dark:border-yellow-700 text-yellow-900 dark:text-yellow-300 bg-yellow-50/50 dark:bg-yellow-950/20' : 'border-slate-300 dark:border-slate-700 text-slate-500' }} rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-yellow-400 cursor-pointer shadow-2xs">
+                                    <option value="" {{ !$channel->client_id ? 'selected' : '' }}>-- Unassigned --</option>
+                                    @foreach($clients as $c)
+                                        <option value="{{ $c->id }}" {{ $channel->client_id === $c->id ? 'selected' : '' }}>
+                                            {{ $c->company_name }} ({{ $c->kx_code }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </form>
                         </td>
                         <td class="py-3.5 px-4 font-semibold text-slate-900 dark:text-slate-100">
                             {{ number_format($channel->member_count ?: 13587) }} members

@@ -400,6 +400,7 @@ Route::middleware(['auth'])->group(function () {
     // Telegram Tracked Channels & Auto-Detection
     Route::post('/telegram/channels/verify', [TelegramChannelController::class, 'verify'])->name('telegram.channels.verify');
     Route::get('/telegram/channels/auto-detect', [TelegramChannelController::class, 'autoDetect'])->name('telegram.channels.auto_detect');
+    Route::post('/telegram/channels/{channel}/assign-client', [TelegramChannelController::class, 'assignClient'])->name('telegram.channels.assign_client');
     Route::delete('/telegram/channels/{channel}', [TelegramChannelController::class, 'destroy'])->name('telegram.channels.destroy');
 
     // 10. Meta / Facebook OAuth & Integration Routes
