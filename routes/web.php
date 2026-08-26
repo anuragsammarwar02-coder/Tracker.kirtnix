@@ -34,6 +34,8 @@ Route::get('/healthz', function () {
         if (request()->query('clear_cache')) {
             try {
                 \Illuminate\Support\Facades\Artisan::call('optimize:clear');
+                \Illuminate\Support\Facades\Artisan::call('route:clear');
+                \Illuminate\Support\Facades\Artisan::call('config:clear');
                 \Illuminate\Support\Facades\Artisan::call('view:clear');
                 if (function_exists('opcache_reset')) {
                     @opcache_reset();

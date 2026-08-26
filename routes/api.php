@@ -18,5 +18,8 @@ Route::post('/track/view', [TrackingApiController::class, 'recordView'])->name('
 Route::post('/track/invite', [TrackingApiController::class, 'getInvite'])->name('api.track.invite');
 Route::post('/track/click', [TrackingApiController::class, 'recordClick'])->name('api.track.click');
 
-// 3. Conversion Meta CAPI Retry
+// 3. Live Metrics API
+Route::get('/analytics/{slug}/live-metrics', [\App\Http\Controllers\AnalyticsController::class, 'liveMetrics'])->name('api.analytics.live_metrics');
+
+// 4. Conversion Meta CAPI Retry
 Route::post('/conversions/{conversion}/retry-meta', [TrackingApiController::class, 'retryMeta'])->name('api.conversions.retry_meta');
