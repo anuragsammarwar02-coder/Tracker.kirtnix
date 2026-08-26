@@ -175,29 +175,43 @@ Route::get('/healthz', function () {
             ], 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         }
 
-        $out = "=== PRODUCTION DATABASE DISCOVERY REPORT ===\n";
-        $out .= "Configured: {$dbPath} (Exists: " . ($dbExists ? 'YES' : 'NO') . ", {$dbSize} bytes)\n";
-        $out .= "Discovered Candidates (" . count($uniqueCandidates) . " found):\n\n";
+        $html = "<!DOCTYPE html><html><head><title>Kirtnix DB Inspector</title>";
+        $html .= "<style>body{font-family:monospace;background:#0d1117;color:#c9d1d9;padding:20px;} table{border-collapse:collapse;width:100%;margin-top:15px;} th,td{border:1px solid #30363d;padding:8px 12px;text-align:left;} th{background:#161b22;color:#58a6ff;} tr:nth-child(even){background:#161b22;}</style></head><body>";
+        $html .= "<h2>KIRTNIX PRODUCTION DATABASE INSPECTOR (READ-ONLY)</h2>";
+        $html .= "<p><strong>Configured DB:</strong> {$dbPath}<br>";
+        $html .= "<strong>Exists:</strong> " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)<br>";
+        $html .= "<strong>Connected:</strong> " . ($dbConnected ? 'YES' : 'NO') . "<br>";
+        $html .= "<strong>Live Records:</strong> Users={$usersCount}, Clients={$clientsCount}, LandingPages={$landingPagesCount}, Bots={$botsCount}</p>";
 
-        foreach ($uniqueCandidates as $idx => $cand) {
-            $num = $idx + 1;
-            $out .= "--- CANDIDATE #{$num} ---\n";
-            $out .= "Path: {$cand['absolute_path']}\n";
-            $out .= "Size: {$cand['size_formatted']} | Modified: {$cand['last_modified']}\n";
-            $out .= "Integrity: {$cand['sqlite_integrity']} | Has Users Table: " . ($cand['has_users_table'] ? 'YES' : 'NO') . "\n";
-            $out .= "Tables (" . count($cand['tables']) . "): " . implode(', ', array_slice($cand['tables'], 0, 15)) . "\n";
-            $countsStr = [];
-            foreach ($cand['table_counts'] as $t => $cnt) {
-                $countsStr[] = "{$t}={$cnt}";
+        $html .= "<h3>Discovered SQLite Candidate Files (" . count($uniqueCandidates) . ")</h3>";
+        if (empty($uniqueCandidates)) {
+            $html .= "<p style='color:#f85149;'>No candidate SQLite files found in scanned directories.</p>";
+        } else {
+            $html .= "<table><thead><tr><th>#</th><th>File Path</th><th>Size</th><th>Modified</th><th>Integrity</th><th>Users Table</th><th>Row Counts</th></tr></thead><tbody>";
+            foreach ($uniqueCandidates as $idx => $cand) {
+                $num = $idx + 1;
+                $countsStr = [];
+                foreach ($cand['table_counts'] as $t => $cnt) {
+                    $countsStr[] = "{$t}:{$cnt}";
+                }
+                $countsText = empty($countsStr) ? 'None' : htmlspecialchars(implode(', ', $countsStr));
+                $html .= "<tr>";
+                $html .= "<td>{$num}</td>";
+                $html .= "<td><strong>" . htmlspecialchars($cand['absolute_path']) . "</strong></td>";
+                $html .= "<td>{$cand['size_formatted']}</td>";
+                $html .= "<td>{$cand['last_modified']}</td>";
+                $html .= "<td>" . htmlspecialchars($cand['sqlite_integrity']) . "</td>";
+                $html .= "<td>" . ($cand['has_users_table'] ? '<span style="color:#3fb950;font-weight:bold;">YES</span>' : '<span style="color:#8b949e;">NO</span>') . "</td>";
+                $html .= "<td>{$countsText}</td>";
+                $html .= "</tr>";
             }
-            $out .= "Counts: " . (empty($countsStr) ? 'None' : implode(', ', $countsStr)) . "\n\n";
+            $html .= "</tbody></table>";
         }
 
-        $out .= "=== END REPORT ===\n";
-
-        return response($out, 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+        $html .= "</body></html>";
+        return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
     } catch (\Throwable $e) {
-        return response("CRITICAL HEALTHZ ERROR:\n" . $e->getMessage() . "\n\nStack Trace:\n" . $e->getTraceAsString(), 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+        return response("<h1>CRITICAL ERROR</h1><pre>" . htmlspecialchars($e->getMessage() . "\n" . $e->getTraceAsString()) . "</pre>", 200, ['Content-Type' => 'text/html; charset=UTF-8']);
     }
 });
 
