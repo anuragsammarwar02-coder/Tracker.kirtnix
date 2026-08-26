@@ -522,6 +522,7 @@ Route::get('/healthz', function () {
                 \Illuminate\Support\Facades\DB::commit();
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\DB::rollBack();
+                $recoverError = $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine();
             }
         }
 
@@ -708,6 +709,7 @@ Route::get('/healthz', function () {
                     'size' => $dbSize,
                     'connected' => $dbConnected,
                 ],
+                'recover_error' => $recoverError ?? null,
                 'live_counts' => [
                     'users' => $usersCount,
                     'clients' => $clientsCount,
