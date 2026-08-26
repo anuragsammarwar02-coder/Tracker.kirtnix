@@ -180,10 +180,10 @@ class MetaIntegrationController extends Controller
         MetaConnection::query()->delete();
         AdAccount::query()->delete();
         MetaBusiness::query()->delete();
-        Setting::set('meta_system_user_token', null);
+        Setting::where('key', 'meta_system_user_token')->delete();
 
         return redirect()->route('settings.index', ['tab' => 'meta'])
-            ->with('info', 'Meta agency connection disconnected and ad accounts removed.');
+            ->with('info', 'Meta connection disconnected successfully. You can now connect your Facebook account.');
     }
 
     /**

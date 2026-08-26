@@ -29,7 +29,7 @@ class SettingController extends Controller
         // Meta connection & accounts
         $metaConnection = MetaConnection::with(['businesses', 'adAccounts'])->first();
         if (!$metaConnection) {
-            $token = Setting::get('meta_system_user_token') ?? env('META_SYSTEM_USER_TOKEN');
+            $token = Setting::get('meta_system_user_token');
             if (!empty($token)) {
                 try {
                     $metaConnection = app(\App\Services\MetaSyncService::class)->connectAccessToken($token, auth()->id());
