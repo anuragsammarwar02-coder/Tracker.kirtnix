@@ -213,9 +213,34 @@ class MetaSyncService
 
         try {
             $rawAccId = str_replace('act_', '', $adAccount->account_id);
+
+            // 1. Sync live ad account metadata from Meta
+            $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}", [
+                'access_token' => $token,
+                'fields' => 'id,account_id,name,currency,account_status,spend_limit,balance,amount_spent,daily_budget,funding_source_details',
+            ]);
+
+            if ($accRes->successful() && !empty($accRes->json())) {
+                $accData = $accRes->json();
+                $spendLimit = isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : 0.00;
+                $balance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : 0.00;
+                $lifetimeSpend = isset($accData['amount_spent']) ? ((float) $accData['amount_spent'] / 100) : (float)$adAccount->lifetime_spend;
+                $dailyBudget = isset($accData['daily_budget']) ? ((float) $accData['daily_budget'] / 100) : 0.00;
+
+                $adAccount->update([
+                    'spend_limit' => $spendLimit,
+                    'balance' => $balance,
+                    'lifetime_spend' => $lifetimeSpend,
+                    'active_daily_budget' => $dailyBudget,
+                    'currency' => $accData['currency'] ?? $adAccount->currency,
+                    'last_synced_at' => now(),
+                ]);
+            }
+
+            // 2. Sync campaigns and insights from Meta
             $res = Http::withoutVerifying()->timeout(15)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/campaigns", [
                 'access_token' => $token,
-                'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,insights{reach,impressions,spend,actions}',
+                'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
                 'effective_status' => '["ACTIVE","PAUSED","ARCHIVED","IN_PROCESS","WITH_ISSUES"]',
                 'limit' => 100,
             ]);
@@ -226,7 +251,8 @@ class MetaSyncService
                     $spend = (float) ($insights['spend'] ?? 0);
                     $reach = (int) ($insights['reach'] ?? 0);
                     $impressions = (int) ($insights['impressions'] ?? 0);
-                    $dailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : (isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00);
+                    $dailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
+                    $lifetimeBudget = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
 
                     $subscribers = 0;
                     if (!empty($insights['actions'])) {
@@ -256,6 +282,7 @@ class MetaSyncService
                             'conversion_location' => 'Telegram Channel',
                             'status' => $status,
                             'spend' => $spend,
+                            'budget' => $lifetimeBudget,
                             'active_daily_budget' => $dailyBudget,
                             'reach' => $reach,
                             'impressions' => $impressions,

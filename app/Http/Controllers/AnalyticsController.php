@@ -396,13 +396,52 @@ class AnalyticsController extends Controller
             'backouts' => $backouts,
         ];
 
-        // Budget section
-        $totalBudgetLimit = $adAccount ? (float) ($adAccount->spend_limit > 0 ? $adAccount->spend_limit : ($campaigns->sum('active_daily_budget') > 0 ? $campaigns->sum('active_daily_budget') * 30 : ($adAccount->lifetime_spend > 0 ? $adAccount->lifetime_spend : $campaignSpend))) : 0.00;
+        // Active Daily Budget (Sum only for ACTIVE campaigns)
+        $activeCampaigns = $campaigns->filter(fn($c) => in_array(strtolower($c->status ?? ''), ['active', '1']));
+        $activeDailyBudgetSum = (float) $activeCampaigns->sum('active_daily_budget');
+        $campaignLifetimeBudgetSum = (float) $campaigns->sum('budget');
+
+        // Resolve Real Total Budget and Remaining Budget from Meta / Client
+        $totalBudgetLimit = 0.00;
+        $remainingBudget = 0.00;
+        $budgetSource = 'Live from Meta ad account';
+        $remainingSource = 'Live from Meta ad account';
+
+        if ($adAccount && (float) $adAccount->spend_limit > 0) {
+            $totalBudgetLimit = (float) $adAccount->spend_limit;
+            $remainingBudget = max(0, $totalBudgetLimit - ($adAccount->lifetime_spend ?: $campaignSpend));
+            $budgetSource = 'Account spend limit from Meta';
+            $remainingSource = 'Limit minus lifetime spend';
+        } elseif ($client && (float) $client->monthly_budget > 0) {
+            $totalBudgetLimit = (float) $client->monthly_budget;
+            $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
+            $budgetSource = 'Configured client monthly budget';
+            $remainingSource = 'Monthly budget minus spend';
+        } elseif ($campaignLifetimeBudgetSum > 0) {
+            $totalBudgetLimit = $campaignLifetimeBudgetSum;
+            $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
+            $budgetSource = 'Campaign lifetime budget from Meta';
+            $remainingSource = 'Budget minus campaign spend';
+        } elseif ($activeDailyBudgetSum > 0) {
+            $totalBudgetLimit = $activeDailyBudgetSum * 30;
+            $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
+            $budgetSource = 'Active daily run rate (30 days)';
+            $remainingSource = 'Run rate minus current spend';
+        } else {
+            // When all campaigns are paused/off and no hard limit is configured in Meta
+            $totalBudgetLimit = $campaignSpend > 0 ? $campaignSpend : (float) ($adAccount?->lifetime_spend ?? 0.00);
+            $remainingBudget = (float) ($adAccount?->balance > 0 ? $adAccount->balance : 0.00);
+            $budgetSource = 'Total spent (All campaigns currently paused)';
+            $remainingSource = $remainingBudget > 0 ? 'Account prepaid balance' : 'All campaigns currently paused';
+        }
+
         $budget = [
             'total_spending' => $campaignSpend,
             'total_budget' => $totalBudgetLimit,
-            'remaining_budget' => max(0, $totalBudgetLimit - $campaignSpend),
+            'remaining_budget' => $remainingBudget,
             'currency_symbol' => $adAccount?->currency_symbol ?? '₹',
+            'budget_source' => $budgetSource,
+            'remaining_source' => $remainingSource,
             'last_synced' => $adAccount?->last_synced_at ? $adAccount->last_synced_at->diffForHumans() : 'Never',
         ];
 
@@ -432,6 +471,8 @@ class AnalyticsController extends Controller
             'adAccount',
             'budget',
             'campaigns',
+            'activeDailyBudgetSum',
+            'campaignLifetimeBudgetSum',
             'kpis',
             'joinHistory',
             'dateRange',

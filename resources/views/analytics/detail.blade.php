@@ -163,7 +163,7 @@
                     </div>
                     <div class="mt-2">
                         <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_budget'], 2) }}</span>
-                        <p class="text-[11px] text-slate-400 mt-1">Live from the connected Meta ad account</p>
+                        <p class="text-[11px] text-slate-400 mt-1">{{ $budget['budget_source'] ?? 'Live from the connected Meta ad account' }}</p>
                     </div>
                 </div>
 
@@ -175,7 +175,7 @@
                     </div>
                     <div class="mt-2">
                         <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['remaining_budget'], 2) }}</span>
-                        <p class="text-[11px] text-slate-400 mt-1">Live from Meta ad account</p>
+                        <p class="text-[11px] text-slate-400 mt-1">{{ $budget['remaining_source'] ?? 'Live from Meta ad account' }}</p>
                     </div>
                 </div>
             </div>
@@ -186,7 +186,7 @@
             <div class="flex items-center gap-2.5">
                 <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">AD ACCOUNT (LIVE FROM META) <span class="sr-only">Ad Account (Live from Meta)</span></h2>
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                    Budget from: Account spend limit
+                    Budget from: {{ $adAccount?->spend_limit > 0 ? 'Account spend limit' : ($client?->monthly_budget > 0 ? 'Client monthly budget' : (($activeDailyBudgetSum ?? 0) > 0 ? 'Active daily run rate' : 'No spend limit set in Meta')) }}
                 </span>
             </div>
 
@@ -231,11 +231,11 @@
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACTIVE DAILY BUDGET</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($adAccount->active_daily_budget ?? 0, 2) }} / day</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($activeDailyBudgetSum ?? 0, 2) }} / day</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">LIFETIME BUDGETS</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">—</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ ($campaignLifetimeBudgetSum ?? 0) > 0 ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignLifetimeBudgetSum, 2) : '—' }}</span>
                     </div>
                 </div>
 
