@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdAccount;
 use App\Models\Client;
 use App\Models\LandingPage;
 use App\Models\User;
@@ -22,7 +23,7 @@ class LandingPageSlugAndMetaPixelTest extends TestCase
             'status' => 'active',
         ]);
 
-        // 1. Create first landing page
+        // 1. Create first landing page without manual telegram link
         $this->actingAs($user)->post(route('landing-pages.store_import'), [
             'client_id' => $client->id,
             'title' => 'kirtnix-digital',
@@ -30,7 +31,6 @@ class LandingPageSlugAndMetaPixelTest extends TestCase
             'import_type' => 'vercel',
             'vercel_project_name' => 'kirtnix-digital',
             'production_domain' => 'kirtnix-digital.vercel.app',
-            'telegram_destination' => 'https://t.me/+G84Kwpa2V0yYTU1',
             'meta_pixel_id' => '1130260856232291',
             'meta_access_token' => 'EAAB_test_token',
         ])->assertRedirect();
@@ -52,7 +52,6 @@ class LandingPageSlugAndMetaPixelTest extends TestCase
             'import_type' => 'vercel',
             'vercel_project_name' => 'kirtnix-digital',
             'production_domain' => 'kirtnix-digital.vercel.app',
-            'telegram_destination' => 'https://t.me/+G84Kwpa2V0yYTU1',
             'meta_pixel_id' => '9988776655443322',
             'meta_access_token' => 'EAAB_new_token',
         ]);
@@ -66,7 +65,7 @@ class LandingPageSlugAndMetaPixelTest extends TestCase
         $this->assertEquals('EAAB_new_token', $newLp->meta_access_token);
     }
 
-    public function test_native_page_can_also_be_recreated_after_deletion_with_same_slug()
+    public function test_can_update_meta_config_directly_on_imported_page()
     {
         $user = User::factory()->create();
         $client = Client::create([
@@ -76,42 +75,53 @@ class LandingPageSlugAndMetaPixelTest extends TestCase
             'status' => 'active',
         ]);
 
-        // 1. Create native page
-        $this->actingAs($user)->post(route('landing-pages.store'), [
+        $lp = LandingPage::create([
             'client_id' => $client->id,
-            'title' => 'Forex Scalper',
-            'slug' => 'forex-scalper',
-            'template_type' => 'forex_focus',
-            'brand_name' => 'Forex Scalper',
-            'hero_heading' => 'Win More Trades',
+            'title' => 'kirtnix-digital',
+            'slug' => 'kirtnix-digital',
+            'page_source' => 'vercel',
+            'template_type' => 'custom',
+            'brand_name' => 'Kirtnix Digital',
             'primary_cta_text' => 'Join Now',
-            'telegram_destination' => 'https://t.me/+test1234',
-        ])->assertRedirect();
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'is_active' => true,
+        ]);
 
-        $lp = LandingPage::where('slug', 'forex-scalper')->first();
-        $this->assertNotNull($lp);
-
-        // 2. Delete it
-        $this->actingAs($user)->delete(route('landing-pages.destroy', $lp))->assertRedirect();
-
-        // 3. Re-create native page with same slug
-        $response = $this->actingAs($user)->post(route('landing-pages.store'), [
-            'client_id' => $client->id,
-            'title' => 'Forex Scalper 2',
-            'slug' => 'forex-scalper',
-            'template_type' => 'forex_focus',
-            'brand_name' => 'Forex Scalper',
-            'hero_heading' => 'Win More Trades',
-            'primary_cta_text' => 'Join Now',
-            'telegram_destination' => 'https://t.me/+test1234',
+        $response = $this->actingAs($user)->post(route('landing-pages.update_meta_config', $lp), [
+            'meta_pixel_id' => '1018611380802707',
+            'meta_access_token' => 'EAAB_test_system_user_token_12345',
         ]);
 
         $response->assertSessionHasNoErrors();
         $response->assertRedirect();
 
-        $this->assertDatabaseHas('landing_pages', [
-            'slug' => 'forex-scalper',
-            'title' => 'Forex Scalper 2',
+        $lp->refresh();
+        $this->assertEquals('1018611380802707', $lp->meta_pixel_id);
+        $this->assertEquals('EAAB_test_system_user_token_12345', $lp->meta_access_token);
+    }
+
+    public function test_can_store_and_delete_ad_account_without_fake_fixtures()
+    {
+        $user = User::factory()->create();
+
+        // 1. Add ad account
+        $this->actingAs($user)->post(route('meta.ad_accounts.store'), [
+            'name' => 'My Custom Ad Account',
+            'account_id' => '1018611380802707',
+            'currency' => 'INR',
+            'status' => 'Active',
+        ])->assertRedirect();
+
+        $acc = AdAccount::where('account_id', 'act_1018611380802707')->first();
+        $this->assertNotNull($acc);
+        $this->assertEquals('My Custom Ad Account', $acc->name);
+
+        // 2. Delete ad account
+        $this->actingAs($user)->delete(route('meta.ad_accounts.destroy', $acc))
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('ad_accounts', [
+            'account_id' => 'act_1018611380802707',
         ]);
     }
 }

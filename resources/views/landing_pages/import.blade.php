@@ -11,12 +11,11 @@
     title: '{{ old('title', 'gujaratitrde') }}',
     slug: '{{ old('slug', 'gujaratitrde') }}',
     domain: '{{ old('production_domain', 'gujaratitrde.vercel.app') }}',
-    telegramDestination: '{{ old('telegram_destination', 'https://t.me/+sncMUjBZ9a41ZDll') }}',
+    telegramDestination: '{{ old('telegram_destination', '') }}',
     metaPixelId: '{{ old('meta_pixel_id', '') }}',
     metaAccessToken: '{{ old('meta_access_token', '') }}',
     showTokenModal: false,
     copiedKx: false,
-    copiedPixel: false,
     
     updateFromProject(projectName) {
       let prj = this.projects.find(p => p.name === projectName);
@@ -26,15 +25,10 @@
         this.domain = prj.domain;
       }
     },
-    copyText(text, type) {
+    copyScript(text) {
       navigator.clipboard.writeText(text);
-      if (type === 'kx') {
-        this.copiedKx = true;
-        setTimeout(() => this.copiedKx = false, 2500);
-      } else {
-        this.copiedPixel = true;
-        setTimeout(() => this.copiedPixel = false, 2500);
-      }
+      this.copiedKx = true;
+      setTimeout(() => this.copiedKx = false, 2500);
     }
 }" class="max-w-4xl mx-auto space-y-6">
 
@@ -53,7 +47,7 @@
     </a>
     <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Import landing page</h1>
     <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-      Bring an external page into Kirtnix. The Kirtnix tracking engine stays the single source of truth — views, CTA clicks, Telegram joins, Meta conversions and attribution work exactly like native pages.
+      Bring an external page into Kirtnix. The Kirtnix tracking script (<code class="font-mono text-amber-700 bg-slate-100 px-1 py-0.5 rounded">kx.js</code>) intercepts CTA clicks and your channel bot creates dynamic single-use invite links (Join Request for private channels, standard join for public channels) to fire Meta Conversions API events.
     </p>
   </div>
 
@@ -154,24 +148,24 @@
         </select>
       </div>
 
-      <!-- Telegram Destination Link -->
+      <!-- Telegram Link (Optional) -->
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">Telegram link (CTA fallback)</label>
-        <input type="text" name="telegram_destination" x-model="telegramDestination" class="w-full text-xs font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="https://t.me/+xyz or @yourchannel" required>
+        <label class="block text-xs font-bold text-slate-700 mb-1">Telegram Destination Link <span class="text-slate-400 font-normal">(Optional — Channel bot generates dynamic invite links)</span></label>
+        <input type="text" name="telegram_destination" x-model="telegramDestination" class="w-full text-xs font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="Optional fallback: https://t.me/+xyz or leave blank for bot links">
       </div>
 
-      <!-- Meta Pixel ID & Meta Access Token Inputs (Direct per-page configuration) -->
+      <!-- Meta Pixel ID & Meta Access Token Inputs -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 border-t border-slate-100">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Meta Pixel ID (Optional)</label>
-          <input type="text" name="meta_pixel_id" x-model="metaPixelId" value="{{ old('meta_pixel_id') }}" class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="e.g. 1130260856232291">
-          <div class="text-[11px] text-slate-500 mt-1">Leave empty to use client or global Meta Pixel.</div>
+          <input type="text" name="meta_pixel_id" x-model="metaPixelId" value="{{ old('meta_pixel_id') }}" class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="e.g. 1018611380802707">
+          <div class="text-[11px] text-slate-500 mt-1">Can also be added/updated directly after import.</div>
         </div>
 
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Meta Access Token / CAPI Token (Optional)</label>
           <input type="password" name="meta_access_token" x-model="metaAccessToken" value="{{ old('meta_access_token') }}" class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="EAAB...">
-          <div class="text-[11px] text-slate-500 mt-1">Conversions API token for server-side Meta delivery.</div>
+          <div class="text-[11px] text-slate-500 mt-1">Conversions API token for server-side Telegram join events.</div>
         </div>
       </div>
 
@@ -227,14 +221,14 @@
       </div>
 
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">Telegram Destination Link</label>
-        <input type="text" name="telegram_destination" class="w-full text-xs font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900" placeholder="https://t.me/+xyz" required>
+        <label class="block text-xs font-bold text-slate-700 mb-1">Telegram Destination Link <span class="text-slate-400 font-normal">(Optional)</span></label>
+        <input type="text" name="telegram_destination" class="w-full text-xs font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900" placeholder="Optional fallback: https://t.me/+xyz">
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 border-t border-slate-100">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Meta Pixel ID (Optional)</label>
-          <input type="text" name="meta_pixel_id" class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="e.g. 1130260856232291">
+          <input type="text" name="meta_pixel_id" class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="e.g. 1018611380802707">
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Meta Access Token / CAPI Token (Optional)</label>
@@ -291,14 +285,14 @@
       </div>
 
       <div>
-        <label class="block text-xs font-bold text-slate-700 mb-1">Telegram Destination Link</label>
-        <input type="text" name="telegram_destination" class="w-full text-xs font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900" placeholder="https://t.me/+xyz" required>
+        <label class="block text-xs font-bold text-slate-700 mb-1">Telegram Destination Link <span class="text-slate-400 font-normal">(Optional)</span></label>
+        <input type="text" name="telegram_destination" class="w-full text-xs font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900" placeholder="Optional fallback: https://t.me/+xyz">
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 border-t border-slate-100">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Meta Pixel ID (Optional)</label>
-          <input type="text" name="meta_pixel_id" class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="e.g. 1130260856232291">
+          <input type="text" name="meta_pixel_id" class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" placeholder="e.g. 1018611380802707">
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Meta Access Token / CAPI Token (Optional)</label>
@@ -314,37 +308,39 @@
     </form>
   </div>
 
-  <!-- SCRIPT GENERATOR BOX & META PIXEL SNIPPETS -->
+  <!-- SCRIPT GENERATOR BOX & META PIXEL CONFIGURATION (DIRECT UNDER SCRIPT) -->
   @if(isset($importedPage) && $importedPage)
   @php
-    $pixelId = $importedPage->meta_pixel_id ?: '1130260856232291';
     $trackingScript = '<script src="' . url('/api/public/kx.js') . '?lp=' . ($importedPage->tracking_token ?? $importedPage->slug) . '" data-kx-lp="' . ($importedPage->tracking_token ?? $importedPage->slug) . '"></script>';
-    $metaPixelScript = "<!-- Meta Pixel Code -->\n<script>\n!function(f,b,e,v,n,t,s)\n{if(f.fbq)return;n=f.fbq=function(){n.callMethod?\nn.callMethod.apply(n,arguments):n.queue.push(arguments)};\nif(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';\nn.queue=[];t=b.createElement(e);t.async=!0;\nt.src=v;s=b.getElementsByTagName(e)[0];\ns.parentNode.insertBefore(t,s)}(window, document,'script',\n'https://connect.facebook.net/en_US/fbevents.js');\nfbq('init', '{$pixelId}');\nfbq('track', 'PageView');\n</script>\n<noscript><img height=\"1\" width=\"1\" style=\"display:none\"\nsrc=\"https://www.facebook.com/tr?id={$pixelId}&ev=PageView&noscript=1\"\n/></noscript>\n<!-- End Meta Pixel Code -->";
   @endphp
   <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
+    
+    <!-- Header -->
     <div class="flex items-center justify-between border-b border-slate-100 pb-3">
       <div>
-        <h2 class="text-sm font-extrabold text-slate-900 uppercase tracking-wide">Tracking & Meta Pixel Code</h2>
-        <p class="text-xs text-slate-500 mt-0.5">Paste these code snippets into your site's <code class="bg-slate-100 px-1.5 py-0.5 rounded text-amber-700 font-mono">&lt;head&gt;</code> tag.</p>
+        <h2 class="text-sm font-extrabold text-slate-900 uppercase tracking-wide">Tracking Script & Meta Configuration</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Paste this single script into your site's <code class="bg-slate-100 px-1.5 py-0.5 rounded text-amber-700 font-mono">&lt;head&gt;</code> tag.</p>
       </div>
       <div class="flex items-center gap-2">
-        <span class="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-          ● Pixel ID: {{ $pixelId }}
-        </span>
-        @if($importedPage->meta_access_token)
+        @if(!empty($importedPage->meta_pixel_id))
+          <span class="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+            ● Pixel ID: {{ $importedPage->meta_pixel_id }}
+          </span>
+        @endif
+        @if(!empty($importedPage->meta_access_token))
           <span class="px-2.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-bold">
-            ● CAPI Active
+            ● Server CAPI Token Active ✓
           </span>
         @endif
       </div>
     </div>
 
-    <!-- 1. Kirtnix Universal Tracking Script -->
+    <!-- 1. KIRTNIX UNIVERSAL SCRIPT (kx.js) -->
     <div class="space-y-2">
       <div class="flex items-center justify-between text-xs">
-        <span class="font-mono text-xs uppercase tracking-wider text-slate-700 font-bold">1. KIRTNIX TRACKING SCRIPT (kx.js)</span>
+        <span class="font-mono text-xs uppercase tracking-wider text-slate-700 font-bold">KIRTNIX TRACKING SCRIPT (kx.js)</span>
         
-        <button type="button" @click="copyText(`{{ $trackingScript }}`, 'kx')" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition">
+        <button type="button" @click="copyScript(`{{ $trackingScript }}`)" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition">
           <span x-text="copiedKx ? '✓ Copied!' : '📋 Copy Kirtnix Script'"></span>
         </button>
       </div>
@@ -353,29 +349,62 @@
         <pre class="font-mono text-xs text-yellow-300 overflow-x-auto whitespace-pre-wrap leading-relaxed select-all"><code>{{ $trackingScript }}</code></pre>
       </div>
       <div class="text-[11px] text-slate-500">
-        Loads asynchronously — records unique page views, UTM parameters, and intercepts Telegram clicks deterministically.
+        Loads asynchronously — intercepts Telegram CTA clicks, dynamically creates single-use bot invite links (Join Request for private channels), and fires Meta Conversions API events.
       </div>
     </div>
 
-    <!-- 2. Meta Pixel Base Code -->
-    <div class="space-y-2 pt-2 border-t border-slate-100">
-      <div class="flex items-center justify-between text-xs">
-        <span class="font-mono text-xs uppercase tracking-wider text-slate-700 font-bold">2. META PIXEL BASE CODE</span>
-        
-        <button type="button" @click="copyText(`{{ $metaPixelScript }}`, 'pixel')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold flex items-center gap-1.5 transition">
-          <span x-text="copiedPixel ? '✓ Copied!' : '📋 Copy Meta Pixel Code'"></span>
-        </button>
+    <!-- 2. DIRECT META PIXEL ID & ACCESS TOKEN INPUT CONFIGURATION -->
+    <div class="p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wide">Meta Pixel ID & Access Token (Required for CAPI)</h3>
+          <p class="text-[11px] text-slate-500 mt-0.5">Configure your Meta Pixel ID and Conversions API Access Token directly for <span class="font-semibold text-slate-800">{{ $importedPage->title }}</span>.</p>
+        </div>
+        @if(!empty($importedPage->meta_pixel_id) && !empty($importedPage->meta_access_token))
+          <span class="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-full border border-emerald-300">
+            ✓ CAPI Ready
+          </span>
+        @else
+          <span class="text-[11px] font-bold text-amber-700 bg-amber-100/80 px-2.5 py-1 rounded-full border border-amber-300">
+            ! Token Required
+          </span>
+        @endif
       </div>
 
-      <div class="bg-slate-950 rounded-xl p-4 border border-slate-800 text-slate-200">
-        <pre class="font-mono text-xs text-emerald-300 overflow-x-auto whitespace-pre-wrap leading-relaxed select-all"><code>{{ $metaPixelScript }}</code></pre>
-      </div>
-      <div class="text-[11px] text-slate-500">
-        Standard Meta Pixel base tag configured with Pixel ID <code class="font-mono font-bold text-slate-700">{{ $pixelId }}</code>.
-      </div>
+      <form method="POST" action="{{ route('landing-pages.update_meta_config', $importedPage) }}" class="space-y-3">
+        @csrf
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">
+              Meta Pixel ID <span class="text-rose-500">*</span>
+            </label>
+            <input type="text" name="meta_pixel_id" value="{{ old('meta_pixel_id', $importedPage->meta_pixel_id) }}" placeholder="e.g. 1018611380802707" class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" required>
+            <div class="text-[11px] text-slate-400 mt-1">Your Meta Events Manager Dataset / Pixel ID.</div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">
+              Meta Access Token / CAPI Token <span class="text-rose-500 font-bold">* (Required)</span>
+            </label>
+            <input type="password" name="meta_access_token" value="{{ old('meta_access_token', $importedPage->meta_access_token) }}" placeholder="EAAB..." class="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg px-3 py-2.5 bg-white text-slate-900 focus:ring-2 focus:ring-yellow-400 focus:outline-none" required>
+            <div class="text-[11px] text-slate-400 mt-1">Direct System User Access Token with <code>ads_management</code> permissions.</div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-200">
+          <div class="text-[11px] text-slate-500">
+            No Meta base code snippet needed on site. Server sends Subscribe / Lead events directly to Meta.
+          </div>
+          <button type="submit" class="px-5 py-2 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            Save Meta Pixel & Token
+          </button>
+        </div>
+      </form>
     </div>
 
-    <div class="flex items-center justify-between pt-3 border-t border-slate-100 text-xs font-bold">
+    <!-- Quick Navigation Links -->
+    <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs font-bold">
       <a href="{{ route('landing-pages.show', $importedPage) }}" class="text-amber-700 hover:underline flex items-center gap-1">
         <span>View Landing Page Settings</span> →
       </a>

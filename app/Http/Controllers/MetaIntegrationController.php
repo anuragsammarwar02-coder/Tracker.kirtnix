@@ -185,4 +185,49 @@ class MetaIntegrationController extends Controller
         return redirect()->route('settings.index', ['tab' => 'meta'])
             ->with('info', 'Meta agency connection disconnected and ad accounts removed.');
     }
+
+    /**
+     * Store custom or manually registered Meta Ad Account
+     */
+    public function storeAdAccount(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'account_id' => ['required', 'string', 'max:255'],
+            'currency' => ['nullable', 'string', 'max:10'],
+            'status' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $rawId = trim($validated['account_id']);
+        $accId = str_starts_with($rawId, 'act_') ? $rawId : ('act_' . $rawId);
+
+        $connection = MetaConnection::first();
+
+        $adAccount = AdAccount::updateOrCreate(
+            ['account_id' => $accId],
+            [
+                'meta_connection_id' => $connection?->id,
+                'name' => $validated['name'],
+                'currency' => strtoupper($validated['currency'] ?? 'INR'),
+                'status' => ucfirst($validated['status'] ?? 'Active'),
+                'is_active' => true,
+                'last_synced_at' => now(),
+            ]
+        );
+
+        return redirect()->back()->with('success', "Ad Account '{$adAccount->name}' ({$accId}) saved successfully!");
+    }
+
+    /**
+     * Remove / Delete a Meta Ad Account
+     */
+    public function destroyAdAccount(AdAccount $adAccount): RedirectResponse
+    {
+        $name = $adAccount->name;
+        \App\Models\Client::where('ad_account_id', $adAccount->id)->update(['ad_account_id' => null]);
+        $adAccount->delete();
+
+        return redirect()->back()->with('success', "Ad Account '{$name}' removed successfully.");
+    }
 }
+

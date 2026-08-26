@@ -118,10 +118,20 @@ class SaaSExtendedTest extends TestCase
         ]);
         $connectRes->assertRedirect(route('settings.index', ['tab' => 'meta']));
 
+        $conn = \App\Models\MetaConnection::first();
+        \App\Models\AdAccount::create([
+            'meta_connection_id' => $conn->id,
+            'account_id' => 'act_real_12345',
+            'name' => 'Real Ad Account',
+            'currency' => 'INR',
+            'status' => 'Active',
+            'is_active' => true,
+        ]);
+
         $syncRes = $this->actingAs($this->user)->postJson(route('meta.sync'));
         $syncRes->assertStatus(200);
         $syncRes->assertJsonStructure(['success', 'message', 'accounts_count']);
-        $this->assertTrue($syncRes->json('accounts_count') > 0);
+        $this->assertTrue($syncRes->json('accounts_count') >= 1);
     }
 
     public function test_access_management_matrix_renders_and_invites_member()

@@ -181,7 +181,7 @@ class LandingPageController extends Controller
             'client_id' => ['required', 'exists:clients,id'],
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('landing_pages', 'slug')->whereNull('deleted_at')],
-            'telegram_destination' => ['required', 'string'],
+            'telegram_destination' => ['nullable', 'string'],
             'vercel_project_name' => ['nullable', 'string', 'max:255'],
             'production_domain' => ['nullable', 'string', 'max:255'],
             'external_url' => ['nullable', 'string', 'max:255'],
@@ -215,6 +215,12 @@ class LandingPageController extends Controller
 
         $client = Client::find($validated['client_id']);
 
+        $telegramDestination = $validated['telegram_destination'] ?? null;
+        if (empty($telegramDestination)) {
+            $channel = \App\Models\TelegramChannel::where('client_id', $validated['client_id'])->first();
+            $telegramDestination = $channel?->username ? ('https://t.me/' . ltrim($channel->username, '@')) : 'https://t.me/kirtnix';
+        }
+
         $landingPage = LandingPage::create([
             'client_id' => $validated['client_id'],
             'title' => $validated['title'],
@@ -226,7 +232,7 @@ class LandingPageController extends Controller
             'template_type' => 'custom',
             'brand_name' => $client->company_name ?? $validated['title'],
             'primary_cta_text' => 'Join Telegram Channel',
-            'telegram_destination' => $validated['telegram_destination'],
+            'telegram_destination' => $telegramDestination,
             'meta_pixel_id' => $validated['meta_pixel_id'] ?? null,
             'meta_access_token' => $validated['meta_access_token'] ?? null,
             'html_content' => $htmlContent,
@@ -249,7 +255,32 @@ class LandingPageController extends Controller
 
         return redirect()->route('landing-pages.import', ['tab' => $type])
             ->with('imported_page_id', $landingPage->id)
-            ->with('success', "Site '{$landingPage->title}' successfully imported from " . ucfirst($type) . "! Tracking script generated below.");
+            ->with('success', "Site '{$landingPage->title}' successfully imported from " . ucfirst($type) . "! Configure Meta Pixel & CAPI below.");
+    }
+
+    /**
+     * Update Meta Pixel ID and CAPI Token directly for a landing page
+     */
+    public function updateMetaConfig(Request $request, LandingPage $landingPage)
+    {
+        $validated = $request->validate([
+            'meta_pixel_id' => ['required', 'string', 'max:255'],
+            'meta_access_token' => ['required', 'string'],
+            'meta_test_event_code' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $landingPage->update($validated);
+
+        if ($landingPage->client) {
+            $landingPage->client->update([
+                'meta_pixel_id' => $validated['meta_pixel_id'],
+                'meta_access_token' => $validated['meta_access_token'],
+            ]);
+        }
+
+        return redirect()->route('landing-pages.import', ['tab' => $landingPage->page_source ?: 'vercel'])
+            ->with('imported_page_id', $landingPage->id)
+            ->with('success', "Meta Pixel ID '{$validated['meta_pixel_id']}' and CAPI Access Token saved successfully for '{$landingPage->title}'!");
     }
 
     /**

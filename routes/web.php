@@ -150,6 +150,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/landing-pages/import', [LandingPageController::class, 'import'])->name('landing-pages.import');
     Route::post('/landing-pages/import', [LandingPageController::class, 'storeImport'])->name('landing-pages.store_import');
     Route::post('/landing-pages/vercel-token', [LandingPageController::class, 'saveVercelToken'])->name('landing-pages.vercel_token');
+    Route::post('/landing-pages/{landingPage}/meta-config', [LandingPageController::class, 'updateMetaConfig'])->name('landing-pages.update_meta_config');
     Route::resource('landing-pages', LandingPageController::class);
 
     // 6. Access Management / Team Permissions
@@ -189,6 +190,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/meta/connect', [MetaIntegrationController::class, 'connect'])->name('meta.connect');
     Route::post('/meta/sync', [MetaIntegrationController::class, 'sync'])->name('meta.sync');
     Route::post('/meta/disconnect', [MetaIntegrationController::class, 'disconnect'])->name('meta.disconnect');
+    Route::post('/meta/ad-accounts', [MetaIntegrationController::class, 'storeAdAccount'])->name('meta.ad_accounts.store');
+    Route::delete('/meta/ad-accounts/{adAccount}', [MetaIntegrationController::class, 'destroyAdAccount'])->name('meta.ad_accounts.destroy');
 
     // 11. Notifications Center
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
