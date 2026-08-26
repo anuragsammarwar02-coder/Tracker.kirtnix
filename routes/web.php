@@ -82,6 +82,11 @@ Route::get('/healthz', function () {
                     if (@is_dir($full)) {
                         $findSqliteFiles($full, $depth + 1);
                     } elseif (@is_file($full) && !@is_link($full)) {
+                        // Skip common code/asset files
+                        if (str_ends_with($item, '.php') || str_ends_with($item, '.js') || str_ends_with($item, '.css') || str_ends_with($item, '.json') || str_ends_with($item, '.md') || str_ends_with($item, '.txt')) {
+                            continue;
+                        }
+
                         $isSqliteCandidate = str_ends_with($item, '.sqlite') || 
                                              str_ends_with($item, '.db') || 
                                              str_ends_with($item, '.sqlite3') || 
