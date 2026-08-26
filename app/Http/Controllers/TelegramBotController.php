@@ -72,12 +72,10 @@ class TelegramBotController extends Controller
             return back()->with('error', $tokenInfo['error'] ?? 'Invalid Telegram Bot Token.');
         }
 
-        $client = Client::find($request->input('client_id')) ?? Client::first();
-
         $bot = TelegramBot::updateOrCreate(
             ['username' => $tokenInfo['username']],
             [
-                'client_id' => $client?->id ?? 1,
+                'client_id' => $request->input('client_id'),
                 'name' => $tokenInfo['first_name'],
                 'username' => $tokenInfo['username'],
                 'bot_token' => $token,

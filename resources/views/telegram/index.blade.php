@@ -394,17 +394,10 @@
                         <div class="space-y-4 text-xs">
                             <div>
                                 <label class="font-bold text-slate-700 dark:text-slate-200 block mb-1">Telegram Bot Token *</label>
-                                <input type="password" name="bot_token" placeholder="8956518773:AAH..." required class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-100 font-mono text-xs focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-yellow-400">
-                                <span class="text-[11px] text-slate-400 mt-1 block">Obtain from @BotFather on Telegram. Token will be securely verified before connection.</span>
-                            </div>
-
-                            <div>
-                                <label class="font-bold text-slate-700 dark:text-slate-200 block mb-1">Assign Client Workspace</label>
-                                <select name="client_id" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-100 text-xs focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-yellow-400">
-                                    @foreach($clients as $c)
-                                        <option value="{{ $c->id }}">{{ $c->company_name }} ({{ $c->kx_code }})</option>
-                                    @endforeach
-                                </select>
+                                <input type="password" name="bot_token" placeholder="123456789:AAE-your-bot-token-here" required class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-800 dark:text-slate-100 font-mono text-xs focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-yellow-400">
+                                <span class="text-[11px] text-slate-400 mt-1.5 block leading-relaxed">
+                                    Obtain from <strong>@BotFather</strong> on Telegram (send <code>/newbot</code> or <code>/token</code>). Token will be securely verified via Telegram API before connecting.
+                                </span>
                             </div>
                         </div>
                     </div>
