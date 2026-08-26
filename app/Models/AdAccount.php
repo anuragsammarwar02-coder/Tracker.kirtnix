@@ -52,6 +52,11 @@ class AdAccount extends Model
         return $this->belongsTo(Client::class);
     }
 
+    public function assignedClients(): HasMany
+    {
+        return $this->hasMany(Client::class, 'ad_account_id');
+    }
+
     public function campaigns(): HasMany
     {
         return $this->hasMany(Campaign::class);

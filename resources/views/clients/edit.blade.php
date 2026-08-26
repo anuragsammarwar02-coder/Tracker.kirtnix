@@ -65,19 +65,31 @@
       </div>
 
       <div class="form-group">
+        <label class="form-label" for="ad_account_id">Meta Ad Account</label>
+        <select id="ad_account_id" name="ad_account_id" class="form-select">
+          <option value="">-- No Ad Account Assigned --</option>
+          @foreach($availableAdAccounts as $acc)
+            <option value="{{ $acc->id }}" {{ old('ad_account_id', $client->ad_account_id) == $acc->id ? 'selected' : '' }}>
+              {{ $acc->name }} ({{ $acc->account_id }}) — {{ $acc->currency }} [{{ $acc->status }}]
+            </option>
+          @endforeach
+        </select>
+        @if(!$hasGlobalMetaConnection)
+          <div class="form-hint" style="color: #b45309;">⚠️ Global Meta account not connected. Connect in <a href="{{ route('settings.index', ['tab' => 'meta']) }}" style="color: var(--accent-blue);">Settings ➔ Meta</a>.</div>
+        @elseif($availableAdAccounts->isEmpty())
+          <div class="form-hint" style="color: #b45309;">No ad accounts synced. Click "Sync accounts" in <a href="{{ route('settings.index', ['tab' => 'meta']) }}" style="color: var(--accent-blue);">Meta Settings</a>.</div>
+        @else
+          <div class="form-hint">Change or reassign the Meta Ad Account used to fetch marketing spend, reach, and conversion metrics.</div>
+        @endif
+      </div>
+
+      <div class="form-group">
         <label class="form-label" for="status">Account Status *</label>
         <select id="status" name="status" class="form-select" required>
           <option value="active" {{ old('status', $client->status) === 'active' ? 'selected' : '' }}>Active</option>
           <option value="paused" {{ old('status', $client->status) === 'paused' ? 'selected' : '' }}>Paused</option>
           <option value="archived" {{ old('status', $client->status) === 'archived' ? 'selected' : '' }}>Archived</option>
         </select>
-      </div>
-
-      <div style="margin: 10px 0 16px;">
-        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-          <input type="checkbox" name="meta_ads_connected" value="1" {{ $client->meta_ads_connected ? 'checked' : '' }} style="accent-color: var(--brand-yellow); width: 16px; height: 16px;" />
-          <span>Meta Ads Integration Connected</span>
-        </label>
       </div>
 
       <div class="form-group">

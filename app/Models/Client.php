@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Client extends Model
@@ -21,6 +22,7 @@ class Client extends Model
         'logo_path',
         'avatar_url',
         'status',
+        'ad_account_id',
         'meta_ads_connected',
         'monthly_budget',
         'notes',
@@ -31,6 +33,11 @@ class Client extends Model
         'meta_ads_connected' => 'boolean',
         'monthly_budget' => 'decimal:2',
     ];
+
+    public function adAccount(): BelongsTo
+    {
+        return $this->belongsTo(AdAccount::class, 'ad_account_id');
+    }
 
     public function reports(): HasMany
     {

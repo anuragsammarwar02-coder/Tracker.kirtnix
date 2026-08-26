@@ -4,7 +4,7 @@
 @section('page_title', 'Clients')
 
 @section('content')
-<div x-data="{ deleteModal: false, clientToDelete: { id: null, name: '', kx_code: '' } }">
+<div x-data="{ createModal: false, deleteModal: false, clientToDelete: { id: null, name: '', kx_code: '' } }">
   <!-- Header Area -->
   <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 14px;">
     <div>
@@ -14,9 +14,9 @@
       </div>
     </div>
 
-    <a href="{{ route('clients.create') }}" class="btn btn-primary">
+    <button type="button" @click="createModal = true" class="btn btn-primary">
       <span>+ New client</span>
-    </a>
+    </button>
   </div>
 
   <!-- Search Bar & Filters -->
@@ -70,7 +70,9 @@
             <strong style="color: var(--text-main);">{{ $client->industry ?? 'Stock Trading' }}</strong>
           </div>
           <div>
-            @if($client->meta_ads_connected)
+            @if($client->adAccount)
+              <span class="pill pill-green" style="font-size: 9.5px;" title="{{ $client->adAccount->account_id }}"><span class="pill-dot"></span> {{ $client->adAccount->name }}</span>
+            @elseif($client->meta_ads_connected)
               <span class="pill pill-green" style="font-size: 9.5px;"><span class="pill-dot"></span> Meta Connected</span>
             @else
               <span class="pill pill-gray" style="font-size: 9.5px;">Meta Offline</span>
@@ -114,13 +116,94 @@
       <div style="font-size: 28px; margin-bottom: 8px;">👤</div>
       <div style="font-weight: 700; font-size: 14px; color: var(--text-main);">No clients found</div>
       <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; margin-bottom: 16px;">Get started by onboarding your first agency client.</div>
-      <a href="{{ route('clients.create') }}" class="btn btn-primary">+ Create Client</a>
+      <button type="button" @click="createModal = true" class="btn btn-primary">+ Create Client</button>
     </div>
     @endforelse
   </div>
 
   <div style="margin-top: 16px;">
     {{ $clients->links() }}
+  </div>
+
+  <!-- New Client Modal (Matches Screenshot 1) -->
+  <div x-show="createModal" style="display: none;" class="modal-backdrop" @click.self="createModal = false">
+    <div class="modal-content" style="max-width: 540px; padding: 24px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 16px; font-weight: 800; color: var(--text-main);">New Client Profile</h3>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Create client profile & assign Meta Ad Account.</div>
+        </div>
+        <button type="button" @click="createModal = false" class="btn-icon" style="color: var(--text-muted); cursor: pointer;">✕</button>
+      </div>
+
+      <form method="POST" action="{{ route('clients.store') }}">
+        @csrf
+
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="modal_kx_code">KX Code</label>
+            <input type="text" id="modal_kx_code" name="kx_code" class="form-input" placeholder="KX-001" />
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="modal_company_name">Company / Channel *</label>
+            <input type="text" id="modal_company_name" name="company_name" class="form-input" placeholder="e.g. STOXK Academy" required />
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="modal_client_name">Client Lead Name *</label>
+            <input type="text" id="modal_client_name" name="client_name" class="form-input" placeholder="e.g. Nandu Meena" required />
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="modal_industry">Industry / Niche</label>
+            <input type="text" id="modal_industry" name="industry" class="form-input" placeholder="Stock Trading" value="Stock Market & Options" />
+          </div>
+        </div>
+
+        <!-- Meta Ad Account Selection Dropdown (Matches Screenshot 1) -->
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" for="modal_create_ad_account_id">Meta Ad Account (Optional)</label>
+          <select id="modal_create_ad_account_id" name="ad_account_id" class="form-select" style="width: 100%;">
+            <option value="">-- Select an ad account --</option>
+            @foreach($availableAdAccounts as $acc)
+              <option value="{{ $acc->id }}">
+                {{ $acc->name }} ({{ $acc->account_id }}) — {{ $acc->currency }} [{{ $acc->status }}]
+              </option>
+            @endforeach
+          </select>
+          @if(!$hasGlobalMetaConnection)
+            <div class="form-hint" style="color: #b45309; font-size: 11px;">⚠️ Global Meta not connected. Connect in <a href="{{ route('settings.index', ['tab' => 'meta']) }}" style="color: var(--accent-blue);">Settings ➔ Meta</a>.</div>
+          @elseif($availableAdAccounts->isEmpty())
+            <div class="form-hint" style="color: #b45309; font-size: 11px;">No ad accounts found. Click "Sync accounts" in <a href="{{ route('settings.index', ['tab' => 'meta']) }}" style="color: var(--accent-blue);">Meta Settings</a>.</div>
+          @else
+            <div class="form-hint" style="font-size: 11px;">Marketing data will automatically sync from this specific Meta Ad Account.</div>
+          @endif
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="modal_email">Email Address</label>
+            <input type="email" id="modal_email" name="email" class="form-input" placeholder="client@domain.com" />
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="modal_status">Status</label>
+            <select id="modal_status" name="status" class="form-select">
+              <option value="active" selected>Active</option>
+              <option value="paused">Paused</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" @click="createModal = false" class="btn btn-secondary" style="font-size: 12px; padding: 7px 14px;">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="font-size: 12px; font-weight: 700; padding: 7px 16px;">
+            Create Client Profile
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- Delete Client Confirmation Modal -->

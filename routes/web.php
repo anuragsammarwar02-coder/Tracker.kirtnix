@@ -140,6 +140,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/analytics/export', [AnalyticsController::class, 'exportCsv'])->name('analytics.export');
 
     // 3. Clients Management
+    Route::post('/clients/{client}/assign-ad-account', [ClientController::class, 'assignAdAccount'])->name('clients.assign_ad_account');
     Route::resource('clients', ClientController::class);
 
     // 4. Campaigns Management

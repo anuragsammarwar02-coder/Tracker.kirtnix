@@ -267,23 +267,15 @@ class AnalyticsController extends Controller
         $formattedDateRange = $rangeInfo[2];
         $syncedAt = now()->format('n/j/Y, g:i:s A');
 
-        // Connected Ad Account (Live from Meta)
-        $adAccount = AdAccount::where('client_id', $client?->id)->first() ?? AdAccount::first() ?? new AdAccount([
-            'name' => 'KX001 - GJ',
-            'account_id' => 'act_2337703703246935',
-            'currency' => 'INR',
-            'status' => 'Active',
-            'lifetime_spend' => 23651.00,
-            'spend_limit' => 23838.00,
-            'balance' => 985.00,
-            'payment_method' => 'Available balance (₹220.85 INR)',
-            'active_daily_budget' => 2314.00,
-        ]);
+        // Connected Ad Account (Scoped strictly to this client)
+        $adAccount = $client?->adAccount ?? ($client ? AdAccount::where('client_id', $client->id)->first() : null);
 
-        // Campaigns Live from Meta for this ad account or client
-        $campaigns = Campaign::where('ad_account_id', $adAccount->id)
-            ->orWhere('client_id', $client?->id)
-            ->get();
+        // Campaigns Live from Meta for this client's assigned ad account
+        if ($adAccount) {
+            $campaigns = Campaign::where('ad_account_id', $adAccount->id)->get();
+        } else {
+            $campaigns = collect();
+        }
 
         // 1. Landing Page Views & Unique Visitors from DB
         $viewsQuery = LandingPageView::where('landing_page_id', $landingPage->id)
@@ -311,7 +303,7 @@ class AnalyticsController extends Controller
         $pendingRequests = (clone $eventsQuery)->where('event_type', 'pending')->count();
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
-        // 4. Meta Ads Metrics from Campaigns
+        // 4. Meta Ads Metrics from Scoped Campaigns
         $campaignSpend = (float) $campaigns->sum('spend');
         $campaignReach = (int) $campaigns->sum('reach');
         $campaignImpressions = (int) $campaigns->sum('impressions');
@@ -322,8 +314,8 @@ class AnalyticsController extends Controller
             : ($uniqueVisitors > 0 ? round(($subscribers / $uniqueVisitors) * 100, 1) . '%' : '0.0%');
 
         $costPerSub = $subscribers > 0 
-            ? ($adAccount->currency_symbol ?? '₹') . number_format($campaignSpend / $subscribers, 2)
-            : ($adAccount->currency_symbol ?? '₹') . '0.00';
+            ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $subscribers, 2)
+            : ($adAccount?->currency_symbol ?? '₹') . '0.00';
 
         // Performance KPI Grid
         $kpis = [
@@ -342,13 +334,13 @@ class AnalyticsController extends Controller
         ];
 
         // Budget section
-        $totalBudgetLimit = (float) ($adAccount->spend_limit ?: ($campaigns->sum('active_daily_budget') * 30));
+        $totalBudgetLimit = $adAccount ? (float) ($adAccount->spend_limit ?: ($campaigns->sum('active_daily_budget') * 30)) : 0.00;
         $budget = [
             'total_spending' => $campaignSpend,
             'total_budget' => $totalBudgetLimit,
             'remaining_budget' => max(0, $totalBudgetLimit - $campaignSpend),
-            'currency_symbol' => $adAccount->currency_symbol ?? '₹',
-            'last_synced' => $adAccount->last_synced_at ? $adAccount->last_synced_at->diffForHumans() : 'Just now',
+            'currency_symbol' => $adAccount?->currency_symbol ?? '₹',
+            'last_synced' => $adAccount?->last_synced_at ? $adAccount->last_synced_at->diffForHumans() : 'Never',
         ];
 
         // Complete Join History Table with filters
