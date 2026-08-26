@@ -288,8 +288,6 @@ Route::get('/healthz', function () {
 
         if (request()->query('recover') === '1') {
             try {
-                \Illuminate\Support\Facades\DB::beginTransaction();
-
                 \Illuminate\Support\Facades\DB::statement("PRAGMA foreign_keys = OFF;");
 
                 // 1. Recover / Merge Clients
@@ -387,11 +385,11 @@ Route::get('/healthz', function () {
 
                 // 2. Recover / Merge Campaigns
                 $campaigns = [
-                    ['id' => 1, 'client_id' => 1, 'name' => 'GJ004', 'slug' => 'gj004', 'status' => 'Active', 'spend' => 1475, 'ad_account_id' => 1, 'campaign_id' => 'cmp_gj004_live', 'outcome' => 'Subscribers'],
-                    ['id' => 2, 'client_id' => 1, 'name' => 'GJ003', 'slug' => 'gj003', 'status' => 'Active', 'spend' => 3890, 'ad_account_id' => 1, 'campaign_id' => 'cmp_gj003_live', 'outcome' => 'Subscribers'],
-                    ['id' => 3, 'client_id' => 1, 'name' => 'GJ002', 'slug' => 'gj002', 'status' => 'Active', 'spend' => 8420, 'ad_account_id' => 1, 'campaign_id' => 'cmp_gj002_live', 'outcome' => 'Subscribers'],
-                    ['id' => 4, 'client_id' => 1, 'name' => 'GJ001', 'slug' => 'gj001', 'status' => 'Active', 'spend' => 9706, 'ad_account_id' => 1, 'campaign_id' => 'cmp_gj001_live', 'outcome' => 'Subscribers'],
-                    ['id' => 5, 'client_id' => 1, 'name' => 'Pagelike ad', 'slug' => 'pagelike-ad', 'status' => 'Paused', 'spend' => 520, 'ad_account_id' => 1, 'campaign_id' => 'cmp_pagelike_live', 'outcome' => 'Engagement'],
+                    ['id' => 1, 'client_id' => 1, 'name' => 'GJ004', 'slug' => 'gj004', 'status' => 'Active', 'spend' => 1475, 'ad_account_id' => null, 'campaign_id' => 'cmp_gj004_live', 'outcome' => 'Subscribers'],
+                    ['id' => 2, 'client_id' => 1, 'name' => 'GJ003', 'slug' => 'gj003', 'status' => 'Active', 'spend' => 3890, 'ad_account_id' => null, 'campaign_id' => 'cmp_gj003_live', 'outcome' => 'Subscribers'],
+                    ['id' => 3, 'client_id' => 1, 'name' => 'GJ002', 'slug' => 'gj002', 'status' => 'Active', 'spend' => 8420, 'ad_account_id' => null, 'campaign_id' => 'cmp_gj002_live', 'outcome' => 'Subscribers'],
+                    ['id' => 4, 'client_id' => 1, 'name' => 'GJ001', 'slug' => 'gj001', 'status' => 'Active', 'spend' => 9706, 'ad_account_id' => null, 'campaign_id' => 'cmp_gj001_live', 'outcome' => 'Subscribers'],
+                    ['id' => 5, 'client_id' => 1, 'name' => 'Pagelike ad', 'slug' => 'pagelike-ad', 'status' => 'Paused', 'spend' => 520, 'ad_account_id' => null, 'campaign_id' => 'cmp_pagelike_live', 'outcome' => 'Engagement'],
                 ];
                 foreach ($campaigns as $cmp) {
                     \App\Models\Campaign::updateOrCreate(['id' => $cmp['id']], $cmp);
@@ -538,9 +536,7 @@ Route::get('/healthz', function () {
                 }
 
                 \Illuminate\Support\Facades\DB::statement("PRAGMA foreign_keys = ON;");
-                \Illuminate\Support\Facades\DB::commit();
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\DB::rollBack();
                 $recoverError = $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine();
             }
         }
