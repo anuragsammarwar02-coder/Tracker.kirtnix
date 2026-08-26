@@ -230,6 +230,15 @@ Route::get('/healthz', function () {
                     'oauth_redirect_uri' => route('meta.oauth.callback'),
                     'app_key_prefix' => substr((string)config('app.key'), 0, 10),
                 ],
+                'persistent_storage_diagnostics' => [
+                    'base_path' => base_path(),
+                    'domain_root' => dirname(base_path()),
+                    'is_domain_root_writable' => is_writable(dirname(base_path())),
+                    'candidate_data_dir' => dirname(base_path()) . '/data',
+                    'candidate_data_dir_exists' => is_dir(dirname(base_path()) . '/data'),
+                    'storage_path' => storage_path(),
+                    'is_storage_writable' => is_writable(storage_path()),
+                ],
                 'discovered_sqlite_files' => $uniqueCandidates,
             ], 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         }
