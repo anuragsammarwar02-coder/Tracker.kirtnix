@@ -160,6 +160,41 @@ Route::get('/healthz', function () {
         }
     }
 
+    if (request()->query('format') === 'text') {
+        $out = "=== KIRTNIX PRODUCTION DATABASE DIAGNOSTIC REPORT ===\n";
+        $out .= "Status: " . (($dbConnected && $usersCount > 0) ? 'OK' : 'ATTENTION REQUIRED') . "\n";
+        $out .= "Configured Driver: " . config('database.default') . "\n";
+        $out .= "Configured Path: {$dbPath}\n";
+        $out .= "File Exists: " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)\n";
+        $out .= "Connected: " . ($dbConnected ? 'YES' : 'NO') . "\n";
+        $out .= "Live Active Records: Users={$usersCount}, Clients={$clientsCount}, LandingPages={$landingPagesCount}, Bots={$botsCount}\n\n";
+        $out .= "=== DISCOVERED SQLITE CANDIDATE FILES (" . count($uniqueCandidates) . ") ===\n";
+
+        if (empty($uniqueCandidates)) {
+            $out .= "No candidate SQLite files discovered in scanned paths.\n";
+        } else {
+            foreach ($uniqueCandidates as $idx => $cand) {
+                $num = $idx + 1;
+                $out .= "[#{$num}] {$cand['absolute_path']}\n";
+                $out .= "     Size: {$cand['size_formatted']} | Modified: {$cand['last_modified']}\n";
+                $out .= "     Integrity: {$cand['sqlite_integrity']} | Has Users Table: " . ($cand['has_users_table'] ? 'YES' : 'NO') . "\n";
+                $out .= "     Tables Count: " . count($cand['tables']) . "\n";
+                $countsStr = [];
+                foreach ($cand['table_counts'] as $t => $cnt) {
+                    $countsStr[] = "{$t}={$cnt}";
+                }
+                $out .= "     Row Counts: " . (empty($countsStr) ? 'None (Empty Database)' : implode(', ', $countsStr)) . "\n\n";
+            }
+        }
+
+        $out .= "=== SCANNED DIRECTORIES ===\n";
+        foreach (array_values(array_unique($scannedPaths)) as $p) {
+            $out .= " - {$p}\n";
+        }
+
+        return response($out, 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+    }
+
     return response()->json([
         'status' => ($dbConnected && $usersCount > 0) ? 'ok' : 'attention_required',
         'current_configured_database' => [
