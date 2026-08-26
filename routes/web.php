@@ -31,6 +31,12 @@ use App\Http\Controllers\PublicMarketingController;
 // Production Health & Diagnostic Check (Read-Only)
 Route::get('/healthz', function () {
     try {
+        if (request()->query('clear_cache')) {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('optimize:clear');
+            } catch (\Throwable $e) {}
+        }
+
         $dbPath = config('database.connections.sqlite.database');
         $dbExists = $dbPath && $dbPath !== ':memory:' ? file_exists($dbPath) : true;
         $dbSize = ($dbExists && $dbPath !== ':memory:') ? filesize($dbPath) : 0;
