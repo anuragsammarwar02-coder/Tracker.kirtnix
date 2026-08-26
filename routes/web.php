@@ -42,6 +42,28 @@ Route::get('/healthz', function () {
         $dbConnected = false;
         $dbError = null;
 
+        $snapshotGzPath = database_path('snapshots/clean_baseline.sqlite.gz');
+        $snapshotExists = file_exists($snapshotGzPath);
+        $snapshotSize = $snapshotExists ? filesize($snapshotGzPath) : 0;
+        $dbWritable = file_exists($dbPath) ? is_writable($dbPath) : is_writable(dirname($dbPath));
+        $dirWritable = is_writable(dirname($dbPath));
+        $writeAttemptResult = 'not_attempted';
+
+        if (($dbSize === 0 || !$dbExists) && $snapshotExists && $snapshotSize > 0) {
+            $gzData = @file_get_contents($snapshotGzPath);
+            $raw = @gzdecode($gzData);
+            if ($raw !== false && strlen($raw) === 458752) {
+                $written = @file_put_contents($dbPath, $raw);
+                $writeAttemptResult = $written !== false ? "wrote_{$written}_bytes" : "failed_to_write_error_" . json_encode(error_get_last());
+                if ($written !== false) {
+                    $dbExists = true;
+                    $dbSize = filesize($dbPath);
+                }
+            } else {
+                $writeAttemptResult = "gzdecode_failed_len_" . (is_string($raw) ? strlen($raw) : 'false');
+            }
+        }
+
         if ($dbExists && $dbSize > 0) {
             try {
                 if (\Illuminate\Support\Facades\Schema::hasTable('users')) {
@@ -202,6 +224,8 @@ Route::get('/healthz', function () {
         $html .= "<p><strong>Configured DB:</strong> {$dbPath}<br>";
         $html .= "<strong>Exists:</strong> " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)<br>";
         $html .= "<strong>Connected:</strong> " . ($dbConnected ? 'YES' : 'NO') . "<br>";
+        $html .= "<strong>Snapshot Archive:</strong> " . ($snapshotExists ? "YES ({$snapshotSize} bytes)" : 'NO') . "<br>";
+        $html .= "<strong>DB Writable:</strong> " . ($dbWritable ? 'YES' : 'NO') . " | <strong>Dir Writable:</strong> " . ($dirWritable ? 'YES' : 'NO') . " | <strong>Write Result:</strong> {$writeAttemptResult}<br>";
         $html .= "<strong>Live Records:</strong> Users={$usersCount}, Clients={$clientsCount}, LandingPages={$landingPagesCount}, Bots={$botsCount}</p>";
 
         $html .= "<h3>Discovered SQLite Candidate Files (" . count($uniqueCandidates) . ")</h3>";
