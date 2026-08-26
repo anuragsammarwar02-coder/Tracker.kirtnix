@@ -13,6 +13,21 @@ class AppServiceProvider extends ServiceProvider
     {
         // Force debug to true on hostinger to display precise diagnostic if error occurs
         Config::set('app.debug', true);
+
+        // Enforce persistent SQLite database path on Hostinger production outside public_html
+        if (DIRECTORY_SEPARATOR === '/') {
+            $domainRoot = dirname(base_path());
+            if (is_dir($domainRoot) && (str_contains(base_path(), 'public_html') || str_contains(base_path(), 'domains'))) {
+                $persistentDir = $domainRoot . '/data';
+                if (!is_dir($persistentDir)) {
+                    @mkdir($persistentDir, 0775, true);
+                }
+                if (is_dir($persistentDir)) {
+                    $persistentDb = $persistentDir . '/database.sqlite';
+                    Config::set('database.connections.sqlite.database', $persistentDb);
+                }
+            }
+        }
     }
 
     public function boot(): void
@@ -22,7 +37,10 @@ class AppServiceProvider extends ServiceProvider
             \Illuminate\Support\Facades\URL::forceScheme('https');
         }
 
-        // Automatically clear stale route and view cache if present
+        // Automatically clear stale config and route cache if present
+        if (file_exists(base_path('bootstrap/cache/config.php'))) {
+            @unlink(base_path('bootstrap/cache/config.php'));
+        }
         if (file_exists(base_path('bootstrap/cache/routes-v7.php'))) {
             @unlink(base_path('bootstrap/cache/routes-v7.php'));
         }
