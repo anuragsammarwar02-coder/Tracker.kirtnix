@@ -341,6 +341,59 @@ class TelegramService
     }
 
     /**
+     * Discover and persist all accessible channels for the bot into database.
+     */
+    public function syncAndPersistAccessibleChannels(TelegramBot $bot): array
+    {
+        $discovered = $this->discoverAccessibleChannels($bot);
+
+        foreach ($discovered as $chData) {
+            $chatId = (string) ($chData['telegram_chat_id'] ?? '');
+            if (empty($chatId)) continue;
+
+            $channel = TelegramChannel::where('telegram_chat_id', $chatId)->first();
+            if (!$channel) {
+                TelegramChannel::create([
+                    'telegram_bot_id' => $bot->id,
+                    'client_id' => $chData['client_id'] ?? null,
+                    'telegram_chat_id' => $chatId,
+                    'title' => $chData['title'] ?? "Channel {$chatId}",
+                    'username' => $chData['username'] ?? null,
+                    'type' => $chData['type'] ?? 'channel',
+                    'member_count' => $chData['member_count'] ?? 0,
+                    'is_bot_admin' => true,
+                    'bot_status' => 'administrator',
+                    'is_active' => true,
+                    'connected_at' => now(),
+                    'last_synced_at' => now(),
+                ]);
+            } else {
+                $updates = [
+                    'is_bot_admin' => true,
+                    'bot_status' => 'administrator',
+                    'is_active' => true,
+                    'last_synced_at' => now(),
+                ];
+                if (empty($channel->telegram_bot_id)) {
+                    $updates['telegram_bot_id'] = $bot->id;
+                }
+                if (!empty($chData['title']) && $channel->title !== $chData['title']) {
+                    $updates['title'] = $chData['title'];
+                }
+                if (isset($chData['username'])) {
+                    $updates['username'] = $chData['username'];
+                }
+                if (!empty($chData['member_count'])) {
+                    $updates['member_count'] = $chData['member_count'];
+                }
+                $channel->update($updates);
+            }
+        }
+
+        return $discovered;
+    }
+
+    /**
      * Generate or request a unique Telegram invite link for a specific visitor / tracking session.
      */
     public function generateInviteLink(

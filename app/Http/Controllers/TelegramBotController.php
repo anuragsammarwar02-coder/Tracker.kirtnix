@@ -29,8 +29,12 @@ class TelegramBotController extends Controller
         $selectedBotId = $request->input('bot_id');
         $selectedBot = $selectedBotId ? TelegramBot::find($selectedBotId) : $bots->first();
 
+        if ($selectedBot) {
+            $this->telegramService->syncAndPersistAccessibleChannels($selectedBot);
+        }
+
         $trackedChannels = $selectedBot
-            ? TelegramChannel::where('telegram_bot_id', $selectedBot->id)->latest('id')->get()
+            ? TelegramChannel::where('telegram_bot_id', $selectedBot->id)->orWhereNull('telegram_bot_id')->latest('id')->get()
             : TelegramChannel::latest('id')->get();
 
         $liveMembers = $selectedBot
@@ -86,8 +90,8 @@ class TelegramBotController extends Controller
 
         $result = $this->telegramService->setWebhook($bot);
 
-        // Auto-discover channels accessible to bot
-        $this->telegramService->discoverAccessibleChannels($bot);
+        // Auto-discover and persist all accessible channels for this bot immediately upon connect
+        $this->telegramService->syncAndPersistAccessibleChannels($bot);
 
         return redirect()->route('telegram.index', ['bot_id' => $bot->id])
             ->with('success', "Bot @{$bot->username} connected successfully! Webhook active.");
@@ -99,6 +103,7 @@ class TelegramBotController extends Controller
     public function syncWebhook(TelegramBot $bot): RedirectResponse
     {
         $result = $this->telegramService->setWebhook($bot);
+        $this->telegramService->syncAndPersistAccessibleChannels($bot);
 
         if ($result['success']) {
             return back()->with('success', "Telegram Webhook for @{$bot->username} reconnected successfully!");
