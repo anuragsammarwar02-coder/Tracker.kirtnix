@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdAccount;
 use App\Models\Campaign;
 use App\Models\Client;
 use App\Models\Conversion;
