@@ -18,6 +18,7 @@ class DatabaseRestoreCleanBaselineCommand extends Command
         $targetPath = database_path('database.sqlite');
         $snapshotGzPath = database_path('snapshots/clean_baseline.sqlite.gz');
         $validSha256List = [
+            '7fcdf6c6df52b67511b34af5b45f8a484dde1f3d07afb1f96c4f85595452b1a0', // Clean baseline with ad_account_id & nullable bot client_id
             'ccf93183bdcf5648f05876d1b18486534ec3afec2100656e1405ad23810e371b', // Clean baseline with nullable telegram_bots.client_id
             '2980f7a4b52a264805f902f525e9920b2d283f1f58a09ff5f83181e849fde003', // Original baseline dd73a856
         ];
