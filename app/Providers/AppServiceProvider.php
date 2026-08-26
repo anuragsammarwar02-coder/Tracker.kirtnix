@@ -17,9 +17,15 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Automatically clear stale route cache if present
+        // Automatically clear stale route and view cache if present
         if (file_exists(base_path('bootstrap/cache/routes-v7.php'))) {
             @unlink(base_path('bootstrap/cache/routes-v7.php'));
+        }
+        $viewsDir = storage_path('framework/views');
+        if (is_dir($viewsDir) && request()->has('clear_cache')) {
+            foreach (@glob($viewsDir . '/*.php') ?: [] as $vf) {
+                @unlink($vf);
+            }
         }
 
         // Safe check for sqlite database: if file is 0 bytes or absent, restore verified clean baseline
