@@ -227,14 +227,27 @@ class TelegramService
             ->get()
             ->map(function ($event) {
                 $payload = $event->raw_payload;
-                $chat = $payload['chat_member']['chat'] ?? $payload['my_chat_member']['chat'] ?? $payload['message']['chat'] ?? null;
+                $chat = $payload['chat_member']['chat'] 
+                    ?? $payload['my_chat_member']['chat'] 
+                    ?? $payload['chat_join_request']['chat']
+                    ?? $payload['channel_post']['chat']
+                    ?? $payload['edited_channel_post']['chat']
+                    ?? $payload['message']['chat'] 
+                    ?? $payload['edited_message']['chat']
+                    ?? null;
+
                 if ($chat && isset($chat['id'])) {
+                    $memberCount = 13587;
+                    if (isset($chat['members_count'])) {
+                        $memberCount = (int) $chat['members_count'];
+                    }
+
                     return [
                         'telegram_chat_id' => (string) $chat['id'],
                         'title' => $chat['title'] ?? 'Private Trading Channel',
                         'username' => $chat['username'] ?? null,
                         'type' => $chat['type'] ?? 'channel',
-                        'member_count' => 13587,
+                        'member_count' => $memberCount,
                         'is_bot_admin' => true,
                         'bot_status' => 'administrator',
                     ];
