@@ -69,11 +69,21 @@ class AppServiceProvider extends ServiceProvider
                     $snapshotGzPath = database_path('snapshots/clean_baseline.sqlite.gz');
 
                     if ($isZeroBytes) {
-                        $legacyDbPath = base_path('database/database.sqlite');
-                        if ($legacyDbPath !== $dbPath && file_exists($legacyDbPath) && filesize($legacyDbPath) > 0) {
-                            @copy($legacyDbPath, $dbPath);
-                            @chmod($dbPath, 0664);
-                        } elseif (file_exists($snapshotGzPath)) {
+                        $legacyCandidates = [
+                            base_path('u123456789_tracker'),
+                            base_path('database/database.sqlite'),
+                        ];
+                        $migrated = false;
+                        foreach ($legacyCandidates as $cand) {
+                            if ($cand !== $dbPath && file_exists($cand) && filesize($cand) > 0) {
+                                @copy($cand, $dbPath);
+                                @chmod($dbPath, 0664);
+                                $migrated = true;
+                                break;
+                            }
+                        }
+
+                        if (!$migrated && file_exists($snapshotGzPath)) {
                             $gzData = file_get_contents($snapshotGzPath);
                             $rawSqlite = @gzdecode($gzData);
                             if ($rawSqlite !== false && strlen($rawSqlite) === 458752) {

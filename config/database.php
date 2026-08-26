@@ -35,14 +35,14 @@ return [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
             'database' => (function () {
-                $envDb = env('DB_DATABASE');
+                $envDb = (string) env('DB_DATABASE');
                 if ($envDb === ':memory:') {
                     return ':memory:';
                 }
-                if ($envDb && $envDb !== 'database/database.sqlite' && $envDb !== database_path('database.sqlite')) {
-                    return (str_starts_with($envDb, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $envDb))
-                        ? $envDb
-                        : base_path($envDb);
+
+                // If explicit absolute path provided in ENV
+                if (str_starts_with($envDb, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $envDb)) {
+                    return $envDb;
                 }
 
                 // Production Hostinger persistent path outside public_html deployment directory
@@ -57,6 +57,10 @@ return [
                             return $persistentDir . '/database.sqlite';
                         }
                     }
+                }
+
+                if (!empty($envDb) && (str_ends_with($envDb, '.sqlite') || str_ends_with($envDb, '.db'))) {
+                    return base_path($envDb);
                 }
 
                 return database_path('database.sqlite');
