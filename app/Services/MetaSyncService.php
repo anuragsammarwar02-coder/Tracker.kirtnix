@@ -197,6 +197,102 @@ class MetaSyncService
     }
 
     /**
+     * Sync single Ad Account's campaigns and insights from Meta Graph API
+     * Fetches ALL campaigns (ACTIVE, PAUSED, ARCHIVED, etc.)
+     */
+    public function syncSingleAdAccount(AdAccount $adAccount): array
+    {
+        $connection = $adAccount->metaConnection ?? MetaConnection::first();
+        $token = $connection?->access_token ?? \App\Models\Setting::get('meta_system_user_token');
+
+        if (!$token) {
+            return [];
+        }
+
+        $syncedCampaigns = [];
+
+        try {
+            $rawAccId = str_replace('act_', '', $adAccount->account_id);
+            $res = Http::withoutVerifying()->timeout(15)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/campaigns", [
+                'access_token' => $token,
+                'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,insights{reach,impressions,spend,actions}',
+                'effective_status' => '["ACTIVE","PAUSED","ARCHIVED","IN_PROCESS","WITH_ISSUES"]',
+                'limit' => 100,
+            ]);
+
+            if ($res->successful() && !empty($res->json('data'))) {
+                foreach ($res->json('data') as $c) {
+                    $insights = $c['insights']['data'][0] ?? [];
+                    $spend = (float) ($insights['spend'] ?? 0);
+                    $reach = (int) ($insights['reach'] ?? 0);
+                    $impressions = (int) ($insights['impressions'] ?? 0);
+                    $dailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : (isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00);
+
+                    $subscribers = 0;
+                    if (!empty($insights['actions'])) {
+                        foreach ($insights['actions'] as $act) {
+                            if (in_array($act['action_type'], ['lead', 'onsite_conversion.subscribe', 'subscribe'])) {
+                                $subscribers += (int) $act['value'];
+                            }
+                        }
+                    }
+                    $costPerSub = $subscribers > 0 ? round($spend / $subscribers, 2) : 0.00;
+
+                    $rawStatus = $c['status'] ?? $c['effective_status'] ?? 'ACTIVE';
+                    $status = ucfirst(strtolower($rawStatus));
+
+                    $campaign = Campaign::updateOrCreate(
+                        ['campaign_id' => 'cmp_' . $c['id']],
+                        [
+                            'client_id' => $adAccount->client_id,
+                            'ad_account_id' => $adAccount->id,
+                            'name' => $c['name'],
+                            'slug' => \Illuminate\Support\Str::slug($c['name']),
+                            'outcome' => in_array($c['objective'] ?? '', ['OUTCOME_LEADS', 'LEADS', 'CONVERSIONS', 'MESSAGES']) ? 'Subscribers' : 'Engagement',
+                            'objective' => $c['objective'] ?? 'OUTCOME_LEADS',
+                            'optimization_goal' => 'OFFSITE_CONVERSIONS',
+                            'optimization_event' => 'Subscribe',
+                            'billing_event' => 'IMPRESSIONS',
+                            'conversion_location' => 'Telegram Channel',
+                            'status' => $status,
+                            'spend' => $spend,
+                            'active_daily_budget' => $dailyBudget,
+                            'reach' => $reach,
+                            'impressions' => $impressions,
+                            'subscribers' => $subscribers,
+                            'cost_per_subscriber' => $costPerSub,
+                        ]
+                    );
+
+                    if ($spend > 0 || $impressions > 0) {
+                        CampaignInsight::updateOrCreate(
+                            ['campaign_id' => $campaign->id, 'date' => now()->format('Y-m-d')],
+                            [
+                                'spend' => $spend,
+                                'reach' => $reach,
+                                'impressions' => $impressions,
+                                'clicks' => 0,
+                                'subscribers' => $subscribers,
+                                'cost_per_subscriber' => $costPerSub,
+                                'ctr' => $impressions > 0 ? round(($subscribers / $impressions) * 100, 2) : 0,
+                                'cpm' => $impressions > 0 ? round(($spend / $impressions) * 1000, 2) : 0,
+                            ]
+                        );
+                    }
+
+                    $syncedCampaigns[] = $campaign;
+                }
+
+                $adAccount->update(['last_synced_at' => now()]);
+            }
+        } catch (\Exception $e) {
+            Log::warning("Meta Graph API Campaigns Error for account {$adAccount->account_id}: " . $e->getMessage());
+        }
+
+        return $syncedCampaigns;
+    }
+
+    /**
      * Sync Campaigns and objectives from Meta Graph API
      */
     public function syncCampaigns(array $adAccounts): void
@@ -205,83 +301,14 @@ class MetaSyncService
             return;
         }
 
-        foreach ($adAccounts as $adAccount) {
-            $connection = $adAccount->metaConnection ?? MetaConnection::first();
-            $token = $connection?->access_token;
+        // Prioritize accounts assigned to clients to avoid gateway timeouts
+        $priorityAccounts = array_filter($adAccounts, fn($acc) => !empty($acc->client_id));
+        if (empty($priorityAccounts)) {
+            $priorityAccounts = array_slice($adAccounts, 0, 5);
+        }
 
-            if (!$token) {
-                continue;
-            }
-
-            try {
-                $rawAccId = str_replace('act_', '', $adAccount->account_id);
-                $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/campaigns", [
-                    'access_token' => $token,
-                    'fields' => 'id,name,objective,status,daily_budget,insights{reach,impressions,spend,actions}',
-                    'limit' => 50,
-                ]);
-
-                if ($res->successful() && !empty($res->json('data'))) {
-                    foreach ($res->json('data') as $c) {
-                        $insights = $c['insights']['data'][0] ?? [];
-                        $spend = (float) ($insights['spend'] ?? 0);
-                        $reach = (int) ($insights['reach'] ?? 0);
-                        $impressions = (int) ($insights['impressions'] ?? 0);
-                        $dailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
-
-                        $subscribers = 0;
-                        if (!empty($insights['actions'])) {
-                            foreach ($insights['actions'] as $act) {
-                                if (in_array($act['action_type'], ['lead', 'onsite_conversion.subscribe', 'subscribe'])) {
-                                    $subscribers += (int) $act['value'];
-                                }
-                            }
-                        }
-                        $costPerSub = $subscribers > 0 ? round($spend / $subscribers, 2) : 0.00;
-
-                        $campaign = Campaign::updateOrCreate(
-                            ['campaign_id' => 'cmp_' . $c['id']],
-                            [
-                                'client_id' => $adAccount->client_id,
-                                'ad_account_id' => $adAccount->id,
-                                'name' => $c['name'],
-                                'slug' => \Illuminate\Support\Str::slug($c['name']),
-                                'outcome' => ($c['objective'] === 'OUTCOME_LEADS' || $c['objective'] === 'LEADS') ? 'Subscribers' : 'Engagement',
-                                'objective' => $c['objective'] ?? 'OUTCOME_LEADS',
-                                'optimization_goal' => 'OFFSITE_CONVERSIONS',
-                                'optimization_event' => 'Subscribe',
-                                'billing_event' => 'IMPRESSIONS',
-                                'conversion_location' => 'Telegram Channel',
-                                'status' => ucfirst(strtolower($c['status'] ?? 'ACTIVE')),
-                                'spend' => $spend,
-                                'active_daily_budget' => $dailyBudget,
-                                'reach' => $reach,
-                                'impressions' => $impressions,
-                                'subscribers' => $subscribers,
-                                'cost_per_subscriber' => $costPerSub,
-                            ]
-                        );
-
-                        if ($spend > 0 || $impressions > 0) {
-                            CampaignInsight::updateOrCreate(
-                                ['campaign_id' => $campaign->id, 'date' => now()->format('Y-m-d')],
-                                [
-                                    'spend' => $spend,
-                                    'reach' => $reach,
-                                    'impressions' => $impressions,
-                                    'clicks' => 0,
-                                    'subscribers' => $subscribers,
-                                    'cost_per_subscriber' => $costPerSub,
-                                    'ctr' => $impressions > 0 ? round(($subscribers / $impressions) * 100, 2) : 0,
-                                    'cpm' => $impressions > 0 ? round(($spend / $impressions) * 1000, 2) : 0,
-                                ]
-                            );
-                        }
-                    }
-                }
-            } catch (\Exception $e) {
-                Log::warning("Meta Graph API Campaigns Error for account {$adAccount->account_id}: " . $e->getMessage());
-            }
+        foreach ($priorityAccounts as $adAccount) {
+            $this->syncSingleAdAccount($adAccount);
         }
     }
 }

@@ -325,6 +325,14 @@ class AnalyticsController extends Controller
         // Campaigns Live from Meta for this client's assigned ad account
         if ($adAccount) {
             $campaigns = Campaign::where('ad_account_id', $adAccount->id)->get();
+            if ($campaigns->isEmpty() || $request->has('sync')) {
+                try {
+                    app(\App\Services\MetaSyncService::class)->syncSingleAdAccount($adAccount);
+                    $campaigns = Campaign::where('ad_account_id', $adAccount->id)->get();
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Meta auto sync error: ' . $e->getMessage());
+                }
+            }
         } else {
             $campaigns = collect();
         }

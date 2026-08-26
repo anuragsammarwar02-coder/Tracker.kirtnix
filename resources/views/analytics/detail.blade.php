@@ -253,7 +253,13 @@
         <div class="space-y-2.5">
             <div class="flex items-center justify-between">
                 <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">CAMPAIGN OBJECTIVES (LIVE FROM META) <span class="sr-only">Campaign Objectives (Live from Meta)</span></h2>
-                <span class="text-[11px] text-slate-400 font-mono">synced {{ $syncedAt ?? '8/25/2026, 6:04:48 PM' }}</span>
+                <div class="flex items-center gap-3">
+                    <a href="?sync=1" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 transition shadow-2xs">
+                        <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Sync Live from Meta
+                    </a>
+                    <span class="text-[11px] text-slate-400 font-mono">synced {{ $syncedAt ?? 'Just now' }}</span>
+                </div>
             </div>
 
             <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
