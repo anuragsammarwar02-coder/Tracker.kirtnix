@@ -161,61 +161,35 @@ Route::get('/healthz', function () {
         }
     }
 
-    if (request()->query('format') === 'json') {
-        return response()->json([
-            'status' => ($dbConnected && $usersCount > 0) ? 'ok' : 'attention_required',
-            'current_configured_database' => [
-                'driver' => config('database.default'),
-                'path' => $dbPath,
-                'file_exists' => $dbExists,
-                'file_size_bytes' => $dbSize,
-                'connected' => $dbConnected,
-            ],
-            'live_active_records' => [
-                'users' => $usersCount,
-                'clients' => $clientsCount,
-                'landing_pages' => $landingPagesCount,
-                'telegram_bots' => $botsCount,
-            ],
-            'scanned_directories' => array_values(array_unique($scannedPaths)),
-            'discovered_sqlite_files' => $uniqueCandidates,
-            'php_version' => PHP_VERSION,
-            'app_key_set' => !empty(config('app.key')),
-            'storage_writable' => is_writable(storage_path('framework/views')),
-            'error' => $dbError,
-        ], 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    }
+    $out = "=== KIRTNIX PRODUCTION DATABASE DISCOVERY REPORT ===\n\n";
+    $out .= "1. CURRENT CONFIGURED DATABASE:\n";
+    $out .= "   - Driver: " . config('database.default') . "\n";
+    $out .= "   - Path: {$dbPath}\n";
+    $out .= "   - Exists: " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)\n";
+    $out .= "   - Connected: " . ($dbConnected ? 'YES' : 'NO') . "\n";
+    $out .= "   - Live Counts: Users={$usersCount}, Clients={$clientsCount}, LandingPages={$landingPagesCount}, Bots={$botsCount}\n\n";
 
-    $out = "=== KIRTNIX PRODUCTION DATABASE DIAGNOSTIC REPORT ===\n";
-    $out .= "Status: " . (($dbConnected && $usersCount > 0) ? 'OK' : 'ATTENTION REQUIRED') . "\n";
-    $out .= "Configured Driver: " . config('database.default') . "\n";
-    $out .= "Configured Path: {$dbPath}\n";
-    $out .= "File Exists: " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)\n";
-    $out .= "Connected: " . ($dbConnected ? 'YES' : 'NO') . "\n";
-    $out .= "Live Active Records: Users={$usersCount}, Clients={$clientsCount}, LandingPages={$landingPagesCount}, Bots={$botsCount}\n\n";
-    $out .= "=== DISCOVERED SQLITE CANDIDATE FILES (" . count($uniqueCandidates) . ") ===\n";
+    $out .= "2. DISCOVERED SQLITE CANDIDATE FILES (" . count($uniqueCandidates) . " found):\n";
 
     if (empty($uniqueCandidates)) {
-        $out .= "No candidate SQLite files discovered in scanned paths.\n";
+        $out .= "   [!] No SQLite candidate files (.sqlite, .db, .sqlite3, or SQLite header) found in scanned directories.\n";
     } else {
         foreach ($uniqueCandidates as $idx => $cand) {
             $num = $idx + 1;
-            $out .= "[#{$num}] {$cand['absolute_path']}\n";
-            $out .= "     Size: {$cand['size_formatted']} | Modified: {$cand['last_modified']}\n";
-            $out .= "     Integrity: {$cand['sqlite_integrity']} | Has Users Table: " . ($cand['has_users_table'] ? 'YES' : 'NO') . "\n";
-            $out .= "     Tables Count: " . count($cand['tables']) . "\n";
+            $out .= "\n   [Candidate #{$num}]\n";
+            $out .= "   Path: {$cand['absolute_path']}\n";
+            $out .= "   Size: {$cand['size_formatted']} | Last Modified: {$cand['last_modified']}\n";
+            $out .= "   Integrity: {$cand['sqlite_integrity']} | Has Users Table: " . ($cand['has_users_table'] ? 'YES' : 'NO') . "\n";
+            $out .= "   Tables (" . count($cand['tables']) . "): " . (empty($cand['tables']) ? 'None' : implode(', ', $cand['tables'])) . "\n";
             $countsStr = [];
             foreach ($cand['table_counts'] as $t => $cnt) {
                 $countsStr[] = "{$t}={$cnt}";
             }
-            $out .= "     Row Counts: " . (empty($countsStr) ? 'None (Empty Database)' : implode(', ', $countsStr)) . "\n\n";
+            $out .= "   Row Counts: " . (empty($countsStr) ? 'None (Empty Database)' : implode(', ', $countsStr)) . "\n";
         }
     }
 
-    $out .= "=== SCANNED DIRECTORIES ===\n";
-    foreach (array_values(array_unique($scannedPaths)) as $p) {
-        $out .= " - {$p}\n";
-    }
+    $out .= "\n=== END REPORT ===\n";
 
     return response($out, 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
 });
