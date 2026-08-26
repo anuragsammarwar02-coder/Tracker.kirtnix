@@ -28,17 +28,6 @@ use App\Http\Controllers\PublicMarketingController;
 | Public Marketing & Product Landing Pages
 |--------------------------------------------------------------------------
 */
-// Safe Clean Baseline Restoration Endpoint (Executes verified restoration command)
-Route::get('/restore-clean-baseline', function () {
-    try {
-        $exitCode = \Illuminate\Support\Facades\Artisan::call('db:restore-clean-baseline');
-        $output = \Illuminate\Support\Facades\Artisan::output();
-        return response("Exit Code: {$exitCode}\n\n" . $output, 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
-    } catch (\Throwable $e) {
-        return response("CRITICAL RESTORE ERROR:\n" . $e->getMessage() . "\n\nStack Trace:\n" . $e->getTraceAsString(), 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
-    }
-});
-
 // Production Health & Diagnostic Check (Read-Only)
 Route::get('/healthz', function () {
     try {
