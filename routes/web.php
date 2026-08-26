@@ -53,6 +53,45 @@ Route::get('/healthz', function () {
         $dbError = $e->getMessage();
     }
 
+    // Scan candidate database files on server (Read-Only)
+    $candidateFiles = [];
+    $scanDirs = [
+        database_path(),
+        storage_path('app'),
+        storage_path('app/backups'),
+        base_path(),
+    ];
+
+    foreach ($scanDirs as $dir) {
+        if (is_dir($dir)) {
+            $files = @scandir($dir) ?: [];
+            foreach ($files as $f) {
+                if ($f === '.' || $f === '..') continue;
+                $full = $dir . DIRECTORY_SEPARATOR . $f;
+                if (is_file($full) && (str_contains($f, '.sqlite') || str_contains($f, '.db') || str_contains($f, 'tracker'))) {
+                    $size = filesize($full);
+                    $tables = [];
+                    if ($size > 0) {
+                        try {
+                            $pdo = new \PDO("sqlite:{$full}");
+                            $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table';");
+                            $tables = $stmt ? $stmt->fetchAll(\PDO::FETCH_COLUMN) : [];
+                        } catch (\Throwable $e) {
+                            $tables = ['error: ' . $e->getMessage()];
+                        }
+                    }
+                    $candidateFiles[] = [
+                        'filename' => $f,
+                        'path' => $full,
+                        'size' => $size,
+                        'tables_count' => count($tables),
+                        'sample_tables' => array_slice($tables, 0, 5),
+                    ];
+                }
+            }
+        }
+    }
+
     return response()->json([
         'status' => ($dbConnected && $usersCount > 0) ? 'ok' : 'attention_required',
         'database_driver' => config('database.default'),
@@ -66,6 +105,7 @@ Route::get('/healthz', function () {
             'landing_pages' => $landingPagesCount,
             'telegram_bots' => $botsCount,
         ],
+        'discovered_sqlite_files' => $candidateFiles,
         'php_version' => PHP_VERSION,
         'sqlite_loaded' => extension_loaded('pdo_sqlite'),
         'app_key_set' => !empty(config('app.key')),
