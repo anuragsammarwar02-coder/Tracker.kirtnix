@@ -30,160 +30,166 @@ use App\Http\Controllers\PublicMarketingController;
 */
 // Production Health & Diagnostic Check (Read-Only)
 Route::get('/healthz', function () {
-    $dbPath = config('database.connections.sqlite.database');
-    $dbExists = $dbPath && $dbPath !== ':memory:' ? file_exists($dbPath) : true;
-    $dbSize = ($dbExists && $dbPath !== ':memory:') ? filesize($dbPath) : 0;
-
-    $usersCount = 0;
-    $clientsCount = 0;
-    $landingPagesCount = 0;
-    $botsCount = 0;
-    $dbConnected = false;
-    $dbError = null;
-
     try {
-        if (\Illuminate\Support\Facades\Schema::hasTable('users')) {
-            $usersCount = \App\Models\User::count();
-            $clientsCount = \App\Models\Client::count();
-            $landingPagesCount = \App\Models\LandingPage::count();
-            $botsCount = \App\Models\TelegramBot::count();
-            $dbConnected = true;
+        $dbPath = config('database.connections.sqlite.database');
+        $dbExists = $dbPath && $dbPath !== ':memory:' ? file_exists($dbPath) : true;
+        $dbSize = ($dbExists && $dbPath !== ':memory:') ? filesize($dbPath) : 0;
+
+        $usersCount = 0;
+        $clientsCount = 0;
+        $landingPagesCount = 0;
+        $botsCount = 0;
+        $dbConnected = false;
+        $dbError = null;
+
+        if ($dbExists && $dbSize > 0) {
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('users')) {
+                    $usersCount = \App\Models\User::count();
+                    $clientsCount = \App\Models\Client::count();
+                    $landingPagesCount = \App\Models\LandingPage::count();
+                    $botsCount = \App\Models\TelegramBot::count();
+                    $dbConnected = true;
+                }
+            } catch (\Throwable $e) {
+                $dbError = $e->getMessage();
+            }
         }
-    } catch (\Throwable $e) {
-        $dbError = $e->getMessage();
-    }
 
-    // Deep Recursive Scan for Candidate SQLite Files (100% Read-Only)
-    $candidateFiles = [];
-    $scannedPaths = [];
+        // Deep Recursive Scan for Candidate SQLite Files (100% Read-Only)
+        $candidateFiles = [];
+        $scannedPaths = [];
 
-    $searchRoots = [
-        database_path(),
-        storage_path('app'),
-        storage_path('app/backups'),
-        base_path(),
-        base_path('database'),
-        base_path('storage'),
-    ];
+        $searchRoots = [
+            database_path(),
+            storage_path('app'),
+            storage_path('app/backups'),
+            base_path(),
+            base_path('database'),
+            base_path('storage'),
+        ];
 
-    $findSqliteFiles = function ($dir, $depth = 0) use (&$findSqliteFiles, &$candidateFiles, &$scannedPaths) {
-        try {
-            if ($depth > 3 || !@is_dir($dir) || !@is_readable($dir)) return;
-            $scannedPaths[] = $dir;
+        $findSqliteFiles = function ($dir, $depth = 0) use (&$findSqliteFiles, &$candidateFiles, &$scannedPaths) {
+            try {
+                if ($depth > 3 || !@is_dir($dir) || !@is_readable($dir)) return;
+                $scannedPaths[] = $dir;
 
-            $items = @scandir($dir) ?: [];
-            foreach ($items as $item) {
-                if ($item === '.' || $item === '..' || $item === 'node_modules' || $item === 'vendor' || $item === '.git') continue;
-                $full = $dir . DIRECTORY_SEPARATOR . $item;
+                $items = @scandir($dir) ?: [];
+                foreach ($items as $item) {
+                    if ($item === '.' || $item === '..' || $item === 'node_modules' || $item === 'vendor' || $item === '.git') continue;
+                    $full = $dir . DIRECTORY_SEPARATOR . $item;
 
-                if (@is_dir($full)) {
-                    $findSqliteFiles($full, $depth + 1);
-                } elseif (@is_file($full)) {
-                    $isSqliteCandidate = str_ends_with($item, '.sqlite') || 
-                                         str_ends_with($item, '.db') || 
-                                         str_ends_with($item, '.sqlite3') || 
-                                         str_contains($item, 'database') || 
-                                         str_contains($item, 'tracker') ||
-                                         str_contains($item, 'backup');
+                    if (@is_dir($full)) {
+                        $findSqliteFiles($full, $depth + 1);
+                    } elseif (@is_file($full)) {
+                        $isSqliteCandidate = str_ends_with($item, '.sqlite') || 
+                                             str_ends_with($item, '.db') || 
+                                             str_ends_with($item, '.sqlite3') || 
+                                             str_contains($item, 'database') || 
+                                             str_contains($item, 'tracker') ||
+                                             str_contains($item, 'backup');
 
-                    if ($isSqliteCandidate) {
-                        $size = @filesize($full) ?: 0;
-                        $mtime = date('Y-m-d H:i:s', @filemtime($full) ?: time());
-                        $integrity = 'untested';
-                        $tables = [];
-                        $tableCounts = [];
+                        if ($isSqliteCandidate) {
+                            $size = @filesize($full) ?: 0;
+                            $mtime = date('Y-m-d H:i:s', @filemtime($full) ?: time());
+                            $integrity = 'untested';
+                            $tables = [];
+                            $tableCounts = [];
 
-                        if ($size > 0) {
-                            try {
-                                $pdo = new \PDO("sqlite:{$full}");
-                                $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+                            if ($size > 0) {
+                                try {
+                                    $pdo = new \PDO("sqlite:{$full}");
+                                    $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
-                                // Integrity check
-                                $stmt = $pdo->query('PRAGMA integrity_check;');
-                                $integrity = $stmt ? $stmt->fetchColumn() : 'unknown';
+                                    // Integrity check
+                                    $stmt = $pdo->query('PRAGMA integrity_check;');
+                                    $integrity = $stmt ? $stmt->fetchColumn() : 'unknown';
 
-                                // Discover tables
-                                $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
-                                $tables = $stmt ? $stmt->fetchAll(\PDO::FETCH_COLUMN) : [];
+                                    // Discover tables
+                                    $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+                                    $tables = $stmt ? $stmt->fetchAll(\PDO::FETCH_COLUMN) : [];
 
-                                // Row counts for key tables
-                                foreach ($tables as $t) {
-                                    try {
-                                        $cStmt = $pdo->query("SELECT COUNT(*) FROM \"{$t}\";");
-                                        $tableCounts[$t] = $cStmt ? (int) $cStmt->fetchColumn() : 0;
-                                    } catch (\Throwable $e) {
-                                        $tableCounts[$t] = 'err';
+                                    // Row counts for key tables
+                                    foreach ($tables as $t) {
+                                        try {
+                                            $cStmt = $pdo->query("SELECT COUNT(*) FROM \"{$t}\";");
+                                            $tableCounts[$t] = $cStmt ? (int) $cStmt->fetchColumn() : 0;
+                                        } catch (\Throwable $e) {
+                                            $tableCounts[$t] = 'err';
+                                        }
                                     }
+                                } catch (\Throwable $e) {
+                                    $integrity = 'error: ' . $e->getMessage();
                                 }
-                            } catch (\Throwable $e) {
-                                $integrity = 'error: ' . $e->getMessage();
                             }
-                        }
 
-                        $candidateFiles[] = [
-                            'filename' => $item,
-                            'absolute_path' => $full,
-                            'size_bytes' => $size,
-                            'size_formatted' => number_format($size) . ' bytes',
-                            'last_modified' => $mtime,
-                            'sqlite_integrity' => $integrity,
-                            'has_users_table' => in_array('users', $tables),
-                            'table_counts' => $tableCounts,
-                            'tables' => $tables,
-                        ];
+                            $candidateFiles[] = [
+                                'filename' => $item,
+                                'absolute_path' => $full,
+                                'size_bytes' => $size,
+                                'size_formatted' => number_format($size) . ' bytes',
+                                'last_modified' => $mtime,
+                                'sqlite_integrity' => $integrity,
+                                'has_users_table' => in_array('users', $tables),
+                                'table_counts' => $tableCounts,
+                                'tables' => $tables,
+                            ];
+                        }
                     }
                 }
+            } catch (\Throwable $e) {
+                // Ignore restricted directories
             }
-        } catch (\Throwable $e) {
-            // Ignore restricted directories
+        };
+
+        foreach (array_unique($searchRoots) as $root) {
+            $findSqliteFiles($root, 0);
         }
-    };
 
-    foreach (array_unique($searchRoots) as $root) {
-        $findSqliteFiles($root, 0);
-    }
-
-    // Deduplicate candidate files by absolute path
-    $uniqueCandidates = [];
-    $seenPaths = [];
-    foreach ($candidateFiles as $cand) {
-        if (!in_array($cand['absolute_path'], $seenPaths)) {
-            $seenPaths[] = $cand['absolute_path'];
-            $uniqueCandidates[] = $cand;
-        }
-    }
-
-    $out = "=== KIRTNIX PRODUCTION DATABASE DISCOVERY REPORT ===\n\n";
-    $out .= "1. CURRENT CONFIGURED DATABASE:\n";
-    $out .= "   - Driver: " . config('database.default') . "\n";
-    $out .= "   - Path: {$dbPath}\n";
-    $out .= "   - Exists: " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)\n";
-    $out .= "   - Connected: " . ($dbConnected ? 'YES' : 'NO') . "\n";
-    $out .= "   - Live Counts: Users={$usersCount}, Clients={$clientsCount}, LandingPages={$landingPagesCount}, Bots={$botsCount}\n\n";
-
-    $out .= "2. DISCOVERED SQLITE CANDIDATE FILES (" . count($uniqueCandidates) . " found):\n";
-
-    if (empty($uniqueCandidates)) {
-        $out .= "   [!] No SQLite candidate files (.sqlite, .db, .sqlite3, or SQLite header) found in scanned directories.\n";
-    } else {
-        foreach ($uniqueCandidates as $idx => $cand) {
-            $num = $idx + 1;
-            $out .= "\n   [Candidate #{$num}]\n";
-            $out .= "   Path: {$cand['absolute_path']}\n";
-            $out .= "   Size: {$cand['size_formatted']} | Last Modified: {$cand['last_modified']}\n";
-            $out .= "   Integrity: {$cand['sqlite_integrity']} | Has Users Table: " . ($cand['has_users_table'] ? 'YES' : 'NO') . "\n";
-            $out .= "   Tables (" . count($cand['tables']) . "): " . (empty($cand['tables']) ? 'None' : implode(', ', $cand['tables'])) . "\n";
-            $countsStr = [];
-            foreach ($cand['table_counts'] as $t => $cnt) {
-                $countsStr[] = "{$t}={$cnt}";
+        // Deduplicate candidate files by absolute path
+        $uniqueCandidates = [];
+        $seenPaths = [];
+        foreach ($candidateFiles as $cand) {
+            if (!in_array($cand['absolute_path'], $seenPaths)) {
+                $seenPaths[] = $cand['absolute_path'];
+                $uniqueCandidates[] = $cand;
             }
-            $out .= "   Row Counts: " . (empty($countsStr) ? 'None (Empty Database)' : implode(', ', $countsStr)) . "\n";
         }
+
+        $out = "=== KIRTNIX PRODUCTION DATABASE DISCOVERY REPORT ===\n\n";
+        $out .= "1. CURRENT CONFIGURED DATABASE:\n";
+        $out .= "   - Driver: " . config('database.default') . "\n";
+        $out .= "   - Path: {$dbPath}\n";
+        $out .= "   - Exists: " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)\n";
+        $out .= "   - Connected: " . ($dbConnected ? 'YES' : 'NO') . "\n";
+        $out .= "   - Live Counts: Users={$usersCount}, Clients={$clientsCount}, LandingPages={$landingPagesCount}, Bots={$botsCount}\n\n";
+
+        $out .= "2. DISCOVERED SQLITE CANDIDATE FILES (" . count($uniqueCandidates) . " found):\n";
+
+        if (empty($uniqueCandidates)) {
+            $out .= "   [!] No SQLite candidate files (.sqlite, .db, .sqlite3, or SQLite header) found in scanned directories.\n";
+        } else {
+            foreach ($uniqueCandidates as $idx => $cand) {
+                $num = $idx + 1;
+                $out .= "\n   [Candidate #{$num}]\n";
+                $out .= "   Path: {$cand['absolute_path']}\n";
+                $out .= "   Size: {$cand['size_formatted']} | Last Modified: {$cand['last_modified']}\n";
+                $out .= "   Integrity: {$cand['sqlite_integrity']} | Has Users Table: " . ($cand['has_users_table'] ? 'YES' : 'NO') . "\n";
+                $out .= "   Tables (" . count($cand['tables']) . "): " . (empty($cand['tables']) ? 'None' : implode(', ', $cand['tables'])) . "\n";
+                $countsStr = [];
+                foreach ($cand['table_counts'] as $t => $cnt) {
+                    $countsStr[] = "{$t}={$cnt}";
+                }
+                $out .= "   Row Counts: " . (empty($countsStr) ? 'None (Empty Database)' : implode(', ', $countsStr)) . "\n";
+            }
+        }
+
+        $out .= "\n=== END REPORT ===\n";
+
+        return response($out, 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+    } catch (\Throwable $e) {
+        return response("CRITICAL HEALTHZ ERROR:\n" . $e->getMessage() . "\n\nStack Trace:\n" . $e->getTraceAsString(), 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
     }
-
-    $out .= "\n=== END REPORT ===\n";
-
-    return response($out, 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
 });
 
 Route::get('/', [PublicMarketingController::class, 'home'])->name('home');
