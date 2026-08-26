@@ -214,10 +214,22 @@ Route::get('/healthz', function () {
                     'landing_pages' => $landingPagesCount,
                     'bots' => $botsCount,
                     'channels' => $dbConnected ? \App\Models\TelegramChannel::count() : 0,
+                    'meta_connections' => $dbConnected ? \App\Models\MetaConnection::count() : 0,
+                    'ad_accounts' => $dbConnected ? \App\Models\AdAccount::count() : 0,
                 ],
                 'bots_data' => $dbConnected ? \App\Models\TelegramBot::select('id', 'name', 'username', 'client_id')->get() : [],
                 'channels_data' => $dbConnected ? \App\Models\TelegramChannel::select('id', 'title', 'telegram_chat_id', 'telegram_bot_id', 'client_id')->get() : [],
                 'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email')->get() : [],
+                'meta_diagnostics' => [
+                    'connection' => $dbConnected ? \App\Models\MetaConnection::select('id', 'facebook_user_id', 'facebook_name', 'status', 'sync_status', 'last_sync_at')->first() : null,
+                    'has_token_in_connection' => $dbConnected ? !empty(\App\Models\MetaConnection::first()?->access_token) : false,
+                    'has_system_user_token_setting' => $dbConnected ? !empty(\App\Models\Setting::get('meta_system_user_token')) : false,
+                    'meta_app_id_setting' => $dbConnected ? \App\Models\Setting::get('meta_app_id') : null,
+                    'meta_app_id_env' => env('META_APP_ID'),
+                    'app_url_config' => config('app.url'),
+                    'oauth_redirect_uri' => route('meta.oauth.callback'),
+                    'app_key_prefix' => substr((string)config('app.key'), 0, 10),
+                ],
                 'discovered_sqlite_files' => $uniqueCandidates,
             ], 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         }
