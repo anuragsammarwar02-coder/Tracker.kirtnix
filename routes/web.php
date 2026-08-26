@@ -57,93 +57,85 @@ Route::get('/healthz', function () {
     $candidateFiles = [];
     $scannedPaths = [];
 
-    $accountRoot = realpath(base_path('../..')) ?: $domainRoot;
     $searchRoots = [
         database_path(),
         storage_path('app'),
         storage_path('app/backups'),
         base_path(),
-        $domainRoot,
-        $accountRoot,
+        base_path('database'),
+        base_path('storage'),
     ];
 
     $findSqliteFiles = function ($dir, $depth = 0) use (&$findSqliteFiles, &$candidateFiles, &$scannedPaths) {
-        if ($depth > 4 || !is_dir($dir) || !is_readable($dir)) return;
-        $scannedPaths[] = $dir;
+        try {
+            if ($depth > 3 || !@is_dir($dir) || !@is_readable($dir)) return;
+            $scannedPaths[] = $dir;
 
-        $items = @scandir($dir) ?: [];
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..' || $item === 'node_modules' || $item === 'vendor' || $item === '.git') continue;
-            $full = $dir . DIRECTORY_SEPARATOR . $item;
+            $items = @scandir($dir) ?: [];
+            foreach ($items as $item) {
+                if ($item === '.' || $item === '..' || $item === 'node_modules' || $item === 'vendor' || $item === '.git') continue;
+                $full = $dir . DIRECTORY_SEPARATOR . $item;
 
-            if (is_dir($full)) {
-                $findSqliteFiles($full, $depth + 1);
-            } elseif (is_file($full)) {
-                $isSqliteCandidate = str_ends_with($item, '.sqlite') || 
-                                     str_ends_with($item, '.db') || 
-                                     str_ends_with($item, '.sqlite3') || 
-                                     str_contains($item, 'database') || 
-                                     str_contains($item, 'backup');
+                if (@is_dir($full)) {
+                    $findSqliteFiles($full, $depth + 1);
+                } elseif (@is_file($full)) {
+                    $isSqliteCandidate = str_ends_with($item, '.sqlite') || 
+                                         str_ends_with($item, '.db') || 
+                                         str_ends_with($item, '.sqlite3') || 
+                                         str_contains($item, 'database') || 
+                                         str_contains($item, 'tracker') ||
+                                         str_contains($item, 'backup');
 
-                // Check magic bytes for SQLite header if file is non-empty
-                if (!$isSqliteCandidate && filesize($full) > 100) {
-                    $handle = @fopen($full, 'rb');
-                    if ($handle) {
-                        $header = fread($handle, 16);
-                        fclose($handle);
-                        if (str_starts_with($header, 'SQLite format 3')) {
-                            $isSqliteCandidate = true;
-                        }
-                    }
-                }
+                    if ($isSqliteCandidate) {
+                        $size = @filesize($full) ?: 0;
+                        $mtime = date('Y-m-d H:i:s', @filemtime($full) ?: time());
+                        $integrity = 'untested';
+                        $tables = [];
+                        $tableCounts = [];
 
-                if ($isSqliteCandidate) {
-                    $size = filesize($full);
-                    $mtime = date('Y-m-d H:i:s', filemtime($full));
-                    $integrity = 'untested';
-                    $tables = [];
-                    $tableCounts = [];
+                        if ($size > 0) {
+                            try {
+                                $pdo = new \PDO("sqlite:{$full}");
+                                $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
-                    if ($size > 0) {
-                        try {
-                            $pdo = new \PDO("sqlite:{$full}");
-                            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+                                // Integrity check
+                                $stmt = $pdo->query('PRAGMA integrity_check;');
+                                $integrity = $stmt ? $stmt->fetchColumn() : 'unknown';
 
-                            // Integrity check
-                            $stmt = $pdo->query('PRAGMA integrity_check;');
-                            $integrity = $stmt ? $stmt->fetchColumn() : 'unknown';
+                                // Discover tables
+                                $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+                                $tables = $stmt ? $stmt->fetchAll(\PDO::FETCH_COLUMN) : [];
 
-                            // Discover tables
-                            $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
-                            $tables = $stmt ? $stmt->fetchAll(\PDO::FETCH_COLUMN) : [];
-
-                            // Row counts for key tables
-                            foreach ($tables as $t) {
-                                try {
-                                    $cStmt = $pdo->query("SELECT COUNT(*) FROM \"{$t}\";");
-                                    $tableCounts[$t] = $cStmt ? (int) $cStmt->fetchColumn() : 0;
-                                } catch (\Throwable $e) {
-                                    $tableCounts[$t] = 'err';
+                                // Row counts for key tables
+                                foreach ($tables as $t) {
+                                    try {
+                                        $cStmt = $pdo->query("SELECT COUNT(*) FROM \"{$t}\";");
+                                        $tableCounts[$t] = $cStmt ? (int) $cStmt->fetchColumn() : 0;
+                                    } catch (\Throwable $e) {
+                                        $tableCounts[$t] = 'err';
+                                    }
                                 }
+                            } catch (\Throwable $e) {
+                                $integrity = 'error: ' . $e->getMessage();
                             }
-                        } catch (\Throwable $e) {
-                            $integrity = 'error: ' . $e->getMessage();
                         }
-                    }
 
-                    $candidateFiles[] = [
-                        'filename' => $item,
-                        'absolute_path' => $full,
-                        'size_bytes' => $size,
-                        'size_formatted' => number_format($size) . ' bytes',
-                        'last_modified' => $mtime,
-                        'sqlite_integrity' => $integrity,
-                        'has_users_table' => in_array('users', $tables),
-                        'table_counts' => $tableCounts,
-                        'tables' => $tables,
-                    ];
+                        $candidateFiles[] = [
+                            'filename' => $item,
+                            'absolute_path' => $full,
+                            'size_bytes' => $size,
+                            'size_formatted' => number_format($size) . ' bytes',
+                            'last_modified' => $mtime,
+                            'sqlite_integrity' => $integrity,
+                            'has_users_table' => in_array('users', $tables),
+                            'table_counts' => $tableCounts,
+                            'tables' => $tables,
+                        ];
+                    }
                 }
             }
+        } catch (\Throwable $e) {
+            // Ignore restricted directories
         }
     };
 
