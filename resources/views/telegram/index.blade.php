@@ -436,14 +436,9 @@
                                 </h3>
                                 <button type="button" @click="autoDetectModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
                             </div>
-
-                            <!-- Telegram API Discovery Explanation Banner -->
-                            <div class="p-3 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl mb-4 text-[11px] text-blue-900 dark:text-blue-200 leading-relaxed flex items-start gap-2.5">
-                                <span class="text-sm">ℹ️</span>
-                                <div>
-                                    Telegram only reports channels to the bot through updates. To discover a channel, send a new post/message in that channel after the bot is an administrator.
-                                </div>
-                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                                Channels where the connected bot has verified Administrator rights:
+                            </p>
 
                             <!-- Loading State -->
                             <div x-show="isDetecting" class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">

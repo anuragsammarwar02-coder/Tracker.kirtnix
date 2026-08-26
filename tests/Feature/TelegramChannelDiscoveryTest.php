@@ -222,4 +222,72 @@ class TelegramChannelDiscoveryTest extends TestCase
             'title' => 'Assigned Client Channel (Renamed)',
         ]);
     }
+
+    public function test_auto_detect_returns_all_three_channels_and_renders_in_ui(): void
+    {
+        $bot = TelegramBot::first();
+        TelegramChannel::truncate();
+
+        $c1 = TelegramChannel::create([
+            'telegram_bot_id' => $bot->id,
+            'telegram_chat_id' => '-1001234567890',
+            'title' => 'Gujarati_trader',
+            'username' => 'gujaratitrdexx',
+            'type' => 'channel',
+            'member_count' => 15800,
+            'is_bot_admin' => true,
+            'bot_status' => 'administrator',
+            'is_active' => true,
+        ]);
+
+        $c2 = TelegramChannel::create([
+            'telegram_bot_id' => $bot->id,
+            'telegram_chat_id' => '-1001984729104',
+            'title' => 'STOX Pro VIP Calls',
+            'username' => 'stoxk_pro_vip',
+            'type' => 'channel',
+            'member_count' => 16550,
+            'is_bot_admin' => true,
+            'bot_status' => 'administrator',
+            'is_active' => true,
+        ]);
+
+        $c3 = TelegramChannel::create([
+            'telegram_bot_id' => $bot->id,
+            'telegram_chat_id' => '-1002938475610',
+            'title' => 'Alpha Forex VIP Club (Private)',
+            'username' => null, // Private channel without username
+            'type' => 'channel',
+            'member_count' => 17300,
+            'is_bot_admin' => true,
+            'bot_status' => 'administrator',
+            'is_active' => true,
+        ]);
+
+        $user = \App\Models\User::first();
+
+        // 1. Verify Auto-Detect JSON API
+        $response = $this->actingAs($user)->getJson(route('telegram.channels.auto_detect', ['bot_id' => $bot->id]));
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'bot_username' => $bot->username,
+        ]);
+
+        $channels = $response->json('channels');
+        $this->assertCount(3, $channels);
+        $this->assertEquals('Gujarati_trader', $channels[0]['title']);
+        $this->assertEquals('STOX Pro VIP Calls', $channels[1]['title']);
+        $this->assertEquals('Alpha Forex VIP Club (Private)', $channels[2]['title']);
+        $this->assertNull($channels[2]['username']);
+
+        // 2. Verify View rendering
+        $viewResponse = $this->actingAs($user)->get(route('telegram.index'));
+        $viewResponse->assertStatus(200);
+        $viewResponse->assertSee('Auto-detect private channel');
+        $viewResponse->assertSee('Step 2: Discovered Telegram Channels');
+        $viewResponse->assertSee('Gujarati_trader');
+        $viewResponse->assertSee('STOX Pro VIP Calls');
+        $viewResponse->assertSee('Alpha Forex VIP Club (Private)');
+    }
 }

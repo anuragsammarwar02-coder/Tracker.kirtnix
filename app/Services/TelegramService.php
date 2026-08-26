@@ -242,8 +242,11 @@ class TelegramService
     {
         $channelsMap = collect();
 
-        // 1. All existing tracked channels for this bot
-        $existingChannels = TelegramChannel::where('telegram_bot_id', $bot->id)->get();
+        // 1. All existing tracked channels for this bot or global channels
+        $existingChannels = TelegramChannel::where('telegram_bot_id', $bot->id)
+            ->orWhereNull('telegram_bot_id')
+            ->get();
+            
         foreach ($existingChannels as $ch) {
             $channelsMap->put((string) $ch->telegram_chat_id, [
                 'id' => $ch->id,
@@ -259,8 +262,27 @@ class TelegramService
             ]);
         }
 
+        // Also merge any other channels from TelegramChannel table
+        foreach (TelegramChannel::all() as $ch) {
+            if (!$channelsMap->has((string) $ch->telegram_chat_id)) {
+                $channelsMap->put((string) $ch->telegram_chat_id, [
+                    'id' => $ch->id,
+                    'telegram_chat_id' => (string) $ch->telegram_chat_id,
+                    'title' => $ch->title,
+                    'username' => $ch->username,
+                    'type' => $ch->type ?? 'channel',
+                    'member_count' => (int) ($ch->member_count ?: 0),
+                    'is_bot_admin' => (bool) $ch->is_bot_admin,
+                    'bot_status' => $ch->bot_status ?? 'administrator',
+                    'client_id' => $ch->client_id,
+                    'client_name' => $ch->client?->company_name,
+                ]);
+            }
+        }
+
         // 2. Discover any additional channels from raw payloads in TelegramEvent
         $events = TelegramEvent::where('telegram_bot_id', $bot->id)
+            ->orWhereNull('telegram_bot_id')
             ->whereNotNull('raw_payload')
             ->get();
 
