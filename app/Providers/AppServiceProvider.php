@@ -21,16 +21,24 @@ class AppServiceProvider extends ServiceProvider
         try {
             if (config('database.default') === 'sqlite') {
                 $dbPath = config('database.connections.sqlite.database');
-                if ($dbPath && $dbPath !== ':memory:' && !file_exists($dbPath)) {
+                if ($dbPath && $dbPath !== ':memory:') {
                     $dir = dirname($dbPath);
                     if (!is_dir($dir)) {
                         @mkdir($dir, 0755, true);
                     }
-                    @touch($dbPath);
+                    if (!file_exists($dbPath)) {
+                        @touch($dbPath);
+                    }
                 }
             }
+
+            // Safe one-time auto-migration for production/Hostinger when users table does not exist
+            if (!Schema::hasTable('users')) {
+                @Artisan::call('migrate', ['--force' => true]);
+                @Artisan::call('db:seed', ['--force' => true]);
+            }
         } catch (\Throwable $e) {
-            // Silently continue
+            @error_log('AppServiceProvider boot error: ' . $e->getMessage());
         }
     }
 }
