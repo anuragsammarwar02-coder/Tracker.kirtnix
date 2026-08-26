@@ -316,7 +316,9 @@ Route::get('/analytics', function () {
     return app(PublicMarketingController::class)->analytics();
 })->name('public.analytics');
 
-// Dedicated Shareable Client Analytics Page
+// Dedicated Shareable Client Analytics Page & Live Polling Endpoints
+Route::get('/analytics/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics'])->name('public.analytics.live_metrics');
+Route::get('/analytics/detail/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics']);
 Route::get('/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('public.analytics.detail');
 Route::get('/share/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('public.analytics.share');
 

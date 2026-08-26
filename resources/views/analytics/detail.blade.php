@@ -117,6 +117,12 @@
                     </div>
                 </form>
 
+                <!-- Live Real-Time Polling Indicator -->
+                <div id="livePulseIndicator" class="inline-flex items-center px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-2"></span>
+                    Live Real-Time
+                </div>
+
                 <!-- Published Badge -->
                 <div class="inline-flex items-center px-3 py-2 rounded-xl text-xs font-semibold bg-amber-50/70 text-amber-900 border border-amber-200/80 shadow-sm">
                     <span class="w-2 h-2 rounded-full bg-amber-500 mr-2"></span>
@@ -151,7 +157,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_spending'], 2) }}</span>
+                        <span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_spending'], 2) }}</span>
                     </div>
                 </div>
 
@@ -162,8 +168,8 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_budget'], 2) }}</span>
-                        <p class="text-[11px] text-slate-400 mt-1">{{ $budget['budget_source'] ?? 'Live from the connected Meta ad account' }}</p>
+                        <span id="budget-total" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_budget'], 2) }}</span>
+                        <p id="budget-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['budget_source'] ?? 'Live from the connected Meta ad account' }}</p>
                     </div>
                 </div>
 
@@ -174,8 +180,8 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['remaining_budget'], 2) }}</span>
-                        <p class="text-[11px] text-slate-400 mt-1">{{ $budget['remaining_source'] ?? 'Live from Meta ad account' }}</p>
+                        <span id="budget-remaining" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['remaining_budget'], 2) }}</span>
+                        <p id="budget-remaining-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['remaining_source'] ?? 'Live from Meta ad account' }}</p>
                     </div>
                 </div>
             </div>
@@ -293,7 +299,7 @@
                                 <td class="py-3.5 px-5 text-slate-600">{{ $camp->billing_event ?? 'Impressions' }}</td>
                                 <td class="py-3.5 px-5 text-slate-500">{{ $camp->conversion_location ?? 'Telegram' }}</td>
                                 <td class="py-3.5 px-5 text-right text-slate-700 font-medium">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ in_array(strtolower($camp->status), ['active', '1']) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600' }}">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ in_array(strtolower($camp->status), ['active', '1']) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200' }}">
                                         {{ ucfirst($camp->status) }}
                                     </span>
                                 </td>
@@ -327,7 +333,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['reach']) }}</span>
+                        <span id="kpi-reach" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['reach']) }}</span>
                         <p class="text-[11px] text-slate-400 mt-0.5">Live from Meta</p>
                     </div>
                 </div>
@@ -339,7 +345,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['impressions']) }}</span>
+                        <span id="kpi-impressions" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['impressions']) }}</span>
                         <p class="text-[11px] text-slate-400 mt-0.5">Live from Meta</p>
                     </div>
                 </div>
@@ -351,7 +357,8 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['lp_views']) }}</span>
+                        <span id="kpi-lp-views" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['lp_views']) }}</span>
+                        <p class="text-[11px] text-emerald-600 font-medium mt-0.5 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Live Real-time</p>
                     </div>
                 </div>
 
@@ -362,7 +369,8 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['unique_visitors']) }}</span>
+                        <span id="kpi-unique-visitors" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['unique_visitors']) }}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Deduplicated visitors</p>
                     </div>
                 </div>
 
@@ -373,96 +381,102 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['tg_clicks']) }}</span>
+                        <span id="kpi-tg-clicks" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['tg_clicks']) }}</span>
+                        <p class="text-[11px] text-emerald-600 font-medium mt-0.5 flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>CTA Clicks</p>
                     </div>
                 </div>
 
-                <!-- 6. Conv. rate -->
+                <!-- 6. Cost / click (CPC) NEW -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-500">Cost / click</span>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <span id="kpi-cost-per-click" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['cost_per_click'] ?? '₹0.00' }}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Spend / Telegram click</p>
+                    </div>
+                </div>
+
+                <!-- 7. Conv. rate -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-medium text-slate-500">Conv. rate</span>
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['conversion_rate'] ?? '0.0%' }}</span>
+                        <span id="kpi-conversion-rate" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['conversion_rate'] ?? '0.0%' }}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Clicks / Views</p>
                     </div>
                 </div>
 
-                <!-- 7. Direct joins -->
+                <!-- 8. Direct joins -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-medium text-slate-500">Direct joins</span>
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['direct_joins']) }}</span>
+                        <span id="kpi-direct-joins" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['direct_joins']) }}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Without ad / organic joins</p>
                     </div>
                 </div>
 
-                <!-- 8. Subscribers (Highlighted Yellow Border Card) -->
+                <!-- 9. Subscribers (Highlighted Yellow Border Card) -->
                 <div class="bg-[#fefce8] p-5 rounded-2xl border-2 border-[#fef08a] shadow-sm flex flex-col justify-between min-h-[115px] relative">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-semibold text-slate-700">Subscribers</span>
                         <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">{{ number_format($kpis['subscribers']) }}</span>
-                        <p class="text-[11px] text-slate-500 mt-0.5">Meta campaign objective: Subscribers</p>
+                        <span id="kpi-subscribers" class="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">{{ number_format($kpis['subscribers']) }}</span>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Actual Telegram joins</p>
                     </div>
                 </div>
 
-                <!-- 9. Approved members -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">Approved members</span>
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    </div>
-                    <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['approved_members']) }}</span>
-                    </div>
-                </div>
-
-                <!-- 10. Pending join requests -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">Pending join requests</span>
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    </div>
-                    <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['pending_requests']) }}</span>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Private channel approvals</p>
-                    </div>
-                </div>
-
-                <!-- 11. Cost / subscriber -->
+                <!-- 10. Cost / subscriber -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-medium text-slate-500">Cost / subscriber</span>
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['cost_per_subscriber'] ?? '₹0.00' }}</span>
+                        <span id="kpi-cost-per-sub" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['cost_per_subscriber'] ?? '₹0.00' }}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Spend / Actual subscriber</p>
                     </div>
                 </div>
 
-                <!-- 12. Backouts -->
+                <!-- 11. Approved members -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">Backouts</span>
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        <span class="text-xs font-medium text-slate-500">Approved members</span>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['backouts']) }}</span>
+                        <span id="kpi-approved-members" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['approved_members']) }}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Verified channel members</p>
+                    </div>
+                </div>
+
+                <!-- 12. Pending join requests -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-500">Pending join requests</span>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <span id="kpi-pending-requests" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['pending_requests']) }}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Private channel approvals</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 6. COMPLETE JOIN HISTORY -->
+        <!-- 6. COMPLETE JOIN HISTORY TABLE -->
         <div class="space-y-2.5">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">COMPLETE JOIN HISTORY <span class="sr-only">Complete Join History</span></h2>
-                <span class="text-xs text-slate-500 font-medium">{{ $joinHistory->total() }} events</span>
+                <span class="text-[11px] text-slate-400 font-mono">{{ $joinHistory->total() }} events</span>
             </div>
 
             <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
@@ -481,20 +495,20 @@
                                 <th class="py-3 px-5 text-right">WHEN</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100 text-slate-700 font-medium">
+                        <tbody id="joinHistoryTbody" class="divide-y divide-slate-100 text-slate-700 font-medium">
                             @forelse($joinHistory as $event)
                             <tr class="hover:bg-slate-50/60 transition">
                                 <td class="py-3.5 px-5 font-bold text-slate-900">
-                                    {{ $event->first_name ? $event->first_name . ' ' . $event->last_name : ($event->telegram_username ? '@' . $event->telegram_username : 'Subscriber') }}
+                                    {{ $event->first_name ? $event->first_name . ' ' . ($event->last_name ?? '') : ($event->telegram_username ? '@' . $event->telegram_username : 'User #' . substr($event->telegram_user_id, -4)) }}
                                 </td>
                                 <td class="py-3.5 px-5">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/50">
-                                        {{ $event->event_type === 'join' ? 'joined' : $event->event_type }}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        {{ $event->event_type === 'join' ? 'Direct Join' : ucfirst($event->event_type) }}
                                     </span>
                                 </td>
                                 <td class="py-3.5 px-5">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">
-                                        {{ $event->status_after ?? 'pending' }}
+                                        {{ $event->status_after ?? 'member' }}
                                     </span>
                                 </td>
                                 <td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>
@@ -544,7 +558,7 @@
         </div>
     </footer>
 
-    <!-- JavaScript Helpers -->
+    <!-- JavaScript Helpers & Real-Time Polling -->
     <script>
         function copyClientLink() {
             const url = window.location.href;
@@ -574,6 +588,57 @@
                 }, 3000);
             }
         }
+
+        // --- REAL-TIME LIVE POLLING ENGINE (Every 3.5s) ---
+        (function() {
+            const basePath = window.location.pathname.replace(/\/$/, '');
+            const liveMetricsUrl = basePath + '/live-metrics' + window.location.search;
+
+            function pollLiveMetrics() {
+                fetch(liveMetricsUrl, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.ok && data.kpis) {
+                        updateKpi('kpi-reach', data.kpis.reach);
+                        updateKpi('kpi-impressions', data.kpis.impressions);
+                        updateKpi('kpi-lp-views', data.kpis.lp_views);
+                        updateKpi('kpi-unique-visitors', data.kpis.unique_visitors);
+                        updateKpi('kpi-tg-clicks', data.kpis.tg_clicks);
+                        updateKpi('kpi-cost-per-click', data.kpis.cost_per_click);
+                        updateKpi('kpi-conversion-rate', data.kpis.conversion_rate);
+                        updateKpi('kpi-direct-joins', data.kpis.direct_joins);
+                        updateKpi('kpi-subscribers', data.kpis.subscribers);
+                        updateKpi('kpi-cost-per-sub', data.kpis.cost_per_subscriber);
+                        updateKpi('kpi-approved-members', data.kpis.approved_members);
+                        updateKpi('kpi-pending-requests', data.kpis.pending_requests);
+                        updateKpi('kpi-backouts', data.kpis.backouts);
+                    }
+                })
+                .catch(() => {});
+            }
+
+            function updateKpi(elementId, newValue) {
+                const el = document.getElementById(elementId);
+                if (!el || newValue === undefined || newValue === null) return;
+                
+                const currentVal = el.textContent.trim();
+                if (currentVal !== String(newValue)) {
+                    el.textContent = newValue;
+                    el.classList.add('text-amber-500', 'scale-110', 'transition-all', 'duration-300');
+                    setTimeout(() => {
+                        el.classList.remove('text-amber-500', 'scale-110');
+                    }, 800);
+                }
+            }
+
+            // Start auto polling every 3.5s
+            setInterval(pollLiveMetrics, 3500);
+        })();
     </script>
 </body>
 </html>

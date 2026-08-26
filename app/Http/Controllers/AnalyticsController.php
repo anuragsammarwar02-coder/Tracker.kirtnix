@@ -355,7 +355,9 @@ class AnalyticsController extends Controller
         $eventsQuery = TelegramEvent::where('client_id', $client?->id)
             ->where('event_time', '>=', $startDate);
         $subscribers = (clone $eventsQuery)->where('event_type', 'join')->count();
-        $directJoins = (clone $eventsQuery)->where('event_type', 'join')->where('source', 'direct')->count();
+        $directJoins = (clone $eventsQuery)->where('event_type', 'join')->where(function($q) {
+            $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
+        })->count();
         $approvedMembers = (clone $eventsQuery)->whereIn('status_after', ['member', 'approved', 'administrator'])->count();
         if ($approvedMembers === 0 && $subscribers > 0) {
             $approvedMembers = $subscribers;
@@ -373,26 +375,31 @@ class AnalyticsController extends Controller
 
         // Derived Metrics
         $convRate = $totalLpViews > 0 
-            ? round(($subscribers / $totalLpViews) * 100, 1) . '%' 
-            : ($uniqueVisitors > 0 ? round(($subscribers / $uniqueVisitors) * 100, 1) . '%' : '0.0%');
+            ? round(($tgClicks / $totalLpViews) * 100, 1) . '%' 
+            : ($uniqueVisitors > 0 ? round(($tgClicks / $uniqueVisitors) * 100, 1) . '%' : '0.0%');
+
+        $costPerClick = $tgClicks > 0
+            ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2)
+            : ($adAccount?->currency_symbol ?? '₹') . '0.00';
 
         $costPerSub = $subscribers > 0 
             ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $subscribers, 2)
             : ($adAccount?->currency_symbol ?? '₹') . '0.00';
 
-        // Performance KPI Grid
+        // Performance KPI Grid (12 Cards with Cost/Click & Cost/Subscriber)
         $kpis = [
             'reach' => $campaignReach,
             'impressions' => $campaignImpressions,
             'lp_views' => $totalLpViews,
             'unique_visitors' => $uniqueVisitors,
             'tg_clicks' => $tgClicks,
+            'cost_per_click' => $costPerClick,
             'conversion_rate' => $convRate,
             'direct_joins' => $directJoins,
             'subscribers' => $subscribers,
+            'cost_per_subscriber' => $costPerSub,
             'approved_members' => $approvedMembers,
             'pending_requests' => $pendingRequests,
-            'cost_per_subscriber' => $costPerSub,
             'backouts' => $backouts,
         ];
 
@@ -482,5 +489,123 @@ class AnalyticsController extends Controller
             'sourceFilter',
             'search'
         ));
+    }
+
+    /**
+     * Real-time metrics endpoint for live polling
+     */
+    public function liveMetrics(Request $request, $slug = null)
+    {
+        $landingPage = null;
+        if ($slug) {
+            $landingPage = LandingPage::where('slug', $slug)
+                ->orWhere('telegram_channel_username', $slug)
+                ->orWhere('title', $slug)
+                ->first();
+
+            if (!$landingPage) {
+                $clientMatch = Client::where('kx_code', $slug)
+                    ->orWhere('company_name', 'like', "%{$slug}%")
+                    ->orWhere('client_name', 'like', "%{$slug}%")
+                    ->first();
+                if ($clientMatch) {
+                    $landingPage = $clientMatch->landingPages()->first();
+                }
+            }
+        }
+
+        if (!$landingPage) {
+            $landingPage = LandingPage::first() ?? new LandingPage([
+                'title' => 'gujaratitrdexx',
+                'slug' => 'gujaratitrdexx',
+                'is_published' => true,
+            ]);
+        }
+
+        $client = $landingPage->client ?? Client::first();
+        $dateRange = $request->input('date_range', 'last_30_days');
+
+        $dateRangeMap = [
+            'today' => [now()->startOfDay(), now()->endOfDay()],
+            'yesterday' => [now()->subDay()->startOfDay(), now()->subDay()->endOfDay()],
+            'last_7_days' => [now()->subDays(7)->startOfDay(), now()],
+            'last_30_days' => [now()->subDays(30)->startOfDay(), now()],
+            'this_month' => [now()->startOfMonth(), now()],
+            'lifetime' => [now()->subYears(10), now()],
+        ];
+
+        $rangeInfo = $dateRangeMap[$dateRange] ?? $dateRangeMap['last_30_days'];
+        $startDate = $rangeInfo[0];
+
+        $adAccount = $client?->adAccount ?? ($client ? AdAccount::where('client_id', $client->id)->first() : null);
+        $campaigns = $adAccount ? Campaign::where('ad_account_id', $adAccount->id)->get() : collect();
+
+        // 1. Landing Page Views & Unique Visitors from DB
+        $viewsQuery = LandingPageView::where('landing_page_id', $landingPage->id)
+            ->where('viewed_at', '>=', $startDate);
+        $totalLpViews = (clone $viewsQuery)->count();
+        $uniqueVisitors = (clone $viewsQuery)->where('is_unique', true)->count();
+        if ($totalLpViews > 0 && $uniqueVisitors === 0) {
+            $uniqueVisitors = $totalLpViews;
+        }
+
+        // 2. CTA Clicks from DB
+        $clicksQuery = CtaClick::where('landing_page_id', $landingPage->id)
+            ->where('clicked_at', '>=', $startDate);
+        $tgClicks = (clone $clicksQuery)->count();
+
+        // 3. Telegram Events from DB
+        $eventsQuery = TelegramEvent::where('client_id', $client?->id)
+            ->where('event_time', '>=', $startDate);
+        $subscribers = (clone $eventsQuery)->where('event_type', 'join')->count();
+        $directJoins = (clone $eventsQuery)->where('event_type', 'join')->where(function($q) {
+            $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
+        })->count();
+        $approvedMembers = (clone $eventsQuery)->whereIn('status_after', ['member', 'approved', 'administrator'])->count();
+        if ($approvedMembers === 0 && $subscribers > 0) {
+            $approvedMembers = $subscribers;
+        }
+        $pendingRequests = (clone $eventsQuery)->where('event_type', 'pending')->count();
+        $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
+
+        // 4. Meta Ads Metrics
+        $campaignSpend = (float) $campaigns->sum('spend');
+        if ($campaignSpend <= 0 && $adAccount && (float) $adAccount->lifetime_spend > 0) {
+            $campaignSpend = (float) $adAccount->lifetime_spend;
+        }
+        $campaignReach = (int) $campaigns->sum('reach');
+        $campaignImpressions = (int) $campaigns->sum('impressions');
+
+        $costPerClick = $tgClicks > 0 
+            ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2)
+            : ($adAccount?->currency_symbol ?? '₹') . '0.00';
+
+        $costPerSub = $subscribers > 0 
+            ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $subscribers, 2)
+            : ($adAccount?->currency_symbol ?? '₹') . '0.00';
+
+        $convRate = $totalLpViews > 0 
+            ? round(($tgClicks / $totalLpViews) * 100, 1) . '%' 
+            : ($uniqueVisitors > 0 ? round(($tgClicks / $uniqueVisitors) * 100, 1) . '%' : '0.0%');
+
+        return response()->json([
+            'ok' => true,
+            'kpis' => [
+                'reach' => number_format($campaignReach),
+                'impressions' => number_format($campaignImpressions),
+                'lp_views' => number_format($totalLpViews),
+                'unique_visitors' => number_format($uniqueVisitors),
+                'tg_clicks' => number_format($tgClicks),
+                'cost_per_click' => $costPerClick,
+                'conversion_rate' => $convRate,
+                'direct_joins' => number_format($directJoins),
+                'subscribers' => number_format($subscribers),
+                'cost_per_subscriber' => $costPerSub,
+                'approved_members' => number_format($approvedMembers),
+                'pending_requests' => number_format($pendingRequests),
+                'backouts' => number_format($backouts),
+            ],
+            'timestamp' => now()->format('n/j/Y, g:i:s A'),
+        ]);
     }
 }

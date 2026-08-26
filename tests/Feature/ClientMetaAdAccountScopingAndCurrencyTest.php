@@ -305,4 +305,81 @@ class ClientMetaAdAccountScopingAndCurrencyTest extends TestCase
         $response->assertSee('No campaigns found for this Meta Ad Account');
         $response->assertDontSee('GJ001');
     }
+
+    public function test_live_metrics_endpoint_returns_json_and_calculates_cost_per_click(): void
+    {
+        $adAccount = AdAccount::create([
+            'meta_connection_id' => $this->connection->id,
+            'account_id' => 'act_live_999',
+            'name' => 'Live Polling Account',
+            'currency' => 'INR',
+            'lifetime_spend' => 1000.00,
+            'is_active' => true,
+        ]);
+
+        $client = Client::create([
+            'company_name' => 'Live Polling Client',
+            'client_name' => 'Live Tester',
+            'kx_code' => 'KX-LIVE',
+            'status' => 'active',
+            'ad_account_id' => $adAccount->id,
+        ]);
+        $adAccount->update(['client_id' => $client->id]);
+
+        $lp = \App\Models\LandingPage::create([
+            'client_id' => $client->id,
+            'title' => 'Live LP',
+            'slug' => 'live-lp-test',
+            'is_published' => true,
+            'is_active' => true,
+        ]);
+
+        Campaign::create([
+            'client_id' => $client->id,
+            'ad_account_id' => $adAccount->id,
+            'campaign_id' => 'cmp_live_1',
+            'name' => 'Live Campaign',
+            'slug' => 'live-campaign',
+            'spend' => 1000.00,
+            'reach' => 5000,
+            'impressions' => 10000,
+            'status' => 'active',
+        ]);
+
+        \App\Models\Cta::create([
+            'landing_page_id' => $lp->id,
+            'client_id' => $client->id,
+            'button_text' => 'Join Now',
+            'tracking_token' => 'kx_live_btn',
+            'telegram_destination' => 'https://t.me/live_channel',
+        ]);
+
+        // Record 10 views and 2 CTA clicks using public tracking APIs
+        for ($i = 0; $i < 10; $i++) {
+            $res = $this->postJson(route('api.track.view'), [
+                'landing_page_id' => $lp->id,
+                'visitor_id' => 'vis_live_' . $i,
+            ]);
+            $res->assertOk();
+        }
+        for ($i = 0; $i < 2; $i++) {
+            $res = $this->postJson(route('api.track.click'), [
+                'landing_page_id' => $lp->id,
+                'visitor_id' => 'vis_live_' . $i,
+                'destination_url' => 'https://t.me/live_channel',
+            ]);
+            $res->assertOk();
+        }
+
+        $response = $this->get("/analytics/{$lp->slug}/live-metrics");
+        $response->assertOk();
+        $response->assertJson([
+            'ok' => true,
+            'kpis' => [
+                'lp_views' => '10',
+                'tg_clicks' => '2',
+                'cost_per_click' => '₹500.00',
+            ],
+        ]);
+    }
 }
