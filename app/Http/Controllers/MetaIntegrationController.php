@@ -123,7 +123,7 @@ class MetaIntegrationController extends Controller
     {
         $token = trim((string) $request->input('access_token'));
         if (empty($token)) {
-            $token = Setting::get('meta_system_user_token') ?? env('META_SYSTEM_USER_TOKEN');
+            $token = Setting::get('meta_system_user_token');
         }
 
         if (empty($token)) {
@@ -152,7 +152,7 @@ class MetaIntegrationController extends Controller
     {
         $connection = MetaConnection::first();
         if (!$connection) {
-            $token = Setting::get('meta_system_user_token') ?? env('META_SYSTEM_USER_TOKEN');
+            $token = Setting::get('meta_system_user_token');
             if ($token) {
                 $connection = $this->metaSyncService->connectAccessToken($token, auth()->id());
             }
