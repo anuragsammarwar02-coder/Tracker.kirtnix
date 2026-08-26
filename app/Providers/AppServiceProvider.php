@@ -87,8 +87,8 @@ class AppServiceProvider extends ServiceProvider
                         try {
                             $clientCols = \Illuminate\Support\Facades\DB::select("PRAGMA table_info(clients)");
                             $hasAdAccountCol = collect($clientCols)->firstWhere('name', 'ad_account_id') !== null;
-                            if (!$hasAdAccountCol) {
-                                \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN ad_account_id INTEGER NULL REFERENCES ad_accounts(id) ON DELETE SET NULL;");
+                            if (!$hasAdAccountCol && count($clientCols) > 0) {
+                                \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN ad_account_id INTEGER NULL;");
                             }
                         } catch (\Throwable $ce) {
                             @error_log('AppServiceProvider clients column check: ' . $ce->getMessage());
