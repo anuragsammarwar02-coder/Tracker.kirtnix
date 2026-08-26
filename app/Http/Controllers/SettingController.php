@@ -28,6 +28,16 @@ class SettingController extends Controller
 
         // Meta connection & accounts
         $metaConnection = MetaConnection::with(['businesses', 'adAccounts'])->first();
+        if (!$metaConnection) {
+            $token = Setting::get('meta_system_user_token') ?? env('META_SYSTEM_USER_TOKEN');
+            if (!empty($token)) {
+                try {
+                    $metaConnection = app(\App\Services\MetaSyncService::class)->connectAccessToken($token, auth()->id());
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('SettingController Meta auto-connect: ' . $e->getMessage());
+                }
+            }
+        }
         $adAccounts = AdAccount::with(['metaBusiness', 'client'])->latest('id')->paginate(15);
         $totalSyncedAccounts = AdAccount::count();
 

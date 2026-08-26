@@ -17,6 +17,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Enforce HTTPS scheme when configured in production
+        if (str_starts_with((string) config('app.url'), 'https://') || app()->isProduction()) {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+        }
+
         // Automatically clear stale route and view cache if present
         if (file_exists(base_path('bootstrap/cache/routes-v7.php'))) {
             @unlink(base_path('bootstrap/cache/routes-v7.php'));
