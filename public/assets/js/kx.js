@@ -192,6 +192,34 @@
     xhr.send(JSON.stringify(payload));
   }
 
+  function getCtaElements() {
+    return document.querySelectorAll(
+      '[data-kx-cta], [data-kx-cta="1"], [data-cta], a[href*="t.me"], button[data-kx-cta], .kx-cta-button, .telegram-join-btn, #btn-join-telegram, #btn-join-telegram-alt'
+    );
+  }
+
+  function applyInviteToCtas(webUrl, deepLink) {
+    var ctas = getCtaElements();
+    for (var i = 0; i < ctas.length; i++) {
+      var el = ctas[i];
+      el.classList.remove('kx-loading', 'opacity-50', 'pointer-events-none');
+      if (deepLink) {
+        el.setAttribute('data-deep-link', deepLink);
+      }
+      if (webUrl) {
+        el.setAttribute('data-web-url', webUrl);
+        if (el.tagName === 'A') {
+          el.href = webUrl;
+        }
+      } else {
+        var fallback = el.getAttribute('data-kx-fallback') || el.getAttribute('data-fallback');
+        if (fallback && el.tagName === 'A' && (el.getAttribute('href') === '#' || !el.getAttribute('href'))) {
+          el.href = fallback;
+        }
+      }
+    }
+  }
+
   function requestUniqueInvite() {
     var slug = scriptSlug || window.location.pathname.replace(/^\/lp\//, '').replace(/^\//, '') || 'default';
     var payload = {
@@ -204,42 +232,56 @@
     xhr.open('POST', baseUrl + '/api/track/invite', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onreadystatechange = function() {
-      if (xhr.readyState === 4 && xhr.status === 200) {
-        try {
-          var res = JSON.parse(xhr.responseText);
-          if (res.deep_link) {
-            targetDeepLink = res.deep_link;
-          }
-          if (res.web_url) {
-            targetWebUrl = res.web_url;
-          }
-
-          var ctas = document.querySelectorAll('[data-kx-cta], a[href*="t.me"], .kx-cta-button, .telegram-join-btn');
-          for (var i = 0; i < ctas.length; i++) {
-            ctas[i].classList.remove('kx-loading', 'opacity-50', 'pointer-events-none');
-            if (targetDeepLink && ctas[i].tagName === 'A') {
-              ctas[i].setAttribute('data-deep-link', targetDeepLink);
-              ctas[i].setAttribute('data-web-url', targetWebUrl);
+      if (xhr.readyState === 4) {
+        if (xhr.status === 200) {
+          try {
+            var res = JSON.parse(xhr.responseText);
+            if (res.deep_link) {
+              targetDeepLink = res.deep_link;
             }
+            if (res.web_url) {
+              targetWebUrl = res.web_url;
+            }
+            applyInviteToCtas(targetWebUrl, targetDeepLink);
+          } catch(e) {
+            applyInviteToCtas(null, null);
           }
-        } catch(e) {}
+        } else {
+          applyInviteToCtas(null, null);
+        }
       }
     };
     xhr.send(JSON.stringify(payload));
   }
 
   function handleCtaClick(e, el) {
+    var fallbackUrl = el.getAttribute('data-kx-fallback') || el.getAttribute('data-fallback');
+    var rawHref = el.getAttribute('href');
+    var currentHref = (rawHref && rawHref !== '#') ? rawHref : null;
+    
+    // Priority: 1. Kirtnix Tracked Web URL -> 2. Existing valid href -> 3. Fallback URL -> 4. Generic https://t.me
+    var webUrl = el.getAttribute('data-web-url') || targetWebUrl || currentHref || fallbackUrl || 'https://t.me';
+    var deepLink = el.getAttribute('data-deep-link') || targetDeepLink;
+    
+    if (!deepLink && webUrl) {
+      if (webUrl.indexOf('t.me/+') !== -1) {
+        deepLink = 'tg://join?invite=' + webUrl.split('t.me/+')[1];
+      } else if (webUrl.indexOf('t.me/') !== -1) {
+        deepLink = 'tg://resolve?domain=' + webUrl.split('t.me/')[1];
+      }
+    }
+
     if (typeof window.fbq === 'function') {
       try {
         window.fbq('track', 'Lead', {
-          content_name: el.innerText || 'Telegram CTA',
+          content_name: el.innerText ? el.innerText.trim() : 'Telegram CTA',
           content_category: 'Telegram',
           source: 'kirtnix_tracker',
           visitor_id: visitorId
         });
         window.fbq('trackCustom', 'TelegramClick', {
-          button_text: el.innerText || 'Join Telegram',
-          destination: targetWebUrl || el.getAttribute('href')
+          button_text: el.innerText ? el.innerText.trim() : 'Join Telegram',
+          destination: webUrl
         });
       } catch(err) {}
     }
@@ -249,24 +291,28 @@
       slug: slug,
       visitor_id: visitorId,
       session_id: trackingSessionId,
-      destination_url: targetWebUrl || el.getAttribute('href') || 'https://t.me',
-      button_text: el.innerText || 'Join Telegram',
+      destination_url: webUrl,
+      button_text: el.innerText ? el.innerText.trim() : 'Join Telegram',
       utm_source: urlParams.utm_source || 'direct',
       utm_campaign: urlParams.utm_campaign || ''
     };
 
     if (navigator.sendBeacon) {
-      var blob = new Blob([JSON.stringify(clickPayload)], { type: 'application/json' });
-      navigator.sendBeacon(baseUrl + '/api/track/click', blob);
+      try {
+        var blob = new Blob([JSON.stringify(clickPayload)], { type: 'application/json' });
+        navigator.sendBeacon(baseUrl + '/api/track/click', blob);
+      } catch(beaconErr) {
+        var clickXhr = new XMLHttpRequest();
+        clickXhr.open('POST', baseUrl + '/api/track/click', true);
+        clickXhr.setRequestHeader('Content-Type', 'application/json');
+        clickXhr.send(JSON.stringify(clickPayload));
+      }
     } else {
       var clickXhr = new XMLHttpRequest();
       clickXhr.open('POST', baseUrl + '/api/track/click', true);
       clickXhr.setRequestHeader('Content-Type', 'application/json');
       clickXhr.send(JSON.stringify(clickPayload));
     }
-
-    var deepLink = el.getAttribute('data-deep-link') || targetDeepLink;
-    var webUrl = el.getAttribute('data-web-url') || targetWebUrl || el.getAttribute('href');
 
     var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -276,20 +322,28 @@
       window.location.href = deepLink;
 
       setTimeout(function() {
-        if (Date.now() - now < 2000) {
+        if (Date.now() - now < 2000 && webUrl && webUrl !== '#') {
           window.location.href = webUrl;
         }
       }, 1200);
+    } else if (el.tagName === 'BUTTON' || !rawHref || rawHref === '#') {
+      e.preventDefault();
+      if (webUrl && webUrl !== '#') {
+        window.location.href = webUrl;
+      }
     }
   }
 
   function bindCtaClicks() {
-    var ctaElements = document.querySelectorAll('[data-kx-cta], a[href*="t.me"], .kx-cta-button, .telegram-join-btn');
+    var ctaElements = getCtaElements();
     for (var i = 0; i < ctaElements.length; i++) {
       (function(el) {
-        el.addEventListener('click', function(e) {
-          handleCtaClick(e, el);
-        });
+        if (!el._kx_bound) {
+          el._kx_bound = true;
+          el.addEventListener('click', function(e) {
+            handleCtaClick(e, el);
+          });
+        }
       })(ctaElements[i]);
     }
   }

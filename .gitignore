@@ -17,4 +17,6 @@ yarn-error.log
 /.idea
 /.vscode
 /scratch
+/bin/git
+/bin/*.zip
 /database/*.sqlite-journal

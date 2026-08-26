@@ -436,14 +436,22 @@ class TelegramService
         $telegramUserId = (string) ($user['id'] ?? rand(100000000, 999999999));
         $oldStatus = $chatMemberUpdate['old_chat_member']['status'] ?? 'unknown';
         $newStatus = $chatMemberUpdate['new_chat_member']['status'] ?? ($chatMemberUpdate['status'] ?? 'member');
-        $payloadInviteLink = $chatMemberUpdate['invite_link']['invite_link'] ?? null;
+        
+        $rawInvite = $chatMemberUpdate['invite_link'] ?? null;
+        $payloadInviteLink = is_array($rawInvite) ? ($rawInvite['invite_link'] ?? null) : (is_string($rawInvite) ? $rawInvite : null);
 
         // Determine event type: join, leave, join_request
         $eventType = 'join';
         $isVerified = true;
         if (isset($update['chat_join_request'])) {
             $eventType = 'join_request';
-            $isVerified = false;
+            $isVerified = true;
+            if ($oldStatus === 'unknown') {
+                $oldStatus = 'none';
+            }
+            if ($newStatus === 'member' && !isset($chatMemberUpdate['new_chat_member'])) {
+                $newStatus = 'join_request';
+            }
         } elseif (in_array($newStatus, ['member', 'administrator', 'creator']) && in_array($oldStatus, ['left', 'kicked', 'restricted', 'unknown'])) {
             $eventType = 'join';
             $isVerified = true;
@@ -494,7 +502,7 @@ class TelegramService
             'telegram_username' => $user['username'] ?? null,
             'first_name' => $user['first_name'] ?? 'Trader',
             'last_name' => $user['last_name'] ?? null,
-            'event_type' => $eventType === 'join_request' ? 'pending' : $eventType,
+            'event_type' => $eventType,
             'invite_link' => $payloadInviteLink ?? $matchedInvite?->invite_link ?? 'https://t.me/+gujaratitrdexx_vip',
             'source' => $source,
             'country' => $country,

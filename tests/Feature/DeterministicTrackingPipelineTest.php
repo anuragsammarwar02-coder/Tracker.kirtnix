@@ -260,6 +260,118 @@ class DeterministicTrackingPipelineTest extends TestCase
     }
 
     /**
+     * 5b. Telegram Webhook Chat Join Request Creates Verified Conversion with Attribution
+     */
+    public function test_telegram_webhook_chat_join_request_creates_verified_conversion(): void
+    {
+        $landingPage = LandingPage::where('slug', 'forex-focus-tg')->firstOrFail();
+        $bot = TelegramBot::where('client_id', $landingPage->client_id)->first() ?? TelegramBot::firstOrFail();
+        $channel = TelegramChannel::firstOrCreate(
+            ['telegram_bot_id' => $bot->id],
+            [
+                'client_id' => $bot->client_id,
+                'telegram_chat_id' => '-1002194829104',
+                'title' => 'Forex Focus Global Community',
+                'username' => 'forexfocus_global',
+                'is_bot_admin' => true,
+            ]
+        );
+
+        $visitorId = (string) Str::uuid();
+
+        // 1. Visitor views Landing Page with UTM & Meta params
+        $viewRes = $this->postJson(route('api.track.view'), [
+            'landing_page_id' => $landingPage->id,
+            'visitor_id' => $visitorId,
+            'utm_source' => 'facebook_ads',
+            'utm_campaign' => 'CAPI_Test_Campaign',
+            'utm_medium' => 'cpc',
+            'fbclid' => 'fbclid_test_998877',
+            'fbc' => 'fb.1.1690000000.fbclid_test_998877',
+            'fbp' => 'fb.1.1690000000.1234567890',
+        ]);
+        $sessionId = $viewRes->json('session_id');
+
+        // 2. Request unique invite with creates_join_request = true
+        $inviteRes = $this->postJson(route('api.track.invite'), [
+            'landing_page_id' => $landingPage->id,
+            'session_id' => $sessionId,
+            'visitor_id' => $visitorId,
+        ]);
+        $inviteLink = $inviteRes->json('invite_link');
+        $this->assertNotNull($inviteLink);
+
+        // 3. User clicks CTA
+        $this->postJson(route('api.track.click'), [
+            'landing_page_id' => $landingPage->id,
+            'session_id' => $sessionId,
+            'visitor_id' => $visitorId,
+            'destination_url' => $inviteLink,
+        ]);
+
+        // 4. Telegram sends chat_join_request webhook
+        $telegramUserId = '7766554433';
+        $updateId = 8829104;
+        $joinRequestPayload = [
+            'update_id' => $updateId,
+            'chat_join_request' => [
+                'chat' => [
+                    'id' => (int) $channel->telegram_chat_id,
+                    'title' => $channel->title,
+                    'type' => 'channel',
+                ],
+                'from' => [
+                    'id' => (int) $telegramUserId,
+                    'is_bot' => false,
+                    'first_name' => 'Rahul',
+                    'last_name' => 'Sharma',
+                    'username' => 'rahul_trader_vip',
+                ],
+                'user_chat_id' => (int) $telegramUserId,
+                'date' => time(),
+                'invite_link' => [
+                    'invite_link' => $inviteLink,
+                    'name' => 'kx_' . substr($visitorId, 0, 8) . "_{$sessionId}",
+                    'creates_join_request' => true,
+                ]
+            ]
+        ];
+
+        $webhookRes = $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinRequestPayload);
+        $webhookRes->assertStatus(200);
+        $webhookRes->assertJson(['ok' => true, 'processed' => true]);
+
+        // Verify Telegram Event is recorded as join_request
+        $this->assertDatabaseHas('telegram_events', [
+            'telegram_user_id' => $telegramUserId,
+            'update_id' => $updateId,
+            'event_type' => 'join_request',
+            'source' => 'ads',
+        ]);
+
+        // Verify Conversion is created with VERIFIED status and exact attribution
+        $this->assertDatabaseHas('conversions', [
+            'telegram_user_id' => $telegramUserId,
+            'visitor_id' => $visitorId,
+            'tracking_session_id' => $sessionId,
+            'event_type' => 'join_request',
+            'status' => 'verified',
+            'source' => 'ads',
+            'utm_source' => 'facebook_ads',
+            'utm_campaign' => 'CAPI_Test_Campaign',
+            'utm_medium' => 'cpc',
+            'fbclid' => 'fbclid_test_998877',
+            'fbc' => 'fb.1.1690000000.fbclid_test_998877',
+            'fbp' => 'fb.1.1690000000.1234567890',
+        ]);
+
+        // Webhook retry with same update_id does NOT create a duplicate conversion
+        $retryRes = $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinRequestPayload);
+        $retryRes->assertStatus(200);
+        $this->assertEquals(1, Conversion::where('telegram_user_id', $telegramUserId)->where('event_type', 'join_request')->count());
+    }
+
+    /**
      * 6. Telegram Webhook Idempotency (Duplicate Update Prevention)
      */
     public function test_telegram_webhook_idempotency_prevents_duplicate_conversions(): void
