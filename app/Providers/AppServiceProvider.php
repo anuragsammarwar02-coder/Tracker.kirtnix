@@ -17,14 +17,20 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Safe database migration check
+        // Ensure database directory and sqlite file exist if sqlite is active
         try {
-            if (extension_loaded('pdo_sqlite') && !Schema::hasTable('users')) {
-                @Artisan::call('migrate', ['--force' => true]);
-                @Artisan::call('db:seed', ['--force' => true]);
+            if (config('database.default') === 'sqlite') {
+                $dbPath = config('database.connections.sqlite.database');
+                if ($dbPath && $dbPath !== ':memory:' && !file_exists($dbPath)) {
+                    $dir = dirname($dbPath);
+                    if (!is_dir($dir)) {
+                        @mkdir($dir, 0755, true);
+                    }
+                    @touch($dbPath);
+                }
             }
         } catch (\Throwable $e) {
-            @error_log('AppServiceProvider migration error: ' . $e->getMessage());
+            // Silently continue
         }
     }
 }

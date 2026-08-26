@@ -16,9 +16,7 @@ return [
     |
     */
 
-    'default' => (env('DB_CONNECTION') === 'mysql' && (empty(env('DB_DATABASE')) || env('DB_DATABASE') === 'laravel' || str_contains((string)env('DB_USERNAME'), '123456789')))
-        ? 'sqlite'
-        : env('DB_CONNECTION', 'sqlite'),
+    'default' => env('DB_CONNECTION', 'sqlite'),
 
     /*
     |--------------------------------------------------------------------------
@@ -36,9 +34,13 @@ return [
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
-            'database' => (env('DB_DATABASE') && env('DB_DATABASE') !== 'sqlite' && file_exists(env('DB_DATABASE'))) 
-                ? env('DB_DATABASE') 
-                : database_path('database.sqlite'),
+            'database' => env('DB_DATABASE') === ':memory:' 
+                ? ':memory:' 
+                : (env('DB_DATABASE') && env('DB_DATABASE') !== 'sqlite'
+                    ? (str_starts_with(env('DB_DATABASE'), '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', env('DB_DATABASE'))
+                        ? env('DB_DATABASE') 
+                        : base_path(env('DB_DATABASE')))
+                    : database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
         ],
