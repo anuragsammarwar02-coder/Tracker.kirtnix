@@ -29,7 +29,7 @@ class TelegramChannelController extends Controller
             ], 404);
         }
 
-        $discovered = $this->telegramService->discoverAccessibleChannels($bot);
+        $discovered = $this->telegramService->syncAndPersistAccessibleChannels($bot);
 
         return response()->json([
             'success' => true,
