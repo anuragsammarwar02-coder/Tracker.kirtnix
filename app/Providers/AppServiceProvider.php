@@ -17,7 +17,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Ensure database directory and sqlite file exist if sqlite is active
+        // Safe check for sqlite directory if database exists
         try {
             if (config('database.default') === 'sqlite') {
                 $dbPath = config('database.connections.sqlite.database');
@@ -26,19 +26,10 @@ class AppServiceProvider extends ServiceProvider
                     if (!is_dir($dir)) {
                         @mkdir($dir, 0755, true);
                     }
-                    if (!file_exists($dbPath)) {
-                        @touch($dbPath);
-                    }
                 }
             }
-
-            // Safe one-time auto-migration for production/Hostinger when users table does not exist
-            if (!Schema::hasTable('users')) {
-                @Artisan::call('migrate', ['--force' => true]);
-                @Artisan::call('db:seed', ['--force' => true]);
-            }
         } catch (\Throwable $e) {
-            @error_log('AppServiceProvider boot error: ' . $e->getMessage());
+            @error_log('AppServiceProvider boot check warning: ' . $e->getMessage());
         }
     }
 }

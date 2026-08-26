@@ -28,55 +28,49 @@ use App\Http\Controllers\PublicMarketingController;
 | Public Marketing & Product Landing Pages
 |--------------------------------------------------------------------------
 */
-// Production Health & Diagnostic Check
+// Production Health & Diagnostic Check (Read-Only)
 Route::get('/healthz', function () {
-    $migrationOutput = null;
-    $migrationError = null;
-
-    try {
-        if (config('database.default') === 'sqlite') {
-            $dbPath = config('database.connections.sqlite.database');
-            if ($dbPath && $dbPath !== ':memory:') {
-                $dir = dirname($dbPath);
-                if (!is_dir($dir)) {
-                    @mkdir($dir, 0755, true);
-                }
-                if (!file_exists($dbPath)) {
-                    @touch($dbPath);
-                }
-            }
-        }
-
-        if (!\Illuminate\Support\Facades\Schema::hasTable('users')) {
-            \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-            $migrationOutput = \Illuminate\Support\Facades\Artisan::output();
-            \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
-        }
-    } catch (\Throwable $e) {
-        $migrationError = $e->getMessage();
-    }
+    $dbPath = config('database.connections.sqlite.database');
+    $dbExists = $dbPath && $dbPath !== ':memory:' ? file_exists($dbPath) : true;
+    $dbSize = ($dbExists && $dbPath !== ':memory:') ? filesize($dbPath) : 0;
 
     $usersCount = 0;
     $clientsCount = 0;
+    $landingPagesCount = 0;
+    $botsCount = 0;
+    $dbConnected = false;
+    $dbError = null;
+
     try {
-        $usersCount = \App\Models\User::count();
-        $clientsCount = \App\Models\Client::count();
+        if (\Illuminate\Support\Facades\Schema::hasTable('users')) {
+            $usersCount = \App\Models\User::count();
+            $clientsCount = \App\Models\Client::count();
+            $landingPagesCount = \App\Models\LandingPage::count();
+            $botsCount = \App\Models\TelegramBot::count();
+            $dbConnected = true;
+        }
     } catch (\Throwable $e) {
-        // Table still missing
+        $dbError = $e->getMessage();
     }
 
     return response()->json([
-        'status' => $usersCount > 0 ? 'ok' : 'pending_init',
+        'status' => ($dbConnected && $usersCount > 0) ? 'ok' : 'attention_required',
+        'database_driver' => config('database.default'),
+        'database_path' => $dbPath,
+        'database_file_exists' => $dbExists,
+        'database_file_size' => $dbSize,
+        'database_connected' => $dbConnected,
+        'records' => [
+            'users' => $usersCount,
+            'clients' => $clientsCount,
+            'landing_pages' => $landingPagesCount,
+            'telegram_bots' => $botsCount,
+        ],
         'php_version' => PHP_VERSION,
         'sqlite_loaded' => extension_loaded('pdo_sqlite'),
-        'database_file_exists' => file_exists(database_path('database.sqlite')),
-        'database_file_size' => file_exists(database_path('database.sqlite')) ? filesize(database_path('database.sqlite')) : 0,
-        'users_count' => $usersCount,
-        'clients_count' => $clientsCount,
         'app_key_set' => !empty(config('app.key')),
         'storage_writable' => is_writable(storage_path('framework/views')),
-        'migration_output' => $migrationOutput,
-        'migration_error' => $migrationError,
+        'error' => $dbError,
     ]);
 });
 
