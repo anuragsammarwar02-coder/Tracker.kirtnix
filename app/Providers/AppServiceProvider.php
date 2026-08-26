@@ -78,6 +78,7 @@ class AppServiceProvider extends ServiceProvider
                                 \Illuminate\Support\Facades\DB::statement('ALTER TABLE "telegram_bots_temp" RENAME TO "telegram_bots";');
                                 \Illuminate\Support\Facades\DB::commit();
                                 \Illuminate\Support\Facades\DB::statement("PRAGMA foreign_keys=ON;");
+                            }
                         } catch (\Throwable $te) {
                             @error_log('AppServiceProvider telegram_bots schema check: ' . $te->getMessage());
                         }
@@ -85,7 +86,7 @@ class AppServiceProvider extends ServiceProvider
                         // Ensure clients.ad_account_id column exists
                         try {
                             $clientCols = \Illuminate\Support\Facades\DB::select("PRAGMA table_info(clients)");
-                            $hasAdAccountCol = collect($clientCols)->contains('name', 'ad_account_id');
+                            $hasAdAccountCol = collect($clientCols)->firstWhere('name', 'ad_account_id') !== null;
                             if (!$hasAdAccountCol) {
                                 \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN ad_account_id INTEGER NULL REFERENCES ad_accounts(id) ON DELETE SET NULL;");
                             }
