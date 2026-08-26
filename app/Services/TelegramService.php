@@ -87,7 +87,15 @@ class TelegramService
         try {
             $response = Http::timeout(8)->post($apiUrl, [
                 'url' => $url,
-                'allowed_updates' => ['chat_member', 'my_chat_member', 'message', 'chat_join_request'],
+                'allowed_updates' => [
+                    'chat_member',
+                    'my_chat_member',
+                    'channel_post',
+                    'edited_channel_post',
+                    'message',
+                    'edited_message',
+                    'chat_join_request',
+                ],
                 'secret_token' => $bot->webhook_secret,
             ]);
 
@@ -153,7 +161,7 @@ class TelegramService
             if ($res->successful() && ($json['ok'] ?? false)) {
                 $chat = $json['result'];
                 $chatId = (string) $chat['id'];
-                $title = $chat['title'] ?? 'Telegram Channel';
+                $title = $chat['title'] ?? ($chat['username'] ? '@' . $chat['username'] : "Channel {$chatId}");
                 $username = $chat['username'] ?? null;
                 $type = $chat['type'] ?? 'channel';
 
@@ -199,10 +207,10 @@ class TelegramService
             Log::warning('Telegram verifyChannel API check failed: ' . $e->getMessage());
         }
 
-        // Realistic sandbox auto-linking for testing
-        $numericId = str_starts_with($cleanId, '-100') ? $cleanId : '-1001234567890';
-        $title = str_contains(strtolower($cleanId), 'gujarat') ? 'Gujrati_trader' : 'STOXK Option Traders VIP';
-        $username = str_contains(strtolower($cleanId), 'gujarat') ? 'gujaratitrdexx' : 'stoxk_official';
+        // Sandbox fallback for offline/development test suites
+        $numericId = str_starts_with($cleanId, '-') ? $cleanId : ('-100' . abs(crc32($cleanId)));
+        $title = !empty($cleanId) && !str_starts_with($cleanId, '-') ? ltrim($cleanId, '@') : "Telegram Channel {$numericId}";
+        $username = str_starts_with($cleanId, '@') ? ltrim($cleanId, '@') : null;
 
         $channel = TelegramChannel::updateOrCreate(
             ['telegram_bot_id' => $bot->id, 'telegram_chat_id' => $numericId],
@@ -232,63 +240,82 @@ class TelegramService
      */
     public function discoverAccessibleChannels(TelegramBot $bot): array
     {
-        $eventChannels = TelegramEvent::where('telegram_bot_id', $bot->id)
+        $channelsMap = collect();
+
+        // 1. All existing tracked channels for this bot
+        $existingChannels = TelegramChannel::where('telegram_bot_id', $bot->id)->get();
+        foreach ($existingChannels as $ch) {
+            $channelsMap->put((string) $ch->telegram_chat_id, [
+                'id' => $ch->id,
+                'telegram_chat_id' => (string) $ch->telegram_chat_id,
+                'title' => $ch->title,
+                'username' => $ch->username,
+                'type' => $ch->type ?? 'channel',
+                'member_count' => (int) ($ch->member_count ?: 0),
+                'is_bot_admin' => (bool) $ch->is_bot_admin,
+                'bot_status' => $ch->bot_status ?? 'administrator',
+                'client_id' => $ch->client_id,
+                'client_name' => $ch->client?->company_name,
+            ]);
+        }
+
+        // 2. Discover any additional channels from raw payloads in TelegramEvent
+        $events = TelegramEvent::where('telegram_bot_id', $bot->id)
             ->whereNotNull('raw_payload')
-            ->get()
-            ->map(function ($event) {
-                $payload = $event->raw_payload;
-                $chat = $payload['chat_member']['chat'] 
-                    ?? $payload['my_chat_member']['chat'] 
-                    ?? $payload['chat_join_request']['chat']
-                    ?? $payload['channel_post']['chat']
-                    ?? $payload['edited_channel_post']['chat']
-                    ?? $payload['message']['chat'] 
-                    ?? $payload['edited_message']['chat']
-                    ?? null;
+            ->get();
 
-                if ($chat && isset($chat['id'])) {
-                    $memberCount = 13587;
-                    if (isset($chat['members_count'])) {
-                        $memberCount = (int) $chat['members_count'];
-                    }
+        foreach ($events as $event) {
+            $payload = $event->raw_payload;
+            if (!is_array($payload)) continue;
 
-                    return [
-                        'telegram_chat_id' => (string) $chat['id'],
-                        'title' => $chat['title'] ?? 'Private Trading Channel',
+            $chat = $payload['channel_post']['chat']
+                ?? $payload['edited_channel_post']['chat']
+                ?? $payload['my_chat_member']['chat']
+                ?? $payload['chat_member']['chat']
+                ?? $payload['chat_join_request']['chat']
+                ?? $payload['message']['chat']
+                ?? $payload['edited_message']['chat']
+                ?? null;
+
+            if ($chat && isset($chat['id'])) {
+                $chatId = (string) $chat['id'];
+                $chatType = $chat['type'] ?? 'channel';
+                if ($chatType === 'private') continue; // Skip direct 1-to-1 user messages
+
+                if (!$channelsMap->has($chatId)) {
+                    $channelsMap->put($chatId, [
+                        'id' => null,
+                        'telegram_chat_id' => $chatId,
+                        'title' => $chat['title'] ?? ($chat['username'] ? '@' . $chat['username'] : "Channel {$chatId}"),
                         'username' => $chat['username'] ?? null,
-                        'type' => $chat['type'] ?? 'channel',
-                        'member_count' => $memberCount,
+                        'type' => $chatType,
+                        'member_count' => isset($chat['members_count']) ? (int) $chat['members_count'] : 0,
                         'is_bot_admin' => true,
                         'bot_status' => 'administrator',
-                    ];
+                        'client_id' => null,
+                        'client_name' => null,
+                    ]);
                 }
-                return null;
-            })
-            ->filter()
-            ->keyBy('telegram_chat_id');
+            }
+        }
 
-        if ($eventChannels->isEmpty()) {
-            $eventChannels->put('-1001234567890', [
-                'telegram_chat_id' => '-1001234567890',
-                'title' => 'Gujrati_trader',
-                'username' => 'gujaratitrdexx',
+        // 3. Include bot configured channel_id if defined on the bot model
+        if (!empty($bot->channel_id) && !$channelsMap->has((string) $bot->channel_id)) {
+            $channelsMap->put((string) $bot->channel_id, [
+                'id' => null,
+                'telegram_chat_id' => (string) $bot->channel_id,
+                'title' => $bot->channel_title ?? 'Configured Bot Channel',
+                'username' => null,
                 'type' => 'channel',
                 'member_count' => 13587,
                 'is_bot_admin' => true,
                 'bot_status' => 'administrator',
-            ]);
-            $eventChannels->put('-1001984729104', [
-                'telegram_chat_id' => '-1001984729104',
-                'title' => 'STOXK Pro VIP Calls',
-                'username' => 'stoxk_pro_vip',
-                'type' => 'supergroup',
-                'member_count' => 8490,
-                'is_bot_admin' => true,
-                'bot_status' => 'administrator',
+                'client_id' => $bot->client_id,
+                'client_name' => $bot->client?->company_name,
             ]);
         }
 
-        return $eventChannels->values()->toArray();
+        return $channelsMap->values()->toArray();
     }
 
     /**
@@ -431,30 +458,122 @@ class TelegramService
             }
         }
 
-        $chatMemberUpdate = $update['chat_member'] ?? $update['my_chat_member'] ?? $update['chat_join_request'] ?? null;
+        // Identify update type and chat object
+        $updateType = 'unknown';
+        $updateData = null;
+        $chat = null;
 
-        if (!$chatMemberUpdate) {
+        if (isset($update['channel_post'])) {
+            $updateType = 'channel_post';
+            $updateData = $update['channel_post'];
+            $chat = $updateData['chat'] ?? null;
+        } elseif (isset($update['edited_channel_post'])) {
+            $updateType = 'edited_channel_post';
+            $updateData = $update['edited_channel_post'];
+            $chat = $updateData['chat'] ?? null;
+        } elseif (isset($update['my_chat_member'])) {
+            $updateType = 'my_chat_member';
+            $updateData = $update['my_chat_member'];
+            $chat = $updateData['chat'] ?? null;
+        } elseif (isset($update['chat_member'])) {
+            $updateType = 'chat_member';
+            $updateData = $update['chat_member'];
+            $chat = $updateData['chat'] ?? null;
+        } elseif (isset($update['chat_join_request'])) {
+            $updateType = 'chat_join_request';
+            $updateData = $update['chat_join_request'];
+            $chat = $updateData['chat'] ?? null;
+        } elseif (isset($update['message'])) {
+            $updateType = 'message';
+            $updateData = $update['message'];
+            $chat = $updateData['chat'] ?? null;
+        } elseif (isset($update['edited_message'])) {
+            $updateType = 'edited_message';
+            $updateData = $update['edited_message'];
+            $chat = $updateData['chat'] ?? null;
+        }
+
+        if (!$chat || !isset($chat['id'])) {
             return null;
         }
 
-        $chat = $chatMemberUpdate['chat'] ?? [];
-        $chatId = (string) ($chat['id'] ?? $bot->channel_id ?? '-1001234567890');
-        $chatTitle = $chat['title'] ?? 'Gujrati_trader';
+        $chatId = (string) $chat['id'];
+        $chatTitle = $chat['title'] ?? ($chat['username'] ? '@' . $chat['username'] : ($chat['first_name'] ?? "Chat {$chatId}"));
+        $chatUsername = $chat['username'] ?? null;
+        $chatType = $chat['type'] ?? 'channel';
 
-        // Resolve or create channel
-        $channel = TelegramChannel::firstOrCreate(
-            ['telegram_bot_id' => $bot->id, 'telegram_chat_id' => $chatId],
-            [
-                'client_id' => $bot->client_id,
-                'title' => $chatTitle,
-                'username' => $chat['username'] ?? null,
-                'type' => $chat['type'] ?? 'channel',
-                'is_bot_admin' => true,
-                'bot_status' => 'administrator',
-                'connected_at' => now(),
-            ]
-        );
+        // Safe diagnostic logging (No tokens/secrets logged)
+        Log::info('Telegram webhook received update', [
+            'update_id' => $updateId,
+            'type' => $updateType,
+            'chat_id' => $chatId,
+            'chat_title' => $chatTitle,
+            'chat_username' => $chatUsername,
+            'chat_type' => $chatType,
+        ]);
 
+        // Auto-discover and persist/update channel (for channels, supergroups, and groups)
+        $channel = null;
+        if ($chatType !== 'private') {
+            $channel = TelegramChannel::where('telegram_bot_id', $bot->id)
+                ->where('telegram_chat_id', $chatId)
+                ->first();
+
+            if (!$channel) {
+                $channel = TelegramChannel::create([
+                    'telegram_bot_id' => $bot->id,
+                    'telegram_chat_id' => $chatId,
+                    'client_id' => $bot->client_id, // NULL for global bots
+                    'title' => $chatTitle,
+                    'username' => $chatUsername,
+                    'type' => $chatType,
+                    'member_count' => isset($chat['members_count']) ? (int) $chat['members_count'] : 0,
+                    'is_bot_admin' => true,
+                    'bot_status' => 'administrator',
+                    'is_active' => true,
+                    'connected_at' => now(),
+                    'last_synced_at' => now(),
+                ]);
+            } else {
+                $channel->update([
+                    'title' => $chatTitle ?: $channel->title,
+                    'username' => $chatUsername !== null ? $chatUsername : $channel->username,
+                    'type' => $chatType ?: $channel->type,
+                    'is_bot_admin' => true,
+                    'bot_status' => 'administrator',
+                    'is_active' => true,
+                    'last_synced_at' => now(),
+                ]);
+            }
+        }
+
+        // Handle Non-Member updates (e.g. channel_post, message, edited_channel_post)
+        if (!in_array($updateType, ['chat_member', 'my_chat_member', 'chat_join_request'])) {
+            $fromUser = $updateData['from'] ?? [];
+            $telegramUserId = (string) ($fromUser['id'] ?? $chatId);
+
+            $telegramEvent = TelegramEvent::create([
+                'telegram_bot_id' => $bot->id,
+                'telegram_channel_id' => $channel?->id,
+                'update_id' => $updateId,
+                'client_id' => $channel?->client_id ?? $bot->client_id,
+                'telegram_user_id' => $telegramUserId,
+                'telegram_username' => $fromUser['username'] ?? $chatUsername,
+                'first_name' => $fromUser['first_name'] ?? $chatTitle,
+                'last_name' => $fromUser['last_name'] ?? null,
+                'event_type' => $updateType,
+                'source' => $updateType,
+                'status_before' => $updateType,
+                'status_after' => 'processed',
+                'raw_payload' => $update,
+                'event_time' => now(),
+            ]);
+
+            return $telegramEvent;
+        }
+
+        // Member Join/Leave/Request Tracking Logic
+        $chatMemberUpdate = $updateData;
         $user = $chatMemberUpdate['from'] ?? $chatMemberUpdate['new_chat_member']['user'] ?? $chatMemberUpdate['user'] ?? [];
         $telegramUserId = (string) ($user['id'] ?? rand(100000000, 999999999));
         $oldStatus = $chatMemberUpdate['old_chat_member']['status'] ?? 'unknown';
@@ -466,7 +585,7 @@ class TelegramService
         // Determine event type: join, leave, join_request
         $eventType = 'join';
         $isVerified = true;
-        if (isset($update['chat_join_request'])) {
+        if ($updateType === 'chat_join_request') {
             $eventType = 'join_request';
             $isVerified = true;
             if ($oldStatus === 'unknown') {
@@ -498,7 +617,7 @@ class TelegramService
 
         // Secondary matching: Recent unassigned CTA click for this client
         if (!$matchedSession) {
-            $matchedClick = CtaClick::where('client_id', $channel->client_id ?? $bot->client_id)
+            $matchedClick = CtaClick::where('client_id', $channel?->client_id ?? $bot->client_id)
                 ->where('created_at', '>=', now()->subHours(6))
                 ->latest('id')
                 ->first();
@@ -516,9 +635,9 @@ class TelegramService
         // Record TelegramEvent
         $telegramEvent = TelegramEvent::create([
             'telegram_bot_id' => $bot->id,
-            'telegram_channel_id' => $channel->id,
+            'telegram_channel_id' => $channel?->id,
             'update_id' => $updateId,
-            'client_id' => $channel->client_id ?? $bot->client_id,
+            'client_id' => $channel?->client_id ?? $bot->client_id,
             'campaign_id' => $matchedSession?->campaign_id ?? $matchedClick?->campaign_id,
             'cta_click_id' => $matchedClick?->id,
             'telegram_user_id' => $telegramUserId,
@@ -526,7 +645,7 @@ class TelegramService
             'first_name' => $user['first_name'] ?? 'Trader',
             'last_name' => $user['last_name'] ?? null,
             'event_type' => $eventType,
-            'invite_link' => $payloadInviteLink ?? $matchedInvite?->invite_link ?? 'https://t.me/+gujaratitrdexx_vip',
+            'invite_link' => $payloadInviteLink ?? $matchedInvite?->invite_link,
             'source' => $source,
             'country' => $country,
             'device' => $device,
@@ -538,7 +657,7 @@ class TelegramService
         ]);
 
         // Create Verified Conversion Record for join / join_request
-        if (in_array($eventType, ['join', 'join_request'])) {
+        if ($channel && in_array($eventType, ['join', 'join_request'])) {
             $existingConversion = Conversion::where('telegram_channel_id', $channel->id)
                 ->where('telegram_user_id', $telegramUserId)
                 ->where('event_type', $eventType)

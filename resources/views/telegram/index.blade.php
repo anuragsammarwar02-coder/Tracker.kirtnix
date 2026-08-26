@@ -432,13 +432,18 @@
                         <div>
                             <div class="flex items-center justify-between mb-3">
                                 <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                    🔍 Step 2: Discovered Telegram Channels
+                                    🔍 Step 2: Discovered Telegram Channels (<span x-text="discoveredChannels.length"></span>)
                                 </h3>
                                 <button type="button" @click="autoDetectModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
                             </div>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                                Channels where the connected bot has verified Administrator rights:
-                            </p>
+
+                            <!-- Telegram API Discovery Explanation Banner -->
+                            <div class="p-3 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl mb-4 text-[11px] text-blue-900 dark:text-blue-200 leading-relaxed flex items-start gap-2.5">
+                                <span class="text-sm">ℹ️</span>
+                                <div>
+                                    Telegram only reports channels to the bot through updates. To discover a channel, send a new post/message in that channel after the bot is an administrator.
+                                </div>
+                            </div>
 
                             <!-- Loading State -->
                             <div x-show="isDetecting" class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
@@ -451,13 +456,18 @@
                                 <template x-for="ch in discoveredChannels" :key="ch.telegram_chat_id">
                                     <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-yellow-400 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-yellow-50/30 dark:hover:bg-yellow-950/20 transition flex items-center justify-between">
                                         <div>
-                                            <h4 class="font-bold text-slate-900 dark:text-white text-xs" x-text="ch.title"></h4>
+                                            <div class="flex items-center gap-2">
+                                                <h4 class="font-bold text-slate-900 dark:text-white text-xs" x-text="ch.title"></h4>
+                                                <span x-show="ch.username" class="text-[11px] text-blue-600 dark:text-blue-400 font-mono" x-text="'@' + ch.username"></span>
+                                                <span x-show="!ch.username" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono">Private Channel</span>
+                                            </div>
                                             <div class="flex items-center gap-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                                                 <span x-text="'ID: ' + ch.telegram_chat_id" class="font-bold text-slate-700 dark:text-slate-200"></span>
                                                 <span>•</span>
                                                 <span x-text="ch.member_count.toLocaleString() + ' members'"></span>
                                                 <span>•</span>
                                                 <span class="text-emerald-700 dark:text-emerald-400 font-bold">Bot: Admin</span>
+                                                <span x-show="ch.client_name" class="text-yellow-700 dark:text-yellow-400 font-sans font-semibold" x-text="'• Client: ' + ch.client_name"></span>
                                             </div>
                                         </div>
 
@@ -468,7 +478,7 @@
                                 </template>
 
                                 <div x-show="discoveredChannels.length === 0" class="text-center py-6 text-xs text-slate-400">
-                                    No unlinked channels detected. Add the bot as Admin in your Telegram channel first.
+                                    No channels detected yet. Ensure the bot is an Administrator in your Telegram channel, then post any message in the channel.
                                 </div>
                             </div>
                         </div>
