@@ -17,7 +17,10 @@ class DatabaseRestoreCleanBaselineCommand extends Command
 
         $targetPath = database_path('database.sqlite');
         $snapshotGzPath = database_path('snapshots/clean_baseline.sqlite.gz');
-        $expectedSha256 = '2980f7a4b52a264805f902f525e9920b2d283f1f58a09ff5f83181e849fde003';
+        $validSha256List = [
+            'ccf93183bdcf5648f05876d1b18486534ec3afec2100656e1405ad23810e371b', // Clean baseline with nullable telegram_bots.client_id
+            '2980f7a4b52a264805f902f525e9920b2d283f1f58a09ff5f83181e849fde003', // Original baseline dd73a856
+        ];
         $expectedBytes = 458752;
 
         $this->line("Target Database Path: {$targetPath}");
@@ -39,8 +42,8 @@ class DatabaseRestoreCleanBaselineCommand extends Command
         }
 
         $actualSha256 = hash('sha256', $rawSqlite);
-        if ($actualSha256 !== $expectedSha256) {
-            $this->error("SHA256 mismatch! Expected {$expectedSha256}, got {$actualSha256}");
+        if (!in_array($actualSha256, $validSha256List)) {
+            $this->error("SHA256 mismatch! Found unexpected hash {$actualSha256}");
             return 1;
         }
         $this->info("✓ Snapshot payload verified: " . number_format(strlen($rawSqlite)) . " bytes, SHA256 matched.");
