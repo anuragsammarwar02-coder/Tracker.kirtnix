@@ -36,7 +36,7 @@ return [
             'url' => env('DB_URL'),
             'database' => env('DB_DATABASE') === ':memory:' 
                 ? ':memory:' 
-                : (env('DB_DATABASE') && env('DB_DATABASE') !== 'sqlite'
+                : (env('DB_DATABASE') && (str_ends_with(env('DB_DATABASE'), '.sqlite') || str_ends_with(env('DB_DATABASE'), '.db') || str_contains(env('DB_DATABASE'), 'database'))
                     ? (str_starts_with(env('DB_DATABASE'), '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', env('DB_DATABASE'))
                         ? env('DB_DATABASE') 
                         : base_path(env('DB_DATABASE')))
