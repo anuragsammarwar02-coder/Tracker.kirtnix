@@ -34,13 +34,33 @@ return [
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE') === ':memory:' 
-                ? ':memory:' 
-                : (env('DB_DATABASE') && (str_ends_with(env('DB_DATABASE'), '.sqlite') || str_ends_with(env('DB_DATABASE'), '.db') || str_contains(env('DB_DATABASE'), 'database'))
-                    ? (str_starts_with(env('DB_DATABASE'), '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', env('DB_DATABASE'))
-                        ? env('DB_DATABASE') 
-                        : base_path(env('DB_DATABASE')))
-                    : database_path('database.sqlite')),
+            'database' => (function () {
+                $envDb = env('DB_DATABASE');
+                if ($envDb === ':memory:') {
+                    return ':memory:';
+                }
+                if ($envDb && $envDb !== 'database/database.sqlite' && $envDb !== database_path('database.sqlite')) {
+                    return (str_starts_with($envDb, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $envDb))
+                        ? $envDb
+                        : base_path($envDb);
+                }
+
+                // Production Hostinger persistent path outside public_html deployment directory
+                if (DIRECTORY_SEPARATOR === '/') {
+                    $domainRoot = dirname(base_path());
+                    if (is_dir($domainRoot) && (str_contains(base_path(), 'public_html') || str_contains(base_path(), 'domains'))) {
+                        $persistentDir = $domainRoot . '/data';
+                        if (!is_dir($persistentDir)) {
+                            @mkdir($persistentDir, 0775, true);
+                        }
+                        if (is_dir($persistentDir)) {
+                            return $persistentDir . '/database.sqlite';
+                        }
+                    }
+                }
+
+                return database_path('database.sqlite');
+            })(),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
         ],

@@ -40,19 +40,28 @@ class AppServiceProvider extends ServiceProvider
                 if ($dbPath && $dbPath !== ':memory:') {
                     $dir = dirname($dbPath);
                     if (!is_dir($dir)) {
-                        @mkdir($dir, 0755, true);
+                        @mkdir($dir, 0775, true);
+                    }
+                    if (is_dir($dir)) {
+                        @chmod($dir, 0775);
                     }
 
-                    // Only if database file does not exist OR is 0 bytes, restore verified clean baseline snapshot
+                    // Only if persistent database file does not exist OR is 0 bytes, migrate from legacy path or restore baseline
                     $isZeroBytes = !file_exists($dbPath) || (file_exists($dbPath) && filesize($dbPath) === 0);
                     $snapshotGzPath = database_path('snapshots/clean_baseline.sqlite.gz');
 
-                    if ($isZeroBytes && file_exists($snapshotGzPath)) {
-                        $gzData = file_get_contents($snapshotGzPath);
-                        $rawSqlite = @gzdecode($gzData);
-                        if ($rawSqlite !== false && strlen($rawSqlite) === 458752) {
-                            @file_put_contents($dbPath, $rawSqlite);
+                    if ($isZeroBytes) {
+                        $legacyDbPath = base_path('database/database.sqlite');
+                        if ($legacyDbPath !== $dbPath && file_exists($legacyDbPath) && filesize($legacyDbPath) > 0) {
+                            @copy($legacyDbPath, $dbPath);
                             @chmod($dbPath, 0664);
+                        } elseif (file_exists($snapshotGzPath)) {
+                            $gzData = file_get_contents($snapshotGzPath);
+                            $rawSqlite = @gzdecode($gzData);
+                            if ($rawSqlite !== false && strlen($rawSqlite) === 458752) {
+                                @file_put_contents($dbPath, $rawSqlite);
+                                @chmod($dbPath, 0664);
+                            }
                         }
                     }
 
