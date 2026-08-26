@@ -53,65 +53,135 @@ Route::get('/healthz', function () {
         $dbError = $e->getMessage();
     }
 
-    // Scan candidate database files on server (Read-Only)
+    // Deep Recursive Scan for Candidate SQLite Files (100% Read-Only)
     $candidateFiles = [];
-    $scanDirs = [
+    $scannedPaths = [];
+
+    $domainRoot = realpath(base_path('..')) ?: base_path();
+    $searchRoots = [
         database_path(),
         storage_path('app'),
         storage_path('app/backups'),
         base_path(),
+        $domainRoot,
     ];
 
-    foreach ($scanDirs as $dir) {
-        if (is_dir($dir)) {
-            $files = @scandir($dir) ?: [];
-            foreach ($files as $f) {
-                if ($f === '.' || $f === '..') continue;
-                $full = $dir . DIRECTORY_SEPARATOR . $f;
-                if (is_file($full) && (str_contains($f, '.sqlite') || str_contains($f, '.db') || str_contains($f, 'tracker'))) {
+    $findSqliteFiles = function ($dir, $depth = 0) use (&$findSqliteFiles, &$candidateFiles, &$scannedPaths) {
+        if ($depth > 4 || !is_dir($dir) || !is_readable($dir)) return;
+        $scannedPaths[] = $dir;
+
+        $items = @scandir($dir) ?: [];
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..' || $item === 'node_modules' || $item === 'vendor' || $item === '.git') continue;
+            $full = $dir . DIRECTORY_SEPARATOR . $item;
+
+            if (is_dir($full)) {
+                $findSqliteFiles($full, $depth + 1);
+            } elseif (is_file($full)) {
+                $isSqliteCandidate = str_ends_with($item, '.sqlite') || 
+                                     str_ends_with($item, '.db') || 
+                                     str_ends_with($item, '.sqlite3') || 
+                                     str_contains($item, 'database') || 
+                                     str_contains($item, 'backup');
+
+                // Check magic bytes for SQLite header if file is non-empty
+                if (!$isSqliteCandidate && filesize($full) > 100) {
+                    $handle = @fopen($full, 'rb');
+                    if ($handle) {
+                        $header = fread($handle, 16);
+                        fclose($handle);
+                        if (str_starts_with($header, 'SQLite format 3')) {
+                            $isSqliteCandidate = true;
+                        }
+                    }
+                }
+
+                if ($isSqliteCandidate) {
                     $size = filesize($full);
+                    $mtime = date('Y-m-d H:i:s', filemtime($full));
+                    $integrity = 'untested';
                     $tables = [];
+                    $tableCounts = [];
+
                     if ($size > 0) {
                         try {
                             $pdo = new \PDO("sqlite:{$full}");
-                            $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table';");
+                            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+
+                            // Integrity check
+                            $stmt = $pdo->query('PRAGMA integrity_check;');
+                            $integrity = $stmt ? $stmt->fetchColumn() : 'unknown';
+
+                            // Discover tables
+                            $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
                             $tables = $stmt ? $stmt->fetchAll(\PDO::FETCH_COLUMN) : [];
+
+                            // Row counts for key tables
+                            foreach ($tables as $t) {
+                                try {
+                                    $cStmt = $pdo->query("SELECT COUNT(*) FROM \"{$t}\";");
+                                    $tableCounts[$t] = $cStmt ? (int) $cStmt->fetchColumn() : 0;
+                                } catch (\Throwable $e) {
+                                    $tableCounts[$t] = 'err';
+                                }
+                            }
                         } catch (\Throwable $e) {
-                            $tables = ['error: ' . $e->getMessage()];
+                            $integrity = 'error: ' . $e->getMessage();
                         }
                     }
+
                     $candidateFiles[] = [
-                        'filename' => $f,
-                        'path' => $full,
-                        'size' => $size,
-                        'tables_count' => count($tables),
-                        'sample_tables' => array_slice($tables, 0, 5),
+                        'filename' => $item,
+                        'absolute_path' => $full,
+                        'size_bytes' => $size,
+                        'size_formatted' => number_format($size) . ' bytes',
+                        'last_modified' => $mtime,
+                        'sqlite_integrity' => $integrity,
+                        'has_users_table' => in_array('users', $tables),
+                        'table_counts' => $tableCounts,
+                        'tables' => $tables,
                     ];
                 }
             }
+        }
+    };
+
+    foreach (array_unique($searchRoots) as $root) {
+        $findSqliteFiles($root, 0);
+    }
+
+    // Deduplicate candidate files by absolute path
+    $uniqueCandidates = [];
+    $seenPaths = [];
+    foreach ($candidateFiles as $cand) {
+        if (!in_array($cand['absolute_path'], $seenPaths)) {
+            $seenPaths[] = $cand['absolute_path'];
+            $uniqueCandidates[] = $cand;
         }
     }
 
     return response()->json([
         'status' => ($dbConnected && $usersCount > 0) ? 'ok' : 'attention_required',
-        'database_driver' => config('database.default'),
-        'database_path' => $dbPath,
-        'database_file_exists' => $dbExists,
-        'database_file_size' => $dbSize,
-        'database_connected' => $dbConnected,
-        'records' => [
+        'current_configured_database' => [
+            'driver' => config('database.default'),
+            'path' => $dbPath,
+            'file_exists' => $dbExists,
+            'file_size_bytes' => $dbSize,
+            'connected' => $dbConnected,
+        ],
+        'live_active_records' => [
             'users' => $usersCount,
             'clients' => $clientsCount,
             'landing_pages' => $landingPagesCount,
             'telegram_bots' => $botsCount,
         ],
-        'discovered_sqlite_files' => $candidateFiles,
+        'scanned_directories' => array_values(array_unique($scannedPaths)),
+        'discovered_sqlite_files' => $uniqueCandidates,
         'php_version' => PHP_VERSION,
-        'sqlite_loaded' => extension_loaded('pdo_sqlite'),
         'app_key_set' => !empty(config('app.key')),
         'storage_writable' => is_writable(storage_path('framework/views')),
         'error' => $dbError,
-    ]);
+    ], 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 });
 
 Route::get('/', [PublicMarketingController::class, 'home'])->name('home');
