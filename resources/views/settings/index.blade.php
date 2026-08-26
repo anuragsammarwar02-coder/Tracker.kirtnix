@@ -57,18 +57,36 @@
                     <div>
                         <div class="flex items-center gap-2">
                             <h2 class="text-base font-bold text-slate-900">Meta Integration</h2>
+                            @if($metaConnection->sync_status === 'failed' || $metaConnection->status === 'expired' || $metaConnection->status === 'reauth_required')
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
+                                Re-authentication Required
+                            </span>
+                            @else
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
                                 Connected
                             </span>
+                            @endif
                         </div>
                         <p class="text-xs text-slate-500 mt-1 max-w-xl">
                             One agency Facebook connection powers spend, campaign objectives, pixel and Conversions API across every client.
                         </p>
+                        @if($metaConnection->sync_status === 'failed' && $metaConnection->error_message)
+                        <div class="mt-2 text-xs text-amber-700 font-medium">
+                            <span>Notice: {{ Str::limit($metaConnection->error_message, 120) }}</span>
+                        </div>
+                        @endif
                     </div>
                 </div>
 
                 <div class="flex items-center gap-2">
+                    @if($metaConnection->sync_status === 'failed' || $metaConnection->status === 'expired' || $metaConnection->status === 'reauth_required')
+                    <a href="{{ route('meta.oauth.redirect') }}" class="px-3.5 py-2 text-xs font-bold text-white bg-[#1877F2] hover:bg-[#166FE5] rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        Reconnect
+                    </a>
+                    @endif
                     <form action="{{ route('meta.sync') }}" method="POST">
                         @csrf
                         <button type="submit" class="px-3.5 py-2 text-xs font-bold text-slate-900 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">

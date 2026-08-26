@@ -219,7 +219,9 @@ Route::get('/healthz', function () {
                 ],
                 'bots_data' => $dbConnected ? \App\Models\TelegramBot::select('id', 'name', 'username', 'client_id')->get() : [],
                 'channels_data' => $dbConnected ? \App\Models\TelegramChannel::select('id', 'title', 'telegram_chat_id', 'telegram_bot_id', 'client_id')->get() : [],
-                'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email')->get() : [],
+                'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email', 'ad_account_id')->get() : [],
+                'users_data' => $dbConnected ? \App\Models\User::select('id', 'name', 'email', 'role')->get() : [],
+                'settings_keys' => $dbConnected ? \App\Models\Setting::pluck('key')->all() : [],
                 'meta_diagnostics' => [
                     'connection' => $dbConnected ? \App\Models\MetaConnection::select('id', 'facebook_user_id', 'facebook_name', 'status', 'sync_status', 'last_sync_at')->first() : null,
                     'has_token_in_connection' => $dbConnected ? !empty(\App\Models\MetaConnection::first()?->access_token) : false,
