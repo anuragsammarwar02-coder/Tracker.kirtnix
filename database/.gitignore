@@ -1,1 +1,6 @@
-*.sqlite*
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+!snapshots/
+!snapshots/**
+
