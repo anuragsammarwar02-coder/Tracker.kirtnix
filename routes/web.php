@@ -217,6 +217,7 @@ Route::get('/healthz', function () {
                 ],
                 'bots_data' => $dbConnected ? \App\Models\TelegramBot::select('id', 'name', 'username', 'client_id')->get() : [],
                 'channels_data' => $dbConnected ? \App\Models\TelegramChannel::select('id', 'title', 'telegram_chat_id', 'telegram_bot_id', 'client_id')->get() : [],
+                'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email')->get() : [],
                 'discovered_sqlite_files' => $uniqueCandidates,
             ], 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         }
