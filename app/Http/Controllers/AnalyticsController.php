@@ -357,6 +357,9 @@ class AnalyticsController extends Controller
 
         // 4. Meta Ads Metrics from Scoped Campaigns
         $campaignSpend = (float) $campaigns->sum('spend');
+        if ($campaignSpend <= 0 && $adAccount && (float) $adAccount->lifetime_spend > 0) {
+            $campaignSpend = (float) $adAccount->lifetime_spend;
+        }
         $campaignReach = (int) $campaigns->sum('reach');
         $campaignImpressions = (int) $campaigns->sum('impressions');
 
@@ -386,7 +389,7 @@ class AnalyticsController extends Controller
         ];
 
         // Budget section
-        $totalBudgetLimit = $adAccount ? (float) ($adAccount->spend_limit ?: ($campaigns->sum('active_daily_budget') * 30)) : 0.00;
+        $totalBudgetLimit = $adAccount ? (float) ($adAccount->spend_limit > 0 ? $adAccount->spend_limit : ($campaigns->sum('active_daily_budget') > 0 ? $campaigns->sum('active_daily_budget') * 30 : ($adAccount->lifetime_spend > 0 ? $adAccount->lifetime_spend : $campaignSpend))) : 0.00;
         $budget = [
             'total_spending' => $campaignSpend,
             'total_budget' => $totalBudgetLimit,

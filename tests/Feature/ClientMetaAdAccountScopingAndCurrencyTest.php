@@ -215,4 +215,94 @@ class ClientMetaAdAccountScopingAndCurrencyTest extends TestCase
         $responseB->assertOk();
         $responseB->assertSee('$350.00');
     }
+
+    public function test_analytics_detail_page_renders_dynamic_campaigns_and_never_hardcoded_dummy_data(): void
+    {
+        $adAccount = AdAccount::create([
+            'meta_connection_id' => $this->connection->id,
+            'account_id' => 'act_real_999',
+            'name' => 'Kirtnix Digital Ad Account',
+            'currency' => 'INR',
+            'lifetime_spend' => 8420.00,
+            'is_active' => true,
+        ]);
+
+        $client = Client::create([
+            'company_name' => 'Kirtnix Digital Media',
+            'client_name' => 'Kirti',
+            'kx_code' => 'KX-KD',
+            'status' => 'active',
+            'ad_account_id' => $adAccount->id,
+        ]);
+        $adAccount->update(['client_id' => $client->id]);
+
+        $lp = \App\Models\LandingPage::create([
+            'client_id' => $client->id,
+            'title' => 'Kirtnix Digital LP',
+            'slug' => 'kirtnix-digital',
+            'is_published' => true,
+            'is_active' => true,
+        ]);
+
+        Campaign::create([
+            'client_id' => $client->id,
+            'ad_account_id' => $adAccount->id,
+            'campaign_id' => 'cmp_real_lead_1',
+            'name' => 'Real Active Lead Campaign',
+            'slug' => 'real-active-lead-campaign',
+            'spend' => 8420.00,
+            'reach' => 15000,
+            'impressions' => 22000,
+            'status' => 'active',
+            'outcome' => 'Subscribers',
+            'objective' => 'OUTCOME_LEADS',
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('analytics.detail', 'kirtnix-digital'));
+        $response->assertOk();
+        // Must see real campaign name
+        $response->assertSee('Real Active Lead Campaign');
+        $response->assertSee('Kirtnix Digital Ad Account');
+        $response->assertSee('₹8,420.00');
+        // Must NOT see hardcoded dummy campaigns
+        $response->assertDontSee('GJ001');
+        $response->assertDontSee('GJ002');
+        $response->assertDontSee('GJ003');
+        $response->assertDontSee('GJ004');
+        $response->assertDontSee('Pagelike ad');
+    }
+
+    public function test_analytics_detail_page_renders_empty_state_when_ad_account_has_no_campaigns(): void
+    {
+        $adAccount = AdAccount::create([
+            'meta_connection_id' => $this->connection->id,
+            'account_id' => 'act_empty_888',
+            'name' => 'Empty Fresh Account',
+            'currency' => 'USD',
+            'lifetime_spend' => 0.00,
+            'is_active' => true,
+        ]);
+
+        $client = Client::create([
+            'company_name' => 'Fresh Client Corp',
+            'client_name' => 'Alex',
+            'kx_code' => 'KX-FC',
+            'status' => 'active',
+            'ad_account_id' => $adAccount->id,
+        ]);
+        $adAccount->update(['client_id' => $client->id]);
+
+        $lp = \App\Models\LandingPage::create([
+            'client_id' => $client->id,
+            'title' => 'Fresh Client LP',
+            'slug' => 'fresh-client-lp',
+            'is_published' => true,
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('analytics.detail', 'fresh-client-lp'));
+        $response->assertOk();
+        $response->assertSee('No campaigns found for this Meta Ad Account');
+        $response->assertDontSee('GJ001');
+    }
 }

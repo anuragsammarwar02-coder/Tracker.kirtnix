@@ -243,7 +243,7 @@
                 <div class="bg-[#f8fafc]/50 px-5 py-3.5 flex items-center justify-between">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">CAMPAIGNS</span>
-                        <span class="text-slate-800 font-bold text-xs mt-0.5 block">4 active / 5 total</span>
+                        <span class="text-slate-800 font-bold text-xs mt-0.5 block">{{ $campaigns->where('status', 'active')->count() + $campaigns->where('status', 'ACTIVE')->count() }} active / {{ $campaigns->count() }} total</span>
                     </div>
                 </div>
             </div>
@@ -272,86 +272,37 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700 font-medium">
-                            <!-- Campaign 1 -->
+                            @forelse($campaigns as $camp)
                             <tr class="hover:bg-slate-50/60 transition">
-                                <td class="py-3.5 px-5 font-bold text-slate-900">GJ004</td>
+                                <td class="py-3.5 px-5 font-bold text-slate-900">{{ $camp->name }}</td>
                                 <td class="py-3.5 px-5">
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200/60">
                                         <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
-                                        Subscribers
+                                        {{ $camp->outcome ?? 'Subscribers' }}
                                     </span>
                                 </td>
-                                <td class="py-3.5 px-5 text-slate-600">Outcome leads</td>
-                                <td class="py-3.5 px-5 text-slate-600">Offsite conversions</td>
-                                <td class="py-3.5 px-5 text-slate-600">Subscribe</td>
-                                <td class="py-3.5 px-5 text-slate-600">Impressions</td>
-                                <td class="py-3.5 px-5 text-slate-500">Undefined</td>
-                                <td class="py-3.5 px-5 text-right text-slate-700 font-medium">Active</td>
-                            </tr>
-                            <!-- Campaign 2 -->
-                            <tr class="hover:bg-slate-50/60 transition">
-                                <td class="py-3.5 px-5 font-bold text-slate-900">GJ003</td>
-                                <td class="py-3.5 px-5">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200/60">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
-                                        Subscribers
+                                <td class="py-3.5 px-5 text-slate-600">{{ $camp->objective ?? 'OUTCOME_LEADS' }}</td>
+                                <td class="py-3.5 px-5 text-slate-600">{{ $camp->optimization_goal ?? 'Offsite conversions' }}</td>
+                                <td class="py-3.5 px-5 text-slate-600">{{ $camp->optimization_event ?? 'Subscribe' }}</td>
+                                <td class="py-3.5 px-5 text-slate-600">{{ $camp->billing_event ?? 'Impressions' }}</td>
+                                <td class="py-3.5 px-5 text-slate-500">{{ $camp->conversion_location ?? 'Telegram' }}</td>
+                                <td class="py-3.5 px-5 text-right text-slate-700 font-medium">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ in_array(strtolower($camp->status), ['active', '1']) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600' }}">
+                                        {{ ucfirst($camp->status) }}
                                     </span>
                                 </td>
-                                <td class="py-3.5 px-5 text-slate-600">Outcome leads</td>
-                                <td class="py-3.5 px-5 text-slate-600">Offsite conversions</td>
-                                <td class="py-3.5 px-5 text-slate-600">Subscribe</td>
-                                <td class="py-3.5 px-5 text-slate-600">Impressions</td>
-                                <td class="py-3.5 px-5 text-slate-500">Undefined</td>
-                                <td class="py-3.5 px-5 text-right text-slate-700 font-medium">Active</td>
                             </tr>
-                            <!-- Campaign 3 -->
-                            <tr class="hover:bg-slate-50/60 transition">
-                                <td class="py-3.5 px-5 font-bold text-slate-900">GJ002</td>
-                                <td class="py-3.5 px-5">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200/60">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
-                                        Subscribers
-                                    </span>
+                            @empty
+                            <tr>
+                                <td colspan="8" class="py-8 px-5 text-center text-slate-400 font-medium">
+                                    <div class="flex flex-col items-center justify-center space-y-1">
+                                        <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                                        <span class="text-xs font-semibold text-slate-600">No campaigns found for this Meta Ad Account</span>
+                                        <span class="text-[11px] text-slate-400">Only campaigns belonging to {{ $adAccount->name ?? 'the connected account' }} will appear here.</span>
+                                    </div>
                                 </td>
-                                <td class="py-3.5 px-5 text-slate-600">Outcome leads</td>
-                                <td class="py-3.5 px-5 text-slate-600">Offsite conversions</td>
-                                <td class="py-3.5 px-5 text-slate-600">Subscribe</td>
-                                <td class="py-3.5 px-5 text-slate-600">Impressions</td>
-                                <td class="py-3.5 px-5 text-slate-500">Undefined</td>
-                                <td class="py-3.5 px-5 text-right text-slate-700 font-medium">Active</td>
                             </tr>
-                            <!-- Campaign 4 -->
-                            <tr class="hover:bg-slate-50/60 transition">
-                                <td class="py-3.5 px-5 font-bold text-slate-900">GJ001</td>
-                                <td class="py-3.5 px-5">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200/60">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
-                                        Subscribers
-                                    </span>
-                                </td>
-                                <td class="py-3.5 px-5 text-slate-600">Outcome leads</td>
-                                <td class="py-3.5 px-5 text-slate-600">Offsite conversions</td>
-                                <td class="py-3.5 px-5 text-slate-600">Subscribe</td>
-                                <td class="py-3.5 px-5 text-slate-600">Impressions</td>
-                                <td class="py-3.5 px-5 text-slate-500">Undefined</td>
-                                <td class="py-3.5 px-5 text-right text-slate-700 font-medium">Active</td>
-                            </tr>
-                            <!-- Campaign 5 -->
-                            <tr class="hover:bg-slate-50/60 transition">
-                                <td class="py-3.5 px-5 font-bold text-slate-900">Pagelike ad</td>
-                                <td class="py-3.5 px-5">
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200/60">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
-                                        Engagement
-                                    </span>
-                                </td>
-                                <td class="py-3.5 px-5 text-slate-600">Outcome engagement</td>
-                                <td class="py-3.5 px-5 text-slate-600">Profile and page engagement</td>
-                                <td class="py-3.5 px-5 text-slate-500">Unknown</td>
-                                <td class="py-3.5 px-5 text-slate-600">Impressions</td>
-                                <td class="py-3.5 px-5 text-slate-600">Facebook page</td>
-                                <td class="py-3.5 px-5 text-right text-slate-400 font-medium">Paused</td>
-                            </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
@@ -370,7 +321,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['reach'] ?: 14887) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['reach']) }}</span>
                         <p class="text-[11px] text-slate-400 mt-0.5">Live from Meta</p>
                     </div>
                 </div>
@@ -382,7 +333,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['impressions'] ?: 16617) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['impressions']) }}</span>
                         <p class="text-[11px] text-slate-400 mt-0.5">Live from Meta</p>
                     </div>
                 </div>
@@ -394,7 +345,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['lp_views'] ?: 137) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['lp_views']) }}</span>
                     </div>
                 </div>
 
@@ -405,7 +356,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['unique_visitors'] ?: 110) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['unique_visitors']) }}</span>
                     </div>
                 </div>
 
@@ -416,7 +367,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['tg_clicks'] ?: 65) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['tg_clicks']) }}</span>
                     </div>
                 </div>
 
@@ -427,7 +378,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['conversion_rate'] ?? '14.6%' }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['conversion_rate'] ?? '0.0%' }}</span>
                     </div>
                 </div>
 
@@ -438,7 +389,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['direct_joins'] ?: 19) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['direct_joins']) }}</span>
                     </div>
                 </div>
 
@@ -449,7 +400,7 @@
                         <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">{{ number_format($kpis['subscribers'] ?: 20) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">{{ number_format($kpis['subscribers']) }}</span>
                         <p class="text-[11px] text-slate-500 mt-0.5">Meta campaign objective: Subscribers</p>
                     </div>
                 </div>
@@ -461,7 +412,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['approved_members'] ?: 9) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['approved_members']) }}</span>
                     </div>
                 </div>
 
@@ -472,7 +423,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['pending_requests'] ?: 11) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['pending_requests']) }}</span>
                         <p class="text-[11px] text-slate-400 mt-0.5">Private channel approvals</p>
                     </div>
                 </div>
@@ -484,7 +435,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['cost_per_subscriber'] ?? '₹81' }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['cost_per_subscriber'] ?? '₹0.00' }}</span>
                     </div>
                 </div>
 
@@ -495,7 +446,7 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                     </div>
                     <div>
-                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['backouts'] ?: 5) }}</span>
+                        <span class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['backouts']) }}</span>
                     </div>
                 </div>
             </div>
@@ -505,7 +456,7 @@
         <div class="space-y-2.5">
             <div class="flex items-center justify-between">
                 <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">COMPLETE JOIN HISTORY <span class="sr-only">Complete Join History</span></h2>
-                <span class="text-xs text-slate-500 font-medium">{{ $joinHistory->total() ?: 25 }} events</span>
+                <span class="text-xs text-slate-500 font-medium">{{ $joinHistory->total() }} events</span>
             </div>
 
             <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
@@ -525,75 +476,41 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 text-slate-700 font-medium">
-                            @php
-                                $sampleSubscribers = [
-                                    ['name' => 'Darshit Jivani', 'time' => '8/25/2026, 5:21:46 PM'],
-                                    ['name' => 'Sagar Rahul', 'time' => '8/25/2026, 3:41:04 PM'],
-                                    ['name' => '@Otp_new_fast', 'subname' => 'Sonu', 'time' => '8/25/2026, 3:03:19 PM'],
-                                    ['name' => 'Vijay Chauhan', 'time' => '8/25/2026, 2:36:28 PM'],
-                                    ['name' => 'Diya Thakkar', 'time' => '8/25/2026, 2:23:34 PM'],
-                                    ['name' => '', 'time' => '8/25/2026, 12:51:55 PM'],
-                                    ['name' => '@Palash_k_ukani', 'subname' => 'Pk', 'time' => '8/25/2026, 12:22:49 PM'],
-                                    ['name' => 'M r Rocky', 'time' => '8/25/2026, 11:51:31 AM'],
-                                ];
-                            @endphp
-
-                            @if($joinHistory->count() > 0)
-                                @foreach($joinHistory as $event)
-                                <tr class="hover:bg-slate-50/60 transition">
-                                    <td class="py-3.5 px-5 font-bold text-slate-900">
-                                        {{ $event->first_name ? $event->first_name . ' ' . $event->last_name : ($event->telegram_username ? '@' . $event->telegram_username : 'Subscriber') }}
-                                    </td>
-                                    <td class="py-3.5 px-5">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/50">
-                                            {{ $event->event_type === 'join' ? 'joined' : $event->event_type }}
-                                        </span>
-                                    </td>
-                                    <td class="py-3.5 px-5">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">
-                                            {{ $event->status_after ?? 'pending' }}
-                                        </span>
-                                    </td>
-                                    <td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>
-                                    <td class="py-3.5 px-5 text-slate-500">{{ $event->source ?? 'direct' }}</td>
-                                    <td class="py-3.5 px-5 text-slate-400">{{ $event->campaign?->name ?? '—' }}</td>
-                                    <td class="py-3.5 px-5 text-slate-400">{{ $event->country ?? '—' }}</td>
-                                    <td class="py-3.5 px-5 text-slate-400">{{ $event->device ?? '—' }}</td>
-                                    <td class="py-3.5 px-5 text-right text-slate-500 whitespace-nowrap font-mono text-[11px]">
-                                        {{ $event->event_time ? $event->event_time->format('n/j/Y, g:i:s A') : now()->format('n/j/Y, g:i:s A') }}
-                                    </td>
-                                </tr>
-                                @endforeach
-                            @else
-                                @foreach($sampleSubscribers as $sub)
-                                <tr class="hover:bg-slate-50/60 transition">
-                                    <td class="py-3.5 px-5 font-bold text-slate-900">
-                                        {{ $sub['name'] }}
-                                        @if(isset($sub['subname']))
-                                            <span class="block text-[11px] font-normal text-slate-500">{{ $sub['subname'] }}</span>
-                                        @endif
-                                    </td>
-                                    <td class="py-3.5 px-5">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/50">
-                                            joined
-                                        </span>
-                                    </td>
-                                    <td class="py-3.5 px-5">
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">
-                                            pending
-                                        </span>
-                                    </td>
-                                    <td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>
-                                    <td class="py-3.5 px-5 text-slate-500">direct</td>
-                                    <td class="py-3.5 px-5 text-slate-400">—</td>
-                                    <td class="py-3.5 px-5 text-slate-400">—</td>
-                                    <td class="py-3.5 px-5 text-slate-400">—</td>
-                                    <td class="py-3.5 px-5 text-right text-slate-500 whitespace-nowrap font-mono text-[11px]">
-                                        {{ $sub['time'] }}
-                                    </td>
-                                </tr>
-                                @endforeach
-                            @endif
+                            @forelse($joinHistory as $event)
+                            <tr class="hover:bg-slate-50/60 transition">
+                                <td class="py-3.5 px-5 font-bold text-slate-900">
+                                    {{ $event->first_name ? $event->first_name . ' ' . $event->last_name : ($event->telegram_username ? '@' . $event->telegram_username : 'Subscriber') }}
+                                </td>
+                                <td class="py-3.5 px-5">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200/50">
+                                        {{ $event->event_type === 'join' ? 'joined' : $event->event_type }}
+                                    </span>
+                                </td>
+                                <td class="py-3.5 px-5">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">
+                                        {{ $event->status_after ?? 'pending' }}
+                                    </span>
+                                </td>
+                                <td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>
+                                <td class="py-3.5 px-5 text-slate-500">{{ $event->source ?? 'direct' }}</td>
+                                <td class="py-3.5 px-5 text-slate-400">{{ $event->campaign?->name ?? '—' }}</td>
+                                <td class="py-3.5 px-5 text-slate-400">{{ $event->country ?? '—' }}</td>
+                                <td class="py-3.5 px-5 text-slate-400">{{ $event->device ?? '—' }}</td>
+                                <td class="py-3.5 px-5 text-right text-slate-500 whitespace-nowrap font-mono text-[11px]">
+                                    {{ $event->event_time ? $event->event_time->format('n/j/Y, g:i:s A') : now()->format('n/j/Y, g:i:s A') }}
+                                </td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="9" class="py-8 px-5 text-center text-slate-400 font-medium">
+                                    <div class="flex flex-col items-center justify-center space-y-1">
+                                        <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                                        <span class="text-xs font-semibold text-slate-600">No join events recorded yet for this client</span>
+                                        <span class="text-[11px] text-slate-400">Join events and subscriber conversions will appear here in real-time as users enter your Telegram channel.</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
