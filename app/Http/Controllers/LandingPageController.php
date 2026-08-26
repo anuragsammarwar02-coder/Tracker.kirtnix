@@ -67,11 +67,15 @@ class LandingPageController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->filled('slug')) {
+            LandingPage::withTrashed()->where('slug', trim($request->slug))->whereNotNull('deleted_at')->forceDelete();
+        }
+
         $validated = $request->validate([
             'client_id' => ['required', 'exists:clients,id'],
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'title' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255', 'unique:landing_pages,slug'],
+            'slug' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('landing_pages', 'slug')->whereNull('deleted_at')],
             'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
@@ -167,12 +171,16 @@ class LandingPageController extends Controller
      */
     public function storeImport(Request $request)
     {
+        if ($request->filled('slug')) {
+            LandingPage::withTrashed()->where('slug', trim($request->slug))->whereNotNull('deleted_at')->forceDelete();
+        }
+
         $type = $request->input('import_type', 'vercel');
 
         $validated = $request->validate([
             'client_id' => ['required', 'exists:clients,id'],
             'title' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255', 'unique:landing_pages,slug'],
+            'slug' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('landing_pages', 'slug')->whereNull('deleted_at')],
             'telegram_destination' => ['required', 'string'],
             'vercel_project_name' => ['nullable', 'string', 'max:255'],
             'production_domain' => ['nullable', 'string', 'max:255'],
@@ -295,7 +303,7 @@ class LandingPageController extends Controller
             'client_id' => ['required', 'exists:clients,id'],
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'title' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255', 'unique:landing_pages,slug,' . $landingPage->id],
+            'slug' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('landing_pages', 'slug')->ignore($landingPage->id)->whereNull('deleted_at')],
             'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
@@ -351,7 +359,7 @@ class LandingPageController extends Controller
             \App\Models\TelegramInvite::where('landing_page_id', $lpId)->delete();
             \App\Models\Cta::where('landing_page_id', $lpId)->delete();
             \App\Models\TelegramChannel::where('landing_page_id', $lpId)->update(['landing_page_id' => null]);
-            $landingPage->delete();
+            $landingPage->forceDelete();
         });
 
         return redirect()->route('landing-pages.index')
