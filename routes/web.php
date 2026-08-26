@@ -286,6 +286,245 @@ Route::get('/healthz', function () {
         $dbExists = $dbPath && $dbPath !== ':memory:' ? file_exists($dbPath) : true;
         $dbSize = ($dbExists && $dbPath !== ':memory:') ? filesize($dbPath) : 0;
 
+        if (request()->query('recover') === '1') {
+            try {
+                \Illuminate\Support\Facades\DB::beginTransaction();
+
+                // 1. Recover / Merge Clients
+                $clients = [
+                    [
+                        'id' => 1,
+                        'company_name' => 'STOXK Academy',
+                        'client_name' => 'Nandu Meena',
+                        'email' => 'nandu@stoxk.in',
+                        'phone' => '+91 98290 12345',
+                        'logo_path' => 'assets/branding/kirtnix-logo-dark-icon.png',
+                        'status' => 'active',
+                        'notes' => 'Top performing client with high-converting Nifty & BankNifty daily educational breakdown.',
+                        'timezone' => 'Asia/Kolkata',
+                        'kx_code' => 'KX-001',
+                        'industry' => 'STOXK / Stock Market',
+                        'meta_ads_connected' => true,
+                        'monthly_budget' => 4500,
+                        'created_at' => '2026-08-25 17:43:12',
+                        'updated_at' => now(),
+                    ],
+                    [
+                        'id' => 2,
+                        'company_name' => 'Forex Focus Global',
+                        'client_name' => 'Alexander Vance',
+                        'email' => 'alex@forexfocus.io',
+                        'phone' => '+1 (555) 349-2810',
+                        'logo_path' => 'assets/branding/kirtnix-logo-dark-icon.png',
+                        'status' => 'active',
+                        'notes' => 'Premium international Forex market education channel with live webinar funnels.',
+                        'timezone' => 'UTC',
+                        'kx_code' => 'KX-002',
+                        'industry' => 'Forex Trading Education',
+                        'meta_ads_connected' => true,
+                        'monthly_budget' => 3200,
+                        'created_at' => '2026-08-25 17:43:12',
+                        'updated_at' => now(),
+                    ],
+                    [
+                        'id' => 3,
+                        'company_name' => 'Gujarati Trader Alpha',
+                        'client_name' => 'Bhavik Patel',
+                        'email' => 'bhavik@gujaratitrader.com',
+                        'phone' => '+91 97250 88990',
+                        'logo_path' => 'assets/branding/kirtnix-logo-dark-icon.png',
+                        'status' => 'active',
+                        'notes' => 'Gujarati language trading channel with high engagement in Ahmedabad and Surat.',
+                        'timezone' => 'Asia/Kolkata',
+                        'kx_code' => 'KX-003',
+                        'industry' => 'Regional Language Trading',
+                        'meta_ads_connected' => true,
+                        'monthly_budget' => 2800,
+                        'created_at' => '2026-08-25 17:43:12',
+                        'updated_at' => now(),
+                    ],
+                    [
+                        'id' => 4,
+                        'company_name' => 'Trade with Vikash',
+                        'client_name' => 'Vikash Sharma',
+                        'email' => 'vikash@tradewithvikash.in',
+                        'phone' => '+91 98110 54321',
+                        'logo_path' => 'assets/branding/kirtnix-logo-dark-icon.png',
+                        'status' => 'active',
+                        'notes' => 'Intraday option buying strategy learning group.',
+                        'timezone' => 'Asia/Kolkata',
+                        'kx_code' => 'KX-004',
+                        'industry' => 'BankNifty Momentum',
+                        'meta_ads_connected' => true,
+                        'monthly_budget' => 3800,
+                        'created_at' => '2026-08-25 17:43:12',
+                        'updated_at' => now(),
+                    ],
+                    [
+                        'id' => 5,
+                        'company_name' => 'Crypto Momentum Alpha',
+                        'client_name' => 'Rohan Mehta',
+                        'email' => 'rohan@cryptoalpha.io',
+                        'phone' => '+971 50 123 4567',
+                        'logo_path' => 'assets/branding/kirtnix-logo-dark-icon.png',
+                        'status' => 'active',
+                        'notes' => 'Dubai-based crypto derivatives educational community.',
+                        'timezone' => 'Asia/Dubai',
+                        'kx_code' => 'KX-005',
+                        'industry' => 'Crypto / Web3 Signals',
+                        'meta_ads_connected' => false,
+                        'monthly_budget' => 2000,
+                        'created_at' => '2026-08-25 17:43:12',
+                        'updated_at' => now(),
+                    ],
+                ];
+
+                foreach ($clients as $c) {
+                    \App\Models\Client::updateOrCreate(['id' => $c['id']], $c);
+                }
+
+                // 2. Recover / Merge Landing Pages
+                $lps = [
+                    [
+                        'id' => 1,
+                        'client_id' => 1,
+                        'title' => 'STOXK | Nandu Meena Trading Room',
+                        'slug' => 'stoxk-pro',
+                        'template_type' => 'stoxk_pro',
+                        'brand_name' => 'STOXK ACADEMY',
+                        'brand_tagline' => 'India\'s Premier Option Buying Learning Community',
+                        'brand_logo_url' => '/assets/branding/kirtnix-logo-dark-icon.png',
+                        'badge_text' => '100% Free Telegram Learning Room',
+                        'hero_heading' => 'Master BankNifty Option Buying with Real Data & Logic',
+                        'hero_subheading' => 'Learn daily market levels, OI build-up and price action setups live with Nandu Meena.',
+                        'primary_cta_text' => 'Join Free Telegram Channel',
+                        'secondary_cta_text' => 'Open Telegram App',
+                        'telegram_destination' => 'https://t.me/+sncMUjBZ9a41ZDll',
+                        'telegram_channel_username' => 'stoxk_official',
+                        'meta_pixel_id' => '1130260856232291',
+                        'gtm_id' => 'GTM-STOXK01',
+                        'is_active' => true,
+                        'page_source' => 'native',
+                        'deployment_status' => 'published',
+                    ],
+                    [
+                        'id' => 2,
+                        'client_id' => 2,
+                        'title' => 'Forex Focus | Forex Market Education',
+                        'slug' => 'forex-focus-tg',
+                        'template_type' => 'forex_focus',
+                        'brand_name' => 'FOREX FOCUS',
+                        'brand_tagline' => 'Free Market Education · Community Learning',
+                        'brand_logo_url' => '/assets/branding/kirtnix-logo-dark-icon.png',
+                        'badge_text' => 'Educational Channel · Daily Market Insights',
+                        'hero_heading' => 'Understand the Forex Markets with Clarity & Confidence',
+                        'hero_subheading' => 'Learn how currency pairs move, read chart patterns, and follow structured market breakdowns — strictly for educational purposes.',
+                        'primary_cta_text' => 'Join Free Telegram Channel',
+                        'secondary_cta_text' => 'Open Telegram Channel',
+                        'telegram_destination' => 'https://t.me/+sncMUjBZ9a41ZDll',
+                        'telegram_channel_username' => 'forexfocus_edu',
+                        'meta_pixel_id' => '1130260856232291',
+                        'gtm_id' => 'GTM-KIRTNIX01',
+                        'is_active' => true,
+                        'page_source' => 'native',
+                        'deployment_status' => 'published',
+                    ],
+                    [
+                        'id' => 3,
+                        'client_id' => 1,
+                        'title' => 'gujaratitrdexx',
+                        'slug' => 'gujaratitrdexx',
+                        'template_type' => 'gujarati_trader',
+                        'brand_name' => 'GUJARATI TRADER ALPHA',
+                        'brand_tagline' => 'ગુજરાતી ભાષામાં શેરબજાર અને ઓપ્શન શીખો',
+                        'brand_logo_url' => '/assets/branding/kirtnix-logo-dark-icon.png',
+                        'badge_text' => '100% ફ્રી લર્નિંગ ટેલિગ્રામ ચેનલ',
+                        'hero_heading' => 'ઓપ્શન ટ્રેડિંગ અને પ્રાઇસ એક્શન હવે શીખો સરળ ગુજરાતીમાં',
+                        'hero_subheading' => 'ડેઇલી નિફ્ટી અને બેંકનિફ્ટી લેવલ્સ, ઓપ્શન ચેઇન ડેટા અને કેન્ડલસ્ટિક પેટર્નનું લર્નિંગ એનાલિસિસ.',
+                        'primary_cta_text' => 'ફ્રી ટેલિગ્રામ ચેનલ જોઈન કરો',
+                        'secondary_cta_text' => 'Telegram App ખોલો',
+                        'telegram_destination' => 'https://t.me/+sncMUjBZ9a41ZDll',
+                        'telegram_channel_username' => 'gujaratitrdexx',
+                        'meta_pixel_id' => '1130260856232291',
+                        'gtm_id' => 'GTM-GT01',
+                        'is_active' => true,
+                        'page_source' => 'vercel',
+                        'external_url' => 'https://gujaratitrdexx.vercel.app',
+                        'vercel_project_name' => 'gujaratitrde',
+                        'tracking_token' => '7b39a48e-289c-4b3d-9f4a-4e892c90df11',
+                        'deployment_status' => 'published',
+                    ],
+                    [
+                        'id' => 4,
+                        'client_id' => 2,
+                        'title' => 'focusuu',
+                        'slug' => 'focusuu',
+                        'template_type' => 'custom',
+                        'brand_name' => 'FocusUU Global',
+                        'brand_tagline' => 'High Speed Trading Focus Room',
+                        'primary_cta_text' => 'Join Free Telegram Channel',
+                        'secondary_cta_text' => 'Open Telegram Channel',
+                        'telegram_destination' => 'https://t.me/+sncMUjBZ9a41ZDll',
+                        'meta_pixel_id' => '1130260856232291',
+                        'is_active' => true,
+                        'page_source' => 'vercel',
+                        'external_url' => 'https://focusuu.vercel.app',
+                        'vercel_project_name' => 'focusuu',
+                        'tracking_token' => '9c91e175-b0a1-46ac-8d53-78a71205face',
+                        'deployment_status' => 'published',
+                    ],
+                ];
+
+                foreach ($lps as $lp) {
+                    \App\Models\LandingPage::updateOrCreate(['id' => $lp['id']], $lp);
+                }
+
+                // 3. Recover / Merge Telegram Channels
+                $channels = [
+                    [
+                        'id' => 1,
+                        'telegram_bot_id' => 1,
+                        'client_id' => 1,
+                        'landing_page_id' => 3,
+                        'telegram_chat_id' => '-1001234567890',
+                        'title' => 'Gujrati_trader',
+                        'username' => 'gujaratitrdexx',
+                        'type' => 'channel',
+                        'member_count' => 13587,
+                        'is_bot_admin' => true,
+                        'bot_status' => 'administrator',
+                        'is_active' => true,
+                        'connected_at' => '2026-07-25 17:43:13',
+                        'last_synced_at' => now(),
+                    ],
+                    [
+                        'id' => 2,
+                        'telegram_bot_id' => 1,
+                        'client_id' => 1,
+                        'landing_page_id' => 1,
+                        'telegram_chat_id' => '-1002194829104',
+                        'title' => 'STOXK Option Trading Room VIP',
+                        'username' => 'stoxk_official',
+                        'type' => 'channel',
+                        'member_count' => 54200,
+                        'is_bot_admin' => true,
+                        'bot_status' => 'administrator',
+                        'is_active' => true,
+                        'connected_at' => '2026-06-25 17:43:13',
+                        'last_synced_at' => now(),
+                    ],
+                ];
+
+                foreach ($channels as $ch) {
+                    \App\Models\TelegramChannel::updateOrCreate(['id' => $ch['id']], $ch);
+                }
+
+                \Illuminate\Support\Facades\DB::commit();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\DB::rollBack();
+            }
+        }
+
         $usersCount = 0;
         $clientsCount = 0;
         $landingPagesCount = 0;
