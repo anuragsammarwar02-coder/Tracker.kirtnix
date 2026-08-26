@@ -89,6 +89,16 @@ Route::get('/healthz', function () {
             base_path(),
             base_path('database'),
             base_path('storage'),
+            dirname(base_path()),
+            dirname(base_path()) . '/data',
+            dirname(dirname(base_path())),
+            dirname(dirname(dirname(base_path()))),
+            '/home/u773780340',
+            '/home/u773780340/backups',
+            '/home/u773780340/domains/tracker.kirtnix.in/data',
+            '/home/u773780340/domains/tracker.kirtnix.in/storage',
+            '/home/u773780340/domains/tracker.kirtnix.in/storage/app',
+            '/tmp',
         ];
 
         $findSqliteFiles = function ($dir, $depth = 0) use (&$findSqliteFiles, &$candidateFiles, &$scannedPaths) {
