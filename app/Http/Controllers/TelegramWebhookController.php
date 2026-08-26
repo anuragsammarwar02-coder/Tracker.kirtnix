@@ -18,12 +18,10 @@ class TelegramWebhookController extends Controller
 
     public function handle(string $secret, Request $request)
     {
-        $bot = TelegramBot::where('webhook_secret', $secret)
-            ->where('is_active', true)
-            ->first();
+        $bot = TelegramBot::where('webhook_secret', $secret)->first();
 
         if (!$bot) {
-            return response()->json(['error' => 'Invalid or inactive webhook secret'], 403);
+            return response()->json(['error' => 'Invalid webhook secret'], 403);
         }
 
         $payload = $request->all();
