@@ -81,42 +81,58 @@ Route::get('/healthz', function () {
 
                     if (@is_dir($full)) {
                         $findSqliteFiles($full, $depth + 1);
-                    } elseif (@is_file($full)) {
+                    } elseif (@is_file($full) && !@is_link($full)) {
                         $isSqliteCandidate = str_ends_with($item, '.sqlite') || 
                                              str_ends_with($item, '.db') || 
                                              str_ends_with($item, '.sqlite3') || 
-                                             str_contains($item, 'database') || 
-                                             str_contains($item, 'tracker') ||
-                                             str_contains($item, 'backup');
+                                             str_ends_with($item, '.backup');
+
+                        // Check magic bytes for SQLite header if file is non-empty
+                        $size = @filesize($full) ?: 0;
+                        if (!$isSqliteCandidate && $size >= 16) {
+                            $handle = @fopen($full, 'rb');
+                            if ($handle) {
+                                $header = fread($handle, 16);
+                                fclose($handle);
+                                if (str_starts_with($header, "SQLite format 3\0")) {
+                                    $isSqliteCandidate = true;
+                                }
+                            }
+                        }
 
                         if ($isSqliteCandidate) {
-                            $size = @filesize($full) ?: 0;
                             $mtime = date('Y-m-d H:i:s', @filemtime($full) ?: time());
                             $integrity = 'untested';
                             $tables = [];
                             $tableCounts = [];
 
-                            if ($size > 0) {
+                            if ($size >= 16) {
                                 try {
-                                    $pdo = new \PDO("sqlite:{$full}");
-                                    $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-
-                                    // Integrity check
-                                    $stmt = $pdo->query('PRAGMA integrity_check;');
-                                    $integrity = $stmt ? $stmt->fetchColumn() : 'unknown';
+                                    $pdo = new \PDO("sqlite:{$full}", null, null, [
+                                        \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                                        \PDO::ATTR_TIMEOUT => 2,
+                                    ]);
 
                                     // Discover tables
                                     $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
                                     $tables = $stmt ? $stmt->fetchAll(\PDO::FETCH_COLUMN) : [];
 
-                                    // Row counts for key tables
-                                    foreach ($tables as $t) {
-                                        try {
-                                            $cStmt = $pdo->query("SELECT COUNT(*) FROM \"{$t}\";");
-                                            $tableCounts[$t] = $cStmt ? (int) $cStmt->fetchColumn() : 0;
-                                        } catch (\Throwable $e) {
-                                            $tableCounts[$t] = 'err';
+                                    // Integrity check
+                                    if (!empty($tables)) {
+                                        $stmt = $pdo->query('PRAGMA integrity_check;');
+                                        $integrity = $stmt ? (string) $stmt->fetchColumn() : 'unknown';
+
+                                        // Row counts for key tables
+                                        foreach ($tables as $t) {
+                                            try {
+                                                $cStmt = $pdo->query("SELECT COUNT(*) FROM \"{$t}\";");
+                                                $tableCounts[$t] = $cStmt ? (int) $cStmt->fetchColumn() : 0;
+                                            } catch (\Throwable $e) {
+                                                $tableCounts[$t] = 'err';
+                                            }
                                         }
+                                    } else {
+                                        $integrity = 'empty database (0 tables)';
                                     }
                                 } catch (\Throwable $e) {
                                     $integrity = 'error: ' . $e->getMessage();
