@@ -360,15 +360,15 @@
       </p>
     </section>
 
-    <!-- PRIMARY CTA -->
+    <!-- PRIMARY CTA — Single Tracked Telegram CTA -->
     <div class="cta-box">
       <a
         id="btn-join-telegram"
         class="cta-primary"
-        href="https://t.me/+qIx1EBRHNtM4MjVl"
-        target="_blank"
+        href="#"
+        data-kx-cta="1"
+        data-kx-fallback="https://t.me/+qIx1EBRHNtM4MjVl"
         rel="noopener noreferrer"
-        onclick="if(typeof fbq==='function'){fbq('track','Lead');}"
       >
         <span class="cta-icon">➤</span>
         Join Free Telegram Channel
@@ -433,14 +433,13 @@
       </p>
     </div>
 
-    <!-- Secondary CTA -->
+    <!-- Secondary CTA — scrolls to primary CTA -->
     <a
       id="btn-join-telegram-alt"
       class="cta-secondary"
-      href="https://t.me/+qIx1EBRHNtM4MjVl"
-      target="_blank"
+      href="#btn-join-telegram"
+      onclick="document.getElementById('btn-join-telegram').scrollIntoView({behavior:'smooth'});return false;"
       rel="noopener noreferrer"
-      onclick="if(typeof fbq==='function'){fbq('track','Lead');}"
     >
       Open Telegram Channel
     </a>
@@ -448,7 +447,7 @@
     <footer>
       <p>© 2026 Trade with Vikash · Educational content only</p>
       <div class="footer-links">
-        <a href="https://t.me/+qIx1EBRHNtM4MjVl" target="_blank" rel="noopener noreferrer">Telegram</a>
+        <a href="#btn-join-telegram" onclick="document.getElementById('btn-join-telegram').scrollIntoView({behavior:'smooth'});return false;">Telegram</a>
         <a href="#disclaimer" onclick="document.querySelector('.disclaimer').scrollIntoView({behavior:'smooth'});return false;">Disclaimer</a>
       </div>
 
@@ -461,18 +460,7 @@
     </footer>
   </div>
 
-  <script>
-    (function () {
-      function fireLead() {
-        if (typeof fbq === 'function') {
-          fbq('track', 'Lead');
-        }
-      }
-      var primary = document.getElementById('btn-join-telegram');
-      var secondary = document.getElementById('btn-join-telegram-alt');
-      if (primary) primary.addEventListener('click', fireLead);
-      if (secondary) secondary.addEventListener('click', fireLead);
-    })();
-  </script>
+  <!-- Canonical Kirtnix Tracking Script -->
+  <script src="https://tracker.kirtnix.in/api/public/kx.js?lp=e5e7cfa7-2173-40b1-aa64-c8166ec87c31" data-kx-lp="e5e7cfa7-2173-40b1-aa64-c8166ec87c31"></script>
 </body>
 </html>

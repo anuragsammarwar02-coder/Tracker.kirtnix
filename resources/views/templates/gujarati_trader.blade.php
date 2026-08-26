@@ -361,7 +361,8 @@
         id="btn-join-telegram"
         class="cta-primary"
         href="{{ $primaryCta ? route('public.cta_redirect', $primaryCta->tracking_token) : '#' }}"
-        data-kx-cta
+        data-kx-cta="1"
+        data-kx-fallback="{{ $landingPage->telegram_destination }}"
         data-kx-token="{{ $primaryCta?->tracking_token }}"
       >
         <span class="cta-icon">➤</span>
@@ -404,9 +405,8 @@
     <a
       id="btn-join-telegram-alt"
       class="cta-secondary"
-      href="{{ $secondaryCta ? route('public.cta_redirect', $secondaryCta->tracking_token) : ($primaryCta ? route('public.cta_redirect', $primaryCta->tracking_token) : '#') }}"
-      data-kx-cta
-      data-kx-token="{{ $secondaryCta?->tracking_token ?? $primaryCta?->tracking_token }}"
+      href="#btn-join-telegram"
+      onclick="document.getElementById('btn-join-telegram').scrollIntoView({behavior:'smooth'});return false;"
     >
       {{ $landingPage->secondary_cta_text }}
     </a>
@@ -415,13 +415,13 @@
     <footer>
       <p>{{ $landingPage->footer_text ?? '© 2026 ' . $landingPage->brand_name }}</p>
       <div class="footer-links">
-        <a href="{{ $primaryCta ? route('public.cta_redirect', $primaryCta->tracking_token) : '#' }}" data-kx-cta>Telegram</a>
+        <a href="#btn-join-telegram" onclick="document.getElementById('btn-join-telegram').scrollIntoView({behavior:'smooth'});return false;">Telegram</a>
         <a href="#disclaimer" onclick="document.querySelector('.disclaimer').scrollIntoView({behavior:'smooth'});return false;">Disclaimer</a>
       </div>
     </footer>
   </div>
 
   <!-- KirtniX Tracker Client Script -->
-  <script src="/api/public/kx.js"></script>
+  <script src="/api/public/kx.js?lp={{ $landingPage->tracking_token }}" data-kx-lp="{{ $landingPage->tracking_token }}"></script>
 </body>
 </html>
