@@ -14,6 +14,7 @@ return [
     */
 
     'name' => env('APP_NAME', 'Laravel'),
+    'version' => '2.1.0-persistent-db-verified',
 
     /*
     |--------------------------------------------------------------------------
