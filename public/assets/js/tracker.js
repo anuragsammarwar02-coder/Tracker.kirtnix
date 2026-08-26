@@ -1,5 +1,6 @@
 /**
- * KIRTNIX UNIVERSAL DETERMINISTIC TRACKER (Vercel, Netlify & External Sites)
+ * KIRTNIX UNIVERSAL DETERMINISTIC TRACKER (kx.js / tracker.js)
+ * High-Speed Visitor Tracking, Auto Meta Pixel (Browser & CAPI) & Dynamic Bot Invites
  * (c) Kirtnix Performance Agency
  */
 (function(window, document) {
@@ -16,10 +17,40 @@
   })();
 
   var scriptEndpoint = currentScript ? (currentScript.getAttribute('data-endpoint') || '') : '';
-  var scriptSlug = currentScript ? (currentScript.getAttribute('data-lp') || currentScript.getAttribute('data-page') || '') : '';
+  var scriptSlug = currentScript ? (currentScript.getAttribute('data-kx-lp') || currentScript.getAttribute('data-lp') || currentScript.getAttribute('data-page') || '') : '';
+  
+  if (!scriptSlug && currentScript && currentScript.src) {
+    var match = currentScript.src.match(/[?&]lp=([^&#]*)/);
+    if (match) scriptSlug = decodeURIComponent(match[1]);
+  }
+  
   var scriptClient = currentScript ? (currentScript.getAttribute('data-client') || '') : '';
 
-  var baseUrl = scriptEndpoint.replace(/\/+$/, '') || window.location.origin;
+  // Extract explicit pixel ID from script tag attributes or query params
+  var scriptPixelId = currentScript ? (
+    currentScript.getAttribute('data-pixel') || 
+    currentScript.getAttribute('data-pixel-id') || 
+    currentScript.getAttribute('data-meta-pixel') || ''
+  ) : '';
+
+  if (!scriptPixelId && currentScript && currentScript.src) {
+    var pixelMatch = currentScript.src.match(/[?&](?:pixel|pixel_id|meta_pixel)=([^&#]*)/);
+    if (pixelMatch) scriptPixelId = decodeURIComponent(pixelMatch[1]);
+  }
+
+  if (!scriptPixelId && window.__KX_CONFIG__ && window.__KX_CONFIG__.meta_pixel_id) {
+    scriptPixelId = window.__KX_CONFIG__.meta_pixel_id;
+  }
+
+  var baseUrl = scriptEndpoint.replace(/\/+$/, '') || (function() {
+    if (currentScript && currentScript.src) {
+      try {
+        var urlObj = new URL(currentScript.src);
+        return urlObj.origin;
+      } catch(e) {}
+    }
+    return window.location.origin;
+  })();
 
   function getCookie(name) {
     var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
@@ -71,6 +102,50 @@
     return params;
   }
 
+  // ==========================================
+  // DYNAMIC CLIENT-SIDE META PIXEL INJECTOR
+  // ==========================================
+  function initMetaPixel(pixelId) {
+    if (!pixelId) return;
+    pixelId = String(pixelId).trim();
+    if (!pixelId || pixelId === 'null' || pixelId === 'undefined') return;
+
+    if (window._kx_meta_pixel_initialized === pixelId) return;
+    window._kx_meta_pixel_initialized = pixelId;
+
+    if (!window.fbq) {
+      (function(f, b, e, v, n, t, s) {
+        if (f.fbq) return;
+        n = f.fbq = function() {
+          n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+        };
+        if (!f._fbq) f._fbq = n;
+        n.push = n;
+        n.loaded = !0;
+        n.version = '2.0';
+        n.queue = [];
+        t = b.createElement(e);
+        t.async = !0;
+        t.src = v;
+        s = b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t, s);
+      })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    }
+
+    try {
+      window.fbq('init', pixelId);
+      window.fbq('track', 'PageView');
+      console.log('[Kirtnix] Meta Pixel ' + pixelId + ' initialized & PageView fired successfully.');
+    } catch(e) {
+      console.warn('[Kirtnix] Meta Pixel initialization note:', e);
+    }
+  }
+
+  // Immediately initialize Meta Pixel if Pixel ID is already available
+  if (scriptPixelId) {
+    initMetaPixel(scriptPixelId);
+  }
+
   var visitorId = getVisitorId();
   var urlParams = getUrlParams();
   var trackingSessionId = null;
@@ -105,6 +180,10 @@
           if (res.session_id) {
             trackingSessionId = res.session_id;
             window._kx_session_id = trackingSessionId;
+          }
+          // Dynamically load Meta Pixel if returned by server configuration
+          if (res.meta_pixel_id) {
+            initMetaPixel(res.meta_pixel_id);
           }
           if (typeof callback === 'function') callback(res);
         } catch(e) {}
@@ -154,8 +233,13 @@
       try {
         window.fbq('track', 'Lead', {
           content_name: el.innerText || 'Telegram CTA',
+          content_category: 'Telegram',
           source: 'kirtnix_tracker',
           visitor_id: visitorId
+        });
+        window.fbq('trackCustom', 'TelegramClick', {
+          button_text: el.innerText || 'Join Telegram',
+          destination: targetWebUrl || el.getAttribute('href')
         });
       } catch(err) {}
     }
@@ -227,6 +311,7 @@
     visitorId: visitorId,
     trackView: trackPageView,
     requestInvite: requestUniqueInvite,
-    bindCtas: bindCtaClicks
+    bindCtas: bindCtaClicks,
+    initMetaPixel: initMetaPixel
   };
 })(window, document);

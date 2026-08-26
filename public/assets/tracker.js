@@ -1,14 +1,7 @@
 /**
- * KIRTNIX UNIVERSAL DETERMINISTIC TRACKER (Vercel, Netlify & External Sites)
+ * KIRTNIX UNIVERSAL DETERMINISTIC TRACKER (kx.js / tracker.js)
+ * High-Speed Visitor Tracking, Auto Meta Pixel (Browser & CAPI) & Dynamic Bot Invites
  * (c) Kirtnix Performance Agency
- *
- * Embed snippet:
- * <script 
- *   src="https://tracker.kirtnix.agency/assets/tracker.js" 
- *   data-lp="your-page-slug" 
- *   data-endpoint="https://tracker.kirtnix.agency" 
- *   async>
- * </script>
  */
 (function(window, document) {
   'use strict';
@@ -16,7 +9,7 @@
   var currentScript = document.currentScript || (function() {
     var scripts = document.getElementsByTagName('script');
     for (var i = 0; i < scripts.length; i++) {
-      if (scripts[i].src && scripts[i].src.indexOf('tracker.js') !== -1) {
+      if (scripts[i].src && (scripts[i].src.indexOf('tracker.js') !== -1 || scripts[i].src.indexOf('kx.js') !== -1)) {
         return scripts[i];
       }
     }
@@ -24,12 +17,41 @@
   })();
 
   var scriptEndpoint = currentScript ? (currentScript.getAttribute('data-endpoint') || '') : '';
-  var scriptSlug = currentScript ? (currentScript.getAttribute('data-lp') || currentScript.getAttribute('data-page') || '') : '';
+  var scriptSlug = currentScript ? (currentScript.getAttribute('data-kx-lp') || currentScript.getAttribute('data-lp') || currentScript.getAttribute('data-page') || '') : '';
+  
+  if (!scriptSlug && currentScript && currentScript.src) {
+    var match = currentScript.src.match(/[?&]lp=([^&#]*)/);
+    if (match) scriptSlug = decodeURIComponent(match[1]);
+  }
+  
   var scriptClient = currentScript ? (currentScript.getAttribute('data-client') || '') : '';
 
-  var baseUrl = scriptEndpoint.replace(/\/+$/, '') || window.location.origin;
+  // Extract explicit pixel ID from script tag attributes or query params
+  var scriptPixelId = currentScript ? (
+    currentScript.getAttribute('data-pixel') || 
+    currentScript.getAttribute('data-pixel-id') || 
+    currentScript.getAttribute('data-meta-pixel') || ''
+  ) : '';
 
-  // 1. Cookie & LocalStorage Helper
+  if (!scriptPixelId && currentScript && currentScript.src) {
+    var pixelMatch = currentScript.src.match(/[?&](?:pixel|pixel_id|meta_pixel)=([^&#]*)/);
+    if (pixelMatch) scriptPixelId = decodeURIComponent(pixelMatch[1]);
+  }
+
+  if (!scriptPixelId && window.__KX_CONFIG__ && window.__KX_CONFIG__.meta_pixel_id) {
+    scriptPixelId = window.__KX_CONFIG__.meta_pixel_id;
+  }
+
+  var baseUrl = scriptEndpoint.replace(/\/+$/, '') || (function() {
+    if (currentScript && currentScript.src) {
+      try {
+        var urlObj = new URL(currentScript.src);
+        return urlObj.origin;
+      } catch(e) {}
+    }
+    return window.location.origin;
+  })();
+
   function getCookie(name) {
     var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? decodeURIComponent(match[2]) : null;
@@ -45,7 +67,6 @@
     document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/; SameSite=Lax';
   }
 
-  // 2. Persistent Unique Visitor Identification (_kx_vid)
   function getVisitorId() {
     var key = '_kx_vid';
     var vid = getCookie(key);
@@ -67,7 +88,6 @@
     return vid;
   }
 
-  // 3. Parse UTM, Meta, and tracking parameters
   function getUrlParams() {
     var params = {};
     var search = window.location.search.substring(1);
@@ -82,13 +102,56 @@
     return params;
   }
 
+  // ==========================================
+  // DYNAMIC CLIENT-SIDE META PIXEL INJECTOR
+  // ==========================================
+  function initMetaPixel(pixelId) {
+    if (!pixelId) return;
+    pixelId = String(pixelId).trim();
+    if (!pixelId || pixelId === 'null' || pixelId === 'undefined') return;
+
+    if (window._kx_meta_pixel_initialized === pixelId) return;
+    window._kx_meta_pixel_initialized = pixelId;
+
+    if (!window.fbq) {
+      (function(f, b, e, v, n, t, s) {
+        if (f.fbq) return;
+        n = f.fbq = function() {
+          n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+        };
+        if (!f._fbq) f._fbq = n;
+        n.push = n;
+        n.loaded = !0;
+        n.version = '2.0';
+        n.queue = [];
+        t = b.createElement(e);
+        t.async = !0;
+        t.src = v;
+        s = b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t, s);
+      })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    }
+
+    try {
+      window.fbq('init', pixelId);
+      window.fbq('track', 'PageView');
+      console.log('[Kirtnix] Meta Pixel ' + pixelId + ' initialized & PageView fired successfully.');
+    } catch(e) {
+      console.warn('[Kirtnix] Meta Pixel initialization note:', e);
+    }
+  }
+
+  // Immediately initialize Meta Pixel if Pixel ID is already available
+  if (scriptPixelId) {
+    initMetaPixel(scriptPixelId);
+  }
+
   var visitorId = getVisitorId();
   var urlParams = getUrlParams();
   var trackingSessionId = null;
   var targetDeepLink = null;
   var targetWebUrl = null;
 
-  // 4. Send Landing Page View
   function trackPageView(callback) {
     var slug = scriptSlug || window.location.pathname.replace(/^\/lp\//, '').replace(/^\//, '') || 'default';
     var payload = {
@@ -118,6 +181,10 @@
             trackingSessionId = res.session_id;
             window._kx_session_id = trackingSessionId;
           }
+          // Dynamically load Meta Pixel if returned by server configuration
+          if (res.meta_pixel_id) {
+            initMetaPixel(res.meta_pixel_id);
+          }
           if (typeof callback === 'function') callback(res);
         } catch(e) {}
       }
@@ -125,7 +192,6 @@
     xhr.send(JSON.stringify(payload));
   }
 
-  // 5. Generate Unique Telegram Invite for this visitor session
   function requestUniqueInvite() {
     var slug = scriptSlug || window.location.pathname.replace(/^\/lp\//, '').replace(/^\//, '') || 'default';
     var payload = {
@@ -148,7 +214,6 @@
             targetWebUrl = res.web_url;
           }
 
-          // Enable CTA buttons if disabled
           var ctas = document.querySelectorAll('[data-kx-cta], a[href*="t.me"], .kx-cta-button, .telegram-join-btn');
           for (var i = 0; i < ctas.length; i++) {
             ctas[i].classList.remove('kx-loading', 'opacity-50', 'pointer-events-none');
@@ -163,15 +228,18 @@
     xhr.send(JSON.stringify(payload));
   }
 
-  // 6. Handle CTA Click Interception & Smart Telegram Launch
   function handleCtaClick(e, el) {
-    // Dispatch browser Meta Pixel Lead if present
     if (typeof window.fbq === 'function') {
       try {
         window.fbq('track', 'Lead', {
           content_name: el.innerText || 'Telegram CTA',
+          content_category: 'Telegram',
           source: 'kirtnix_tracker',
           visitor_id: visitorId
+        });
+        window.fbq('trackCustom', 'TelegramClick', {
+          button_text: el.innerText || 'Join Telegram',
+          destination: targetWebUrl || el.getAttribute('href')
         });
       } catch(err) {}
     }
@@ -187,7 +255,6 @@
       utm_campaign: urlParams.utm_campaign || ''
     };
 
-    // Asynchronously record CTA click in backend (separate from verified join)
     if (navigator.sendBeacon) {
       var blob = new Blob([JSON.stringify(clickPayload)], { type: 'application/json' });
       navigator.sendBeacon(baseUrl + '/api/track/click', blob);
@@ -201,7 +268,6 @@
     var deepLink = el.getAttribute('data-deep-link') || targetDeepLink;
     var webUrl = el.getAttribute('data-web-url') || targetWebUrl || el.getAttribute('href');
 
-    // Smart Device Deep-Link with Web fallback for iOS/Android & in-app browsers
     var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     if (isMobile && deepLink) {
@@ -209,7 +275,6 @@
       var now = Date.now();
       window.location.href = deepLink;
 
-      // If app does not open within 1.2s, fallback to web URL
       setTimeout(function() {
         if (Date.now() - now < 2000) {
           window.location.href = webUrl;
@@ -218,7 +283,6 @@
     }
   }
 
-  // 7. Bind All CTAs on Page
   function bindCtaClicks() {
     var ctaElements = document.querySelectorAll('[data-kx-cta], a[href*="t.me"], .kx-cta-button, .telegram-join-btn');
     for (var i = 0; i < ctaElements.length; i++) {
@@ -230,7 +294,6 @@
     }
   }
 
-  // 8. Lifecycle Initialization
   function init() {
     trackPageView(function() {
       requestUniqueInvite();
@@ -248,6 +311,7 @@
     visitorId: visitorId,
     trackView: trackPageView,
     requestInvite: requestUniqueInvite,
-    bindCtas: bindCtaClicks
+    bindCtas: bindCtaClicks,
+    initMetaPixel: initMetaPixel
   };
 })(window, document);

@@ -311,7 +311,10 @@
   <!-- SCRIPT GENERATOR BOX & META PIXEL CONFIGURATION (DIRECT UNDER SCRIPT) -->
   @if(isset($importedPage) && $importedPage)
   @php
-    $trackingScript = '<script src="' . url('/api/public/kx.js') . '?lp=' . ($importedPage->tracking_token ?? $importedPage->slug) . '" data-kx-lp="' . ($importedPage->tracking_token ?? $importedPage->slug) . '"></script>';
+    $lpParam = $importedPage->tracking_token ?? $importedPage->slug;
+    $pixelParam = $importedPage->meta_pixel_id ? '&pixel=' . $importedPage->meta_pixel_id : '';
+    $dataPixelAttr = $importedPage->meta_pixel_id ? ' data-pixel="' . $importedPage->meta_pixel_id . '"' : '';
+    $trackingScript = '<script src="' . url('/api/public/kx.js') . '?lp=' . $lpParam . $pixelParam . '" data-kx-lp="' . $lpParam . '"' . $dataPixelAttr . '></script>';
   @endphp
   <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
     
@@ -324,7 +327,7 @@
       <div class="flex items-center gap-2">
         @if(!empty($importedPage->meta_pixel_id))
           <span class="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-            ● Pixel ID: {{ $importedPage->meta_pixel_id }}
+            ● Pixel ID: {{ $importedPage->meta_pixel_id }} (Active ✓)
           </span>
         @endif
         @if(!empty($importedPage->meta_access_token))
@@ -349,7 +352,7 @@
         <pre class="font-mono text-xs text-yellow-300 overflow-x-auto whitespace-pre-wrap leading-relaxed select-all"><code>{{ $trackingScript }}</code></pre>
       </div>
       <div class="text-[11px] text-slate-500">
-        Loads asynchronously — intercepts Telegram CTA clicks, dynamically creates single-use bot invite links (Join Request for private channels), and fires Meta Conversions API events.
+        Automatically injects & loads Meta Pixel (detected by Meta Pixel Helper / Data Advisor), records PageViews, intercepts Telegram CTA clicks, dynamically creates single-use bot invite links (Join Request for private channels), and fires Meta Conversions API events.
       </div>
     </div>
 

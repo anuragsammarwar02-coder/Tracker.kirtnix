@@ -124,4 +124,47 @@ class LandingPageSlugAndMetaPixelTest extends TestCase
             'account_id' => 'act_1018611380802707',
         ]);
     }
+
+    public function test_public_kx_js_serves_pixel_and_auto_initializes_in_browser()
+    {
+        $client = Client::create([
+            'client_name' => 'Anurag',
+            'company_name' => 'Kirtnix Digital',
+            'kx_code' => 'KX-001',
+            'status' => 'active',
+        ]);
+
+        $lp = LandingPage::create([
+            'client_id' => $client->id,
+            'title' => 'kirtnix-digital',
+            'slug' => 'kirtnix-digital',
+            'tracking_token' => 'kx_kd_live',
+            'page_source' => 'vercel',
+            'meta_pixel_id' => '1018611380802707',
+            'meta_access_token' => 'EAAB_token',
+            'is_active' => true,
+        ]);
+
+        // 1. Request kx.js with ?lp=kirtnix-digital
+        $response = $this->get('/api/public/kx.js?lp=kirtnix-digital');
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'application/javascript');
+        $this->assertStringContainsString('1018611380802707', $response->getContent());
+        $this->assertStringContainsString('initMetaPixel', $response->getContent());
+        $this->assertStringContainsString('https://connect.facebook.net/en_US/fbevents.js', $response->getContent());
+
+        // 2. Track view endpoint returns meta_pixel_id for client-side init
+        $viewRes = $this->postJson('/api/track/view', [
+            'slug' => 'kirtnix-digital',
+            'visitor_id' => 'kx_test_vid_123',
+            'url' => 'https://kirtnix-digital.vercel.app',
+        ]);
+
+        $viewRes->assertStatus(200);
+        $viewRes->assertJson([
+            'ok' => true,
+            'meta_pixel_id' => '1018611380802707',
+        ]);
+    }
 }
+

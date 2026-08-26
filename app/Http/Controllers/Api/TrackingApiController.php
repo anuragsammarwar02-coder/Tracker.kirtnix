@@ -60,12 +60,15 @@ class TrackingApiController extends Controller
 
         $trackingData = $this->trackingService->recordLandingPageView($landingPage, $request);
 
+        $pixelId = $landingPage->meta_pixel_id ?: ($landingPage->client?->meta_pixel_id ?: \App\Models\Setting::get('default_meta_pixel_id'));
+
         return response()->json([
             'ok' => true,
             'visitor_id' => $trackingData['visitor_id'],
             'session_id' => $trackingData['session']->id,
             'landing_page_id' => $landingPage->id,
             'client_id' => $landingPage->client_id,
+            'meta_pixel_id' => $pixelId,
             'is_unique' => $trackingData['view']->is_unique,
         ])->cookie('kx_visitor_id', $trackingData['visitor_id'], 60 * 24 * 365);
     }

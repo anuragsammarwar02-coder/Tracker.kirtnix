@@ -104,10 +104,48 @@ Route::get('/cta/{token}', [CtaRedirectController::class, 'redirect']);
 // Dynamic Public Landing Pages
 Route::get('/lp/{slug}', [PublicLandingPageController::class, 'show'])->name('public.landing_page');
 
-// Standalone kx.js Dynamic Script for external/embedded landing pages
-Route::get('/api/public/kx.js', function () {
+// Standalone kx.js Dynamic Script for external/embedded landing pages (Vercel / Netlify / Custom)
+Route::get('/api/public/kx.js', function (\Illuminate\Http\Request $request) {
+    $slug = $request->query('lp') ?? $request->query('slug') ?? $request->query('token');
+    $explicitPixel = $request->query('pixel') ?? $request->query('pixel_id') ?? $request->query('meta_pixel');
+
+    $pixelId = $explicitPixel;
+    $landingPage = null;
+
+    if ($slug) {
+        $landingPage = \App\Models\LandingPage::where('tracking_token', $slug)
+            ->orWhere('slug', $slug)
+            ->first();
+    }
+
+    if (!$landingPage && !$pixelId) {
+        // Default to first active landing page
+        $landingPage = \App\Models\LandingPage::where('is_active', true)->first();
+    }
+
+    if (!$pixelId && $landingPage) {
+        $pixelId = $landingPage->meta_pixel_id ?: ($landingPage->client?->meta_pixel_id);
+    }
+
+    if (!$pixelId) {
+        $pixelId = \App\Models\Setting::get('default_meta_pixel_id') ?? '';
+    }
+
     $js = file_get_contents(public_path('assets/js/kx.js'));
-    return response($js, 200, ['Content-Type' => 'application/javascript']);
+    $configHeader = "window.__KX_CONFIG__ = window.__KX_CONFIG__ || {};\n";
+    if ($pixelId) {
+        $configHeader .= "window.__KX_CONFIG__.meta_pixel_id = " . json_encode((string) $pixelId) . ";\n";
+    }
+    if ($landingPage) {
+        $configHeader .= "window.__KX_CONFIG__.slug = " . json_encode($landingPage->slug) . ";\n";
+        $configHeader .= "window.__KX_CONFIG__.token = " . json_encode($landingPage->tracking_token) . ";\n";
+    }
+
+    return response($configHeader . "\n" . $js, 200, [
+        'Content-Type' => 'application/javascript',
+        'Cache-Control' => 'no-cache, private, must-revalidate',
+        'Access-Control-Allow-Origin' => '*',
+    ]);
 });
 
 /*
