@@ -156,35 +156,44 @@ Route::get('/healthz', function () {
             }
         }
 
-        $out = "=== KIRTNIX PRODUCTION DATABASE DISCOVERY REPORT ===\n\n";
-        $out .= "1. CURRENT CONFIGURED DATABASE:\n";
-        $out .= "   - Driver: " . config('database.default') . "\n";
-        $out .= "   - Path: {$dbPath}\n";
-        $out .= "   - Exists: " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)\n";
-        $out .= "   - Connected: " . ($dbConnected ? 'YES' : 'NO') . "\n";
-        $out .= "   - Live Counts: Users={$usersCount}, Clients={$clientsCount}, LandingPages={$landingPagesCount}, Bots={$botsCount}\n\n";
-
-        $out .= "2. DISCOVERED SQLITE CANDIDATE FILES (" . count($uniqueCandidates) . " found):\n";
-
-        if (empty($uniqueCandidates)) {
-            $out .= "   [!] No SQLite candidate files (.sqlite, .db, .sqlite3, or SQLite header) found in scanned directories.\n";
-        } else {
-            foreach ($uniqueCandidates as $idx => $cand) {
-                $num = $idx + 1;
-                $out .= "\n   [Candidate #{$num}]\n";
-                $out .= "   Path: {$cand['absolute_path']}\n";
-                $out .= "   Size: {$cand['size_formatted']} | Last Modified: {$cand['last_modified']}\n";
-                $out .= "   Integrity: {$cand['sqlite_integrity']} | Has Users Table: " . ($cand['has_users_table'] ? 'YES' : 'NO') . "\n";
-                $out .= "   Tables (" . count($cand['tables']) . "): " . (empty($cand['tables']) ? 'None' : implode(', ', $cand['tables'])) . "\n";
-                $countsStr = [];
-                foreach ($cand['table_counts'] as $t => $cnt) {
-                    $countsStr[] = "{$t}={$cnt}";
-                }
-                $out .= "   Row Counts: " . (empty($countsStr) ? 'None (Empty Database)' : implode(', ', $countsStr)) . "\n";
-            }
+        if (request()->query('format') === 'json') {
+            return response()->json([
+                'configured_database' => [
+                    'driver' => config('database.default'),
+                    'path' => $dbPath,
+                    'exists' => $dbExists,
+                    'size' => $dbSize,
+                    'connected' => $dbConnected,
+                ],
+                'live_counts' => [
+                    'users' => $usersCount,
+                    'clients' => $clientsCount,
+                    'landing_pages' => $landingPagesCount,
+                    'bots' => $botsCount,
+                ],
+                'discovered_sqlite_files' => $uniqueCandidates,
+            ], 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         }
 
-        $out .= "\n=== END REPORT ===\n";
+        $out = "=== PRODUCTION DATABASE DISCOVERY REPORT ===\n";
+        $out .= "Configured: {$dbPath} (Exists: " . ($dbExists ? 'YES' : 'NO') . ", {$dbSize} bytes)\n";
+        $out .= "Discovered Candidates (" . count($uniqueCandidates) . " found):\n\n";
+
+        foreach ($uniqueCandidates as $idx => $cand) {
+            $num = $idx + 1;
+            $out .= "--- CANDIDATE #{$num} ---\n";
+            $out .= "Path: {$cand['absolute_path']}\n";
+            $out .= "Size: {$cand['size_formatted']} | Modified: {$cand['last_modified']}\n";
+            $out .= "Integrity: {$cand['sqlite_integrity']} | Has Users Table: " . ($cand['has_users_table'] ? 'YES' : 'NO') . "\n";
+            $out .= "Tables (" . count($cand['tables']) . "): " . implode(', ', array_slice($cand['tables'], 0, 15)) . "\n";
+            $countsStr = [];
+            foreach ($cand['table_counts'] as $t => $cnt) {
+                $countsStr[] = "{$t}={$cnt}";
+            }
+            $out .= "Counts: " . (empty($countsStr) ? 'None' : implode(', ', $countsStr)) . "\n\n";
+        }
+
+        $out .= "=== END REPORT ===\n";
 
         return response($out, 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
     } catch (\Throwable $e) {
