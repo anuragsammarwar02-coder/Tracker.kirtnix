@@ -354,4 +354,122 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         $this->assertTrue(\Illuminate\Support\Facades\Cache::has($cacheKeyB));
         $this->assertNotEquals($cacheKeyA, $cacheKeyB);
     }
+
+    public function test_analytics_detail_cpc_is_derived_from_meta_clicks_and_equals_3_40(): void
+    {
+        $lp = LandingPage::create([
+            'client_id' => $this->clientA->id,
+            'title' => 'Kirtnix Digital',
+            'slug' => 'kirtnix-digital',
+            'is_published' => true,
+        ]);
+
+        $cta = \App\Models\Cta::create([
+            'client_id' => $this->clientA->id,
+            'landing_page_id' => $lp->id,
+            'name' => 'Join Telegram',
+            'button_text' => 'Join Now',
+            'button_type' => 'telegram',
+            'telegram_destination' => 'https://t.me/test',
+        ]);
+
+        // Simulate 1 Telegram CTA click on landing page
+        \App\Models\CtaClick::create([
+            'client_id' => $this->clientA->id,
+            'cta_id' => $cta->id,
+            'landing_page_id' => $lp->id,
+            'tracking_token' => $cta->tracking_token,
+            'destination_url' => 'https://t.me/test',
+            'session_id' => 'sess_1',
+            'visitor_id' => 'vis_1',
+            'clicked_at' => now(),
+        ]);
+
+        // Mock Meta API metrics: Spend = 1694.91, Meta Clicks = 498
+        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}";
+        \Illuminate\Support\Facades\Cache::put($cacheKey, [
+            'connected' => true,
+            'account_name' => 'Kirtnix Official 2025',
+            'account_id' => 'act_4151051451781245',
+            'business_name' => 'Arabika Kofi',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'status' => 'Active',
+            'timezone' => 'Asia/Kolkata',
+            'last_sync' => 'Just now',
+            'spend_today' => 0.00,
+            'spend_total' => 1694.91,
+            'clicks' => 498,
+            'impressions' => 8239,
+            'reach' => 7056,
+            'leads' => 0,
+            'ctr' => 6.04,
+            'cpc' => 3.40,
+            'cpm' => 205.72,
+            'spend_limit' => 0.00,
+            'balance' => 0.00,
+            'campaigns_count' => 4,
+        ], 60);
+
+        // 1. Detail page HTML response
+        $response = $this->actingAs($this->user)->get(route('analytics.detail', $lp->slug));
+        $response->assertOk();
+
+        // Must display CPC = ₹3.40 (1694.91 / 498 clicks)
+        $response->assertSee('₹3.40');
+        $response->assertSee('id="kpi-cost-per-click"', false);
+        $response->assertSee('Spend / Meta ad clicks (CPC)');
+
+        // 2. Live Metrics API endpoint
+        $liveResponse = $this->actingAs($this->user)->get("/analytics/{$lp->slug}/live-metrics");
+        $liveResponse->assertOk();
+        $liveData = $liveResponse->json();
+        $this->assertEquals('₹3.40', $liveData['kpis']['cost_per_click']);
+    }
+
+    public function test_total_budget_comes_from_real_meta_budget_field_and_is_not_derived_from_lifetime_spend(): void
+    {
+        $lp = LandingPage::create([
+            'client_id' => $this->clientA->id,
+            'title' => 'Kirtnix Budget Test',
+            'slug' => 'kirtnix-budget-test',
+            'is_published' => true,
+        ]);
+
+        // Case A: No spend limit in Meta -> Total Budget must be 0.00 and NEVER derived from lifetime spend
+        $this->adAccountA->update(['spend_limit' => 0.00]);
+        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}";
+        \Illuminate\Support\Facades\Cache::put($cacheKey, [
+            'connected' => true,
+            'account_name' => 'Kirtnix Official 2025',
+            'account_id' => 'act_4151051451781245',
+            'business_name' => 'Arabika Kofi',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'spend_today' => 0.00,
+            'spend_total' => 1694.91,
+            'clicks' => 498,
+            'impressions' => 8239,
+            'reach' => 7056,
+            'spend_limit' => 0.00,
+            'balance' => 0.00,
+            'campaigns_count' => 4,
+        ], 60);
+
+        $resA = $this->actingAs($this->user)->get(route('analytics.detail', $lp->slug));
+        $resA->assertOk();
+        // Total Spending is 1694.91
+        $resA->assertSee('₹1,694.91');
+        // Total Budget must NOT be 1694.91, it must be 0.00
+        $resA->assertSee('No spend limit configured in Meta');
+
+        // Case B: When Meta has a real spend limit (spend_cap) e.g. 5000.00
+        $this->adAccountA->update(['spend_limit' => 5000.00]);
+        \Illuminate\Support\Facades\Cache::forget($cacheKey);
+
+        $resB = $this->actingAs($this->user)->get(route('analytics.detail', $lp->slug));
+        $resB->assertOk();
+        $resB->assertSee('₹5,000.00');
+        $resB->assertSee('Account spend limit from Meta');
+    }
 }
