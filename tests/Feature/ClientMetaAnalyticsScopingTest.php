@@ -386,8 +386,9 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         ]);
 
         // Mock Meta API metrics: Spend = 1694.91, Meta Clicks = 498
-        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}";
-        \Illuminate\Support\Facades\Cache::put($cacheKey, [
+        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}:range_lifetime";
+        $fallbackKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}";
+        $mockMetrics = [
             'connected' => true,
             'account_name' => 'Kirtnix Official 2025',
             'account_id' => 'act_4151051451781245',
@@ -398,6 +399,7 @@ class ClientMetaAnalyticsScopingTest extends TestCase
             'timezone' => 'Asia/Kolkata',
             'last_sync' => 'Just now',
             'spend_today' => 0.00,
+            'spend_scoped' => 1694.91,
             'spend_total' => 1694.91,
             'clicks' => 498,
             'impressions' => 8239,
@@ -409,10 +411,12 @@ class ClientMetaAnalyticsScopingTest extends TestCase
             'spend_limit' => 0.00,
             'balance' => 0.00,
             'campaigns_count' => 4,
-        ], 60);
+        ];
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put($fallbackKey, $mockMetrics, 60);
 
         // 1. Detail page HTML response
-        $response = $this->actingAs($this->user)->get(route('analytics.detail', $lp->slug));
+        $response = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'lifetime']));
         $response->assertOk();
 
         // Must display CPC = ₹3.40 (1694.91 / 498 clicks)
@@ -421,7 +425,7 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         $response->assertSee('Spend / Meta ad clicks (CPC)');
 
         // 2. Live Metrics API endpoint
-        $liveResponse = $this->actingAs($this->user)->get("/analytics/{$lp->slug}/live-metrics");
+        $liveResponse = $this->actingAs($this->user)->get("/analytics/{$lp->slug}/live-metrics?date_range=lifetime");
         $liveResponse->assertOk();
         $liveData = $liveResponse->json();
         $this->assertEquals('₹3.40', $liveData['kpis']['cost_per_click']);
@@ -438,8 +442,9 @@ class ClientMetaAnalyticsScopingTest extends TestCase
 
         // Case A: No spend limit in Meta -> Total Budget must be 0.00 and NEVER derived from lifetime spend
         $this->adAccountA->update(['spend_limit' => 0.00]);
-        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}";
-        \Illuminate\Support\Facades\Cache::put($cacheKey, [
+        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}:range_lifetime";
+        $fallbackKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}";
+        $mockMetrics = [
             'connected' => true,
             'account_name' => 'Kirtnix Official 2025',
             'account_id' => 'act_4151051451781245',
@@ -447,6 +452,7 @@ class ClientMetaAnalyticsScopingTest extends TestCase
             'currency' => 'INR',
             'currency_symbol' => '₹',
             'spend_today' => 0.00,
+            'spend_scoped' => 1694.91,
             'spend_total' => 1694.91,
             'clicks' => 498,
             'impressions' => 8239,
@@ -454,9 +460,11 @@ class ClientMetaAnalyticsScopingTest extends TestCase
             'spend_limit' => 0.00,
             'balance' => 0.00,
             'campaigns_count' => 4,
-        ], 60);
+        ];
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put($fallbackKey, $mockMetrics, 60);
 
-        $resA = $this->actingAs($this->user)->get(route('analytics.detail', $lp->slug));
+        $resA = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'lifetime']));
         $resA->assertOk();
         // Total Spending is 1694.91
         $resA->assertSee('₹1,694.91');
@@ -466,8 +474,9 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         // Case B: When Meta has a real spend limit (spend_cap) e.g. 5000.00
         $this->adAccountA->update(['spend_limit' => 5000.00]);
         \Illuminate\Support\Facades\Cache::forget($cacheKey);
+        \Illuminate\Support\Facades\Cache::forget($fallbackKey);
 
-        $resB = $this->actingAs($this->user)->get(route('analytics.detail', $lp->slug));
+        $resB = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'lifetime']));
         $resB->assertOk();
         $resB->assertSee('₹5,000.00');
         $resB->assertSee('Account spend limit from Meta');

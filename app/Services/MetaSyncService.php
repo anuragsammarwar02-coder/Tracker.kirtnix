@@ -338,7 +338,7 @@ class MetaSyncService
             if (Cache::has($cacheKey)) {
                 return Cache::get($cacheKey);
             }
-            if (Cache::has($fallbackKey)) {
+            if ($dateRange === 'lifetime' && Cache::has($fallbackKey)) {
                 return Cache::get($fallbackKey);
             }
         }
@@ -570,7 +570,9 @@ class MetaSyncService
         ];
 
         Cache::put($cacheKey, $metrics, 60);
-        Cache::put($fallbackKey, $metrics, 60);
+        if ($dateRange === 'lifetime') {
+            Cache::put($fallbackKey, $metrics, 60);
+        }
 
         return $metrics;
     }
