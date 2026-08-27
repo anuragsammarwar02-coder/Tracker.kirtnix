@@ -158,6 +158,7 @@
                     </div>
                     <div class="mt-2">
                         <span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_spending'], 2) }}</span>
+                        <p id="budget-spending-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['spending_source'] ?? 'Actual spend for selected period' }}</p>
                     </div>
                 </div>
 
@@ -446,19 +447,7 @@
                     </div>
                 </div>
 
-                <!-- 11. Approved members -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">Approved members</span>
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    </div>
-                    <div>
-                        <span id="kpi-approved-members" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['approved_members']) }}</span>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Verified channel members</p>
-                    </div>
-                </div>
-
-                <!-- 12. Pending join requests -->
+                <!-- 11. Pending join requests -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-medium text-slate-500">Pending join requests</span>
@@ -467,6 +456,18 @@
                     <div>
                         <span id="kpi-pending-requests" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['pending_requests']) }}</span>
                         <p class="text-[11px] text-slate-400 mt-0.5">Private channel approvals</p>
+                    </div>
+                </div>
+
+                <!-- 12. Channel leaves -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-500">Channel leaves</span>
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    </div>
+                    <div>
+                        <span id="kpi-backouts" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['backouts']) }}</span>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Left channel / unsubs</p>
                     </div>
                 </div>
             </div>
@@ -630,7 +631,6 @@
                         updateKpi('kpi-direct-joins', data.kpis.direct_joins);
                         updateKpi('kpi-subscribers', data.kpis.subscribers);
                         updateKpi('kpi-cost-per-sub', data.kpis.cost_per_subscriber);
-                        updateKpi('kpi-approved-members', data.kpis.approved_members);
                         updateKpi('kpi-pending-requests', data.kpis.pending_requests);
                         updateKpi('kpi-backouts', data.kpis.backouts);
                     }

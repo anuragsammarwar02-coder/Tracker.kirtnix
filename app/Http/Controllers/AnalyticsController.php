@@ -365,17 +365,23 @@ class AnalyticsController extends Controller
         $pendingRequests = (clone $eventsQuery)->where('event_type', 'pending')->count();
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
-        // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account
+        // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account and date range
         $metaMetrics = null;
         if ($adAccount) {
-            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, $request->has('sync'));
-            $campaignSpend = (float) $metaMetrics['spend_total'];
-            $campaignReach = (int) $metaMetrics['reach'];
-            $campaignImpressions = (int) $metaMetrics['impressions'];
+            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, $request->has('sync'), $dateRange);
+            $campaignSpend = (float) (isset($metaMetrics['spend_scoped']) ? $metaMetrics['spend_scoped'] : ($metaMetrics['spend_total'] ?? 0.00));
+            $campaignReach = (int) ($metaMetrics['reach'] ?? 0);
+            $campaignImpressions = (int) ($metaMetrics['impressions'] ?? 0);
         } else {
-            $campaignSpend = (float) $campaigns->sum('spend');
-            $campaignReach = (int) $campaigns->sum('reach');
-            $campaignImpressions = (int) $campaigns->sum('impressions');
+            if ($dateRange === 'lifetime') {
+                $campaignSpend = (float) $campaigns->sum('spend');
+                $campaignReach = (int) $campaigns->sum('reach');
+                $campaignImpressions = (int) $campaigns->sum('impressions');
+            } else {
+                $campaignSpend = 0.00;
+                $campaignReach = 0;
+                $campaignImpressions = 0;
+            }
         }
 
         // Derived Metrics
@@ -383,15 +389,15 @@ class AnalyticsController extends Controller
             ? round(($tgClicks / $totalLpViews) * 100, 1) . '%' 
             : ($uniqueVisitors > 0 ? round(($tgClicks / $uniqueVisitors) * 100, 1) . '%' : '0.0%');
 
-        // Cost per Click (CPC from Meta Ads)
+        // Cost per Click (CPC from Meta Ads for selected date range)
         // Primary: Meta Ad Clicks from Meta Graph API (e.g. ₹1,694.91 / 498 clicks = ₹3.40)
         // Fallback: If no Meta clicks, fall back to Telegram CTA clicks ($campaignSpend / $tgClicks)
         $metaClicks = $metaMetrics ? (int) ($metaMetrics['clicks'] ?? 0) : 0;
-        if ($metaClicks > 0) {
+        if ($metaClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $metaClicks, 2);
-        } elseif ($metaMetrics && isset($metaMetrics['cpc']) && (float) $metaMetrics['cpc'] > 0) {
+        } elseif ($metaMetrics && isset($metaMetrics['cpc']) && (float) $metaMetrics['cpc'] > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format((float) $metaMetrics['cpc'], 2);
-        } elseif ($tgClicks > 0) {
+        } elseif ($tgClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2);
         } else {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . '0.00';
@@ -401,7 +407,7 @@ class AnalyticsController extends Controller
             ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $subscribers, 2)
             : ($adAccount?->currency_symbol ?? '₹') . '0.00';
 
-        // Performance KPI Grid (12 Cards with Cost/Click & Cost/Subscriber)
+        // Performance KPI Grid (No duplicate subscriber card)
         $kpis = [
             'reach' => $campaignReach,
             'impressions' => $campaignImpressions,
@@ -423,35 +429,53 @@ class AnalyticsController extends Controller
         $activeDailyBudgetSum = (float) $activeCampaigns->sum('active_daily_budget');
         $campaignLifetimeBudgetSum = (float) $campaigns->sum('budget');
 
-        // Resolve Real Total Budget and Remaining Budget strictly from real Meta budget fields / client configuration
-        // NEVER derive Total Budget from lifetime spend
-        $totalBudgetLimit = 0.00;
-        $remainingBudget = 0.00;
-        $budgetSource = 'Live from Meta ad account';
-        $remainingSource = 'Live from Meta ad account';
-
         $spendCap = (float) ($metaMetrics['spend_limit'] ?? ($adAccount?->spend_limit ?? 0));
         $accountBalance = (float) ($metaMetrics['balance'] ?? ($adAccount?->balance ?? 0));
 
-        if ($spendCap > 0) {
+        $daysMultiplier = match($dateRange) {
+            'today', 'yesterday' => 1,
+            'last_7_days' => 7,
+            'last_30_days' => 30,
+            'this_month' => now()->day,
+            default => 30,
+        };
+        $daysLabel = $daysMultiplier === 1 ? '1 day' : "{$daysMultiplier} days";
+
+        $totalBudgetLimit = 0.00;
+        $remainingBudget = 0.00;
+
+        if ($spendCap > 0 && $dateRange === 'lifetime') {
             $totalBudgetLimit = $spendCap;
             $remainingBudget = max(0, $totalBudgetLimit - ($adAccount?->lifetime_spend ?: $campaignSpend));
             $budgetSource = 'Account spend limit from Meta';
             $remainingSource = 'Limit minus lifetime spend';
-        } elseif ($campaignLifetimeBudgetSum > 0) {
+        } elseif ($spendCap > 0) {
+            $totalBudgetLimit = $spendCap;
+            $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
+            $budgetSource = 'Account spend limit from Meta';
+            $remainingSource = 'Limit minus period spend';
+        } elseif ($campaignLifetimeBudgetSum > 0 && $dateRange === 'lifetime') {
             $totalBudgetLimit = $campaignLifetimeBudgetSum;
             $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
             $budgetSource = 'Campaign lifetime budget from Meta';
             $remainingSource = 'Budget minus campaign spend';
         } elseif ($activeDailyBudgetSum > 0) {
-            $totalBudgetLimit = $activeDailyBudgetSum * 30;
+            $totalBudgetLimit = $activeDailyBudgetSum * $daysMultiplier;
             $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
-            $budgetSource = 'Active daily run rate (30 days)';
-            $remainingSource = 'Run rate minus current spend';
+            $budgetSource = "Active daily budget ({$daysLabel})";
+            $remainingSource = 'Run rate minus period spend';
         } elseif ($client && (float) $client->monthly_budget > 0) {
-            $totalBudgetLimit = (float) $client->monthly_budget;
+            if (in_array($dateRange, ['today', 'yesterday'])) {
+                $totalBudgetLimit = round((float) $client->monthly_budget / 30, 2);
+                $budgetSource = 'Daily portion of monthly budget';
+            } elseif ($dateRange === 'last_7_days') {
+                $totalBudgetLimit = round(((float) $client->monthly_budget / 30) * 7, 2);
+                $budgetSource = '7-day portion of monthly budget';
+            } else {
+                $totalBudgetLimit = (float) $client->monthly_budget;
+                $budgetSource = 'Configured client monthly budget';
+            }
             $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
-            $budgetSource = 'Configured client monthly budget';
             $remainingSource = 'Monthly budget minus spend';
         } else {
             // When no spend limit or budget is configured in Meta:
@@ -467,6 +491,7 @@ class AnalyticsController extends Controller
             'total_budget' => $totalBudgetLimit,
             'remaining_budget' => $remainingBudget,
             'currency_symbol' => $adAccount?->currency_symbol ?? '₹',
+            'spending_source' => 'Actual spend for ' . ucfirst(str_replace('_', ' ', $dateRange)),
             'budget_source' => $budgetSource,
             'remaining_source' => $remainingSource,
             'last_synced' => $adAccount?->last_synced_at ? $adAccount->last_synced_at->diffForHumans() : 'Never',
@@ -590,36 +615,32 @@ class AnalyticsController extends Controller
         $pendingRequests = (clone $eventsQuery)->where('event_type', 'pending')->count();
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
-        // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account
+        // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account and date range
         $campaignSpend = 0.00;
         $campaignReach = 0;
         $campaignImpressions = 0;
         if ($adAccount) {
-            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount);
-            $campaignSpend = (float) $metaMetrics['spend_total'];
-            $campaignReach = (int) $metaMetrics['reach'];
-            $campaignImpressions = (int) $metaMetrics['impressions'];
+            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, false, $dateRange);
+            $campaignSpend = (float) (isset($metaMetrics['spend_scoped']) ? $metaMetrics['spend_scoped'] : ($metaMetrics['spend_total'] ?? 0.00));
+            $campaignReach = (int) ($metaMetrics['reach'] ?? 0);
+            $campaignImpressions = (int) ($metaMetrics['impressions'] ?? 0);
+        } else {
+            if ($dateRange === 'lifetime') {
+                $campaignSpend = (float) $campaigns->sum('spend');
+                $campaignReach = (int) $campaigns->sum('reach');
+                $campaignImpressions = (int) $campaigns->sum('impressions');
+            }
         }
 
-        if ($campaignSpend === 0.00 && $campaigns) {
-            $campaignSpend = (float) $campaigns->sum('spend');
-        }
-        if ($campaignReach === 0 && $campaigns) {
-            $campaignReach = (int) $campaigns->sum('reach');
-        }
-        if ($campaignImpressions === 0 && $campaigns) {
-            $campaignImpressions = (int) $campaigns->sum('impressions');
-        }
-
-        // Cost per Click (CPC from Meta Ads)
+        // Cost per Click (CPC from Meta Ads for selected date range)
         // Primary: Meta Ad Clicks from Meta Graph API (e.g. ₹1,694.91 / 498 clicks = ₹3.40)
         // Fallback: If no Meta clicks, fall back to Telegram CTA clicks ($campaignSpend / $tgClicks)
         $metaClicks = $metaMetrics ? (int) ($metaMetrics['clicks'] ?? 0) : 0;
-        if ($metaClicks > 0) {
+        if ($metaClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $metaClicks, 2);
-        } elseif ($metaMetrics && isset($metaMetrics['cpc']) && (float) $metaMetrics['cpc'] > 0) {
+        } elseif ($metaMetrics && isset($metaMetrics['cpc']) && (float) $metaMetrics['cpc'] > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format((float) $metaMetrics['cpc'], 2);
-        } elseif ($tgClicks > 0) {
+        } elseif ($tgClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2);
         } else {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . '0.00';

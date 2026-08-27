@@ -472,4 +472,191 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         $resB->assertSee('₹5,000.00');
         $resB->assertSee('Account spend limit from Meta');
     }
+
+    public function test_reach_and_impressions_are_zero_when_no_meta_delivery_on_selected_date(): void
+    {
+        $lp = LandingPage::create([
+            'client_id' => $this->clientA->id,
+            'title' => 'Zero Delivery Date Test',
+            'slug' => 'zero-delivery-date-test',
+            'is_published' => true,
+        ]);
+
+        // Mock Meta API metrics for today: 0 delivery (no ads ran today)
+        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}:range_today";
+        \Illuminate\Support\Facades\Cache::put($cacheKey, [
+            'connected' => true,
+            'account_name' => 'Kirtnix Official 2025',
+            'account_id' => 'act_4151051451781245',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'date_range' => 'today',
+            'spend_scoped' => 0.00,
+            'spend_total' => 1694.91,
+            'lifetime_spend' => 1694.91,
+            'spend_today' => 0.00,
+            'clicks' => 0,
+            'impressions' => 0,
+            'reach' => 0,
+            'leads' => 0,
+            'ctr' => 0.00,
+            'cpc' => 0.00,
+            'cpm' => 0.00,
+            'spend_limit' => 0.00,
+            'balance' => 0.00,
+            'campaigns_count' => 4,
+        ], 60);
+
+        $response = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'today']));
+        $response->assertOk();
+
+        // Reach and Impressions must be 0, NOT lifetime 7056 or 8239
+        $response->assertSee('<span id="kpi-reach" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">0</span>', false);
+        $response->assertSee('<span id="kpi-impressions" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">0</span>', false);
+        $response->assertSee('<span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹0.00</span>', false);
+
+        // Live metrics endpoint for today must also return 0
+        $liveResponse = $this->actingAs($this->user)->get("/analytics/{$lp->slug}/live-metrics?date_range=today");
+        $liveResponse->assertOk();
+        $liveData = $liveResponse->json('kpis');
+        $this->assertEquals('0', $liveData['reach']);
+        $this->assertEquals('0', $liveData['impressions']);
+        $this->assertEquals('₹0.00', $liveData['cost_per_click']);
+    }
+
+    public function test_performance_section_has_only_one_subscriber_card_and_no_duplicate(): void
+    {
+        $lp = LandingPage::create([
+            'client_id' => $this->clientA->id,
+            'title' => 'Single Subscriber Card Test',
+            'slug' => 'single-sub-card-test',
+            'is_published' => true,
+        ]);
+
+        Campaign::create([
+            'client_id' => $this->clientA->id,
+            'ad_account_id' => $this->adAccountA->id,
+            'campaign_id' => 'cmp_outcome_sub',
+            'name' => 'Ad Campaign 1',
+            'slug' => 'ad-campaign-1',
+            'status' => 'paused',
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('analytics.detail', $lp->slug));
+        $response->assertOk();
+
+        // 1. Single Subscriber KPI card must exist
+        $response->assertSee('id="kpi-subscribers"', false);
+
+        // 2. Duplicate 'Approved members' card must NOT exist in HTML
+        $response->assertDontSee('id="kpi-approved-members"', false);
+        $response->assertDontSee('Approved members');
+
+        // 3. Campaign table Outcome column '• Subscribers' MUST be preserved
+        $response->assertSee('Subscribers');
+    }
+
+    public function test_total_budget_is_date_scoped_and_never_derived_from_lifetime_spend(): void
+    {
+        $lp = LandingPage::create([
+            'client_id' => $this->clientA->id,
+            'title' => 'Date Scoped Budget Test',
+            'slug' => 'date-scoped-budget-test',
+            'is_published' => true,
+        ]);
+
+        $this->adAccountA->update(['spend_limit' => 0.00]);
+
+        // Campaign with active daily budget of ₹500/day
+        Campaign::create([
+            'client_id' => $this->clientA->id,
+            'ad_account_id' => $this->adAccountA->id,
+            'campaign_id' => 'cmp_daily_budget',
+            'name' => 'Active Daily Campaign',
+            'slug' => 'active-daily-campaign',
+            'status' => 'active',
+            'active_daily_budget' => 500.00,
+        ]);
+
+        // Today: Budget should be 1 day of daily budget = ₹500.00
+        $resToday = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'today']));
+        $resToday->assertOk();
+        $resToday->assertSee('₹500.00');
+        $resToday->assertSee('Active daily budget (1 day)');
+
+        // Last 7 days: Budget should be 7 days = ₹3,500.00
+        $res7d = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'last_7_days']));
+        $res7d->assertOk();
+        $res7d->assertSee('₹3,500.00');
+        $res7d->assertSee('Active daily budget (7 days)');
+
+        // Last 30 days: Budget should be 30 days = ₹15,000.00
+        $res30d = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'last_30_days']));
+        $res30d->assertOk();
+        $res30d->assertSee('₹15,000.00');
+        $res30d->assertSee('Active daily budget (30 days)');
+    }
+
+    public function test_date_filter_correctly_scopes_budget_and_spend_metrics(): void
+    {
+        $lp = LandingPage::create([
+            'client_id' => $this->clientA->id,
+            'title' => 'Date Filter Scope Test',
+            'slug' => 'date-filter-scope-test',
+            'is_published' => true,
+        ]);
+
+        // Mock today: ₹0.00 spend, 0 clicks, 0 reach
+        \Illuminate\Support\Facades\Cache::put("meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}:range_today", [
+            'connected' => true,
+            'account_name' => 'Kirtnix Official 2025',
+            'account_id' => 'act_4151051451781245',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'date_range' => 'today',
+            'spend_scoped' => 0.00,
+            'spend_total' => 1694.91,
+            'lifetime_spend' => 1694.91,
+            'spend_today' => 0.00,
+            'clicks' => 0,
+            'impressions' => 0,
+            'reach' => 0,
+            'spend_limit' => 0.00,
+            'balance' => 0.00,
+            'campaigns_count' => 4,
+        ], 60);
+
+        // Mock lifetime: ₹1,694.91 spend, 498 clicks, 7,056 reach
+        \Illuminate\Support\Facades\Cache::put("meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}:range_lifetime", [
+            'connected' => true,
+            'account_name' => 'Kirtnix Official 2025',
+            'account_id' => 'act_4151051451781245',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'date_range' => 'lifetime',
+            'spend_scoped' => 1694.91,
+            'spend_total' => 1694.91,
+            'lifetime_spend' => 1694.91,
+            'spend_today' => 0.00,
+            'clicks' => 498,
+            'impressions' => 8239,
+            'reach' => 7056,
+            'spend_limit' => 0.00,
+            'balance' => 0.00,
+            'campaigns_count' => 4,
+        ], 60);
+
+        // Request Today
+        $resToday = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'today']));
+        $resToday->assertOk();
+        $resToday->assertSee('<span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹0.00</span>', false);
+
+        // Request Lifetime
+        $resLifetime = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'lifetime']));
+        $resLifetime->assertOk();
+        $resLifetime->assertSee('<span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹1,694.91</span>', false);
+        $resLifetime->assertSee('<span id="kpi-reach" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">7,056</span>', false);
+        $resLifetime->assertSee('<span id="kpi-impressions" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">8,239</span>', false);
+        $resLifetime->assertSee('₹3.40');
+    }
 }
