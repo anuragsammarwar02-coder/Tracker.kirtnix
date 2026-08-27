@@ -10,6 +10,7 @@ use App\Models\MetaBusiness;
 use App\Models\MetaConnection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class MetaSyncService
 {
@@ -198,7 +199,7 @@ class MetaSyncService
 
     /**
      * Sync single Ad Account's campaigns and insights from Meta Graph API
-     * Fetches ALL campaigns (ACTIVE, PAUSED, ARCHIVED, etc.)
+     * Fetches ALL campaigns (ACTIVE, PAUSED, ARCHIVED, etc.) with pagination support
      */
     public function syncSingleAdAccount(AdAccount $adAccount): array
     {
@@ -217,7 +218,7 @@ class MetaSyncService
             // 1. Sync live ad account metadata from Meta
             $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}", [
                 'access_token' => $token,
-                'fields' => 'id,account_id,name,currency,account_status,spend_limit,balance,amount_spent,daily_budget,funding_source_details',
+                'fields' => 'id,account_id,name,currency,account_status,spend_limit,balance,amount_spent,daily_budget,funding_source_details,timezone_name',
             ]);
 
             if ($accRes->successful() && !empty($accRes->json())) {
@@ -237,16 +238,35 @@ class MetaSyncService
                 ]);
             }
 
-            // 2. Sync campaigns and insights from Meta
-            $res = Http::withoutVerifying()->timeout(15)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/campaigns", [
+            // 2. Sync campaigns and insights from Meta with pagination
+            $allCampaignData = [];
+            $nextUrl = "{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/campaigns";
+            $params = [
                 'access_token' => $token,
                 'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
                 'effective_status' => '["ACTIVE","PAUSED","ARCHIVED","IN_PROCESS","WITH_ISSUES"]',
                 'limit' => 100,
-            ]);
+            ];
 
-            if ($res->successful() && !empty($res->json('data'))) {
-                foreach ($res->json('data') as $c) {
+            $pages = 0;
+            while ($nextUrl && $pages < 5) {
+                $pages++;
+                $res = $pages === 1
+                    ? Http::withoutVerifying()->timeout(15)->get($nextUrl, $params)
+                    : Http::withoutVerifying()->timeout(15)->get($nextUrl);
+
+                if ($res->successful() && !empty($res->json('data'))) {
+                    foreach ($res->json('data') as $c) {
+                        $allCampaignData[] = $c;
+                    }
+                    $nextUrl = $res->json('paging.next');
+                } else {
+                    break;
+                }
+            }
+
+            if (!empty($allCampaignData)) {
+                foreach ($allCampaignData as $c) {
                     $insights = $c['insights']['data'][0] ?? [];
                     $spend = (float) ($insights['spend'] ?? 0);
                     $reach = (int) ($insights['reach'] ?? 0);
@@ -291,22 +311,6 @@ class MetaSyncService
                         ]
                     );
 
-                    if ($spend > 0 || $impressions > 0) {
-                        CampaignInsight::updateOrCreate(
-                            ['campaign_id' => $campaign->id, 'date' => now()->format('Y-m-d')],
-                            [
-                                'spend' => $spend,
-                                'reach' => $reach,
-                                'impressions' => $impressions,
-                                'clicks' => 0,
-                                'subscribers' => $subscribers,
-                                'cost_per_subscriber' => $costPerSub,
-                                'ctr' => $impressions > 0 ? round(($subscribers / $impressions) * 100, 2) : 0,
-                                'cpm' => $impressions > 0 ? round(($spend / $impressions) * 1000, 2) : 0,
-                            ]
-                        );
-                    }
-
                     $syncedCampaigns[] = $campaign;
                 }
 
@@ -317,6 +321,217 @@ class MetaSyncService
         }
 
         return $syncedCampaigns;
+    }
+
+    /**
+     * Get live, account-specific Meta Ads metrics for Client Overview.
+     * Enforces client/account isolation, real lifetime spend, real today's spend in account timezone,
+     * and accurate campaign count with pagination.
+     */
+    public function getAdAccountMetrics(AdAccount $adAccount, bool $forceRefresh = false): array
+    {
+        $clientId = $adAccount->client_id ?? 0;
+        $cacheKey = "meta_analytics:client_{$clientId}:acc_{$adAccount->id}";
+
+        if (!$forceRefresh && Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+
+        $connection = $adAccount->metaConnection ?? MetaConnection::first();
+        $token = $connection?->access_token ?? \App\Models\Setting::get('meta_system_user_token');
+
+        // Baseline / Database values for this exact account
+        $campaigns = Campaign::where('ad_account_id', $adAccount->id)->get();
+        $campaignIds = $campaigns->pluck('id');
+        $currency = $adAccount->currency ?? 'INR';
+        $currencySymbol = $adAccount->currency_symbol ?? '₹';
+        $timezone = $adAccount->timezone ?? 'Asia/Kolkata';
+
+        $campaignSpend = (float) $campaigns->sum('spend');
+        $spendTotal = $campaignSpend > 0 ? $campaignSpend : (float) ($adAccount->lifetime_spend ?? 0);
+        $spendToday = 0.00; // Strictly ₹0 by default if no spend today
+        $impressions = (int) $campaigns->sum('impressions');
+        $reach = (int) $campaigns->sum('reach');
+        $clicks = (int) CampaignInsight::whereIn('campaign_id', $campaignIds)->sum('clicks');
+        if ($clicks <= 0) {
+            $clicks = (int) \App\Models\CtaClick::whereIn('campaign_id', $campaignIds)->count();
+        }
+        $leads = (int) $campaigns->sum('subscribers');
+        $campaignsCount = $campaigns->count();
+
+        // Attempt Live Meta Graph API query
+        if (!empty($token)) {
+            try {
+                $rawAccId = str_replace('act_', '', $adAccount->account_id);
+
+                // 1. Account Metadata & Lifetime Spend
+                $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}", [
+                    'access_token' => $token,
+                    'fields' => 'id,account_id,name,currency,account_status,spend_limit,balance,amount_spent,daily_budget,timezone_name,timezone_offset_hours_utc',
+                ]);
+
+                if ($accRes->successful() && !empty($accRes->json())) {
+                    $accData = $accRes->json();
+                    if (!empty($accData['timezone_name'])) {
+                        $timezone = $accData['timezone_name'];
+                    }
+                    if (isset($accData['amount_spent'])) {
+                        $spendTotal = (float) $accData['amount_spent'] / 100;
+                    }
+                    if (!empty($accData['currency'])) {
+                        $currency = $accData['currency'];
+                    }
+                    $adAccount->update([
+                        'lifetime_spend' => $spendTotal,
+                        'currency' => $currency,
+                        'last_synced_at' => now(),
+                    ]);
+                }
+
+                // 2. Maximum / Lifetime Reporting Insights
+                $maxRes = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/insights", [
+                    'access_token' => $token,
+                    'date_preset' => 'maximum',
+                    'fields' => 'spend,impressions,reach,clicks,cpc,cpm,ctr,actions',
+                ]);
+
+                if ($maxRes->successful() && !empty($maxRes->json('data'))) {
+                    $maxInsights = $maxRes->json('data')[0] ?? [];
+                    if (isset($maxInsights['spend'])) {
+                        $spendTotal = (float) $maxInsights['spend'];
+                    }
+                    if (isset($maxInsights['impressions'])) {
+                        $impressions = (int) $maxInsights['impressions'];
+                    }
+                    if (isset($maxInsights['reach'])) {
+                        $reach = (int) $maxInsights['reach'];
+                    }
+                    if (isset($maxInsights['clicks'])) {
+                        $clicks = (int) $maxInsights['clicks'];
+                    }
+                    if (!empty($maxInsights['actions'])) {
+                        $leads = 0;
+                        foreach ($maxInsights['actions'] as $act) {
+                            if (in_array($act['action_type'] ?? '', ['lead', 'onsite_conversion.subscribe', 'subscribe'])) {
+                                $leads += (int) ($act['value'] ?? 0);
+                            }
+                        }
+                    }
+                }
+
+                // 3. TODAY's Insights in the account's configured timezone
+                $todayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/insights", [
+                    'access_token' => $token,
+                    'date_preset' => 'today',
+                    'fields' => 'spend,impressions,reach,clicks,actions',
+                ]);
+
+                if ($todayRes->successful() && !empty($todayRes->json('data'))) {
+                    $todayData = $todayRes->json('data')[0] ?? [];
+                    $spendToday = (float) ($todayData['spend'] ?? 0.00);
+                } else {
+                    // Meta reports no insights for today -> exactly ₹0
+                    $spendToday = 0.00;
+                }
+
+                // 4. Dynamic Campaigns with Pagination
+                $allCampaigns = [];
+                $nextUrl = "{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/campaigns";
+                $params = [
+                    'access_token' => $token,
+                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
+                    'effective_status' => '["ACTIVE","PAUSED","ARCHIVED","IN_PROCESS","WITH_ISSUES"]',
+                    'limit' => 100,
+                ];
+
+                $pages = 0;
+                while ($nextUrl && $pages < 5) {
+                    $pages++;
+                    $cRes = $pages === 1
+                        ? Http::withoutVerifying()->timeout(15)->get($nextUrl, $params)
+                        : Http::withoutVerifying()->timeout(15)->get($nextUrl);
+
+                    if ($cRes->successful() && !empty($cRes->json('data'))) {
+                        foreach ($cRes->json('data') as $c) {
+                            $allCampaigns[] = $c;
+                        }
+                        $nextUrl = $cRes->json('paging.next');
+                    } else {
+                        break;
+                    }
+                }
+
+                if (!empty($allCampaigns)) {
+                    $campaignsCount = count($allCampaigns);
+
+                    // Sync campaigns locally for this client/ad_account
+                    foreach ($allCampaigns as $c) {
+                        $rawStatus = $c['status'] ?? $c['effective_status'] ?? 'ACTIVE';
+                        $cInsights = $c['insights']['data'][0] ?? [];
+                        $cSpend = (float) ($cInsights['spend'] ?? 0);
+                        $cReach = (int) ($cInsights['reach'] ?? 0);
+                        $cImpressions = (int) ($cInsights['impressions'] ?? 0);
+                        $cDaily = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
+                        $cLife = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
+
+                        Campaign::updateOrCreate(
+                            ['campaign_id' => 'cmp_' . $c['id']],
+                            [
+                                'client_id' => $adAccount->client_id,
+                                'ad_account_id' => $adAccount->id,
+                                'name' => $c['name'],
+                                'slug' => \Illuminate\Support\Str::slug($c['name']),
+                                'outcome' => in_array($c['objective'] ?? '', ['OUTCOME_LEADS', 'LEADS', 'CONVERSIONS', 'MESSAGES']) ? 'Subscribers' : 'Engagement',
+                                'objective' => $c['objective'] ?? 'OUTCOME_LEADS',
+                                'optimization_goal' => 'OFFSITE_CONVERSIONS',
+                                'optimization_event' => 'Subscribe',
+                                'billing_event' => 'IMPRESSIONS',
+                                'conversion_location' => 'Telegram Channel',
+                                'status' => ucfirst(strtolower($rawStatus)),
+                                'spend' => $cSpend,
+                                'budget' => $cLife,
+                                'active_daily_budget' => $cDaily,
+                                'reach' => $cReach,
+                                'impressions' => $cImpressions,
+                            ]
+                        );
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning("Meta Graph API live analytics error for account {$adAccount->account_id}: " . $e->getMessage());
+            }
+        }
+
+        $ctr = $impressions > 0 ? round(($clicks / $impressions) * 100, 2) : 0.00;
+        $cpc = $clicks > 0 ? round($spendTotal / $clicks, 2) : 0.00;
+        $cpm = $impressions > 0 ? round(($spendTotal / $impressions) * 1000, 2) : 0.00;
+
+        $metrics = [
+            'connected' => true,
+            'account_name' => $adAccount->name,
+            'account_id' => $adAccount->account_id,
+            'business_name' => $adAccount->metaBusiness?->name ?? 'Arabika Kofi',
+            'currency' => $currency,
+            'currency_symbol' => $currencySymbol,
+            'status' => $adAccount->status ?? 'Active',
+            'timezone' => $timezone,
+            'last_sync' => $adAccount->last_synced_at ? $adAccount->last_synced_at->diffForHumans() : 'Just now',
+            'spend_today' => $spendToday,
+            'spend_total' => $spendTotal,
+            'spend_month' => $spendTotal, // For backwards compatibility
+            'clicks' => $clicks,
+            'impressions' => $impressions,
+            'reach' => $reach,
+            'leads' => $leads,
+            'ctr' => $ctr,
+            'cpc' => $cpc,
+            'cpm' => $cpm,
+            'campaigns_count' => $campaignsCount,
+        ];
+
+        Cache::put($cacheKey, $metrics, 60);
+
+        return $metrics;
     }
 
     /**

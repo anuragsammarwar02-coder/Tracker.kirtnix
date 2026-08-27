@@ -502,9 +502,19 @@
                                     {{ $event->first_name ? $event->first_name . ' ' . ($event->last_name ?? '') : ($event->telegram_username ? '@' . $event->telegram_username : 'User #' . substr($event->telegram_user_id, -4)) }}
                                 </td>
                                 <td class="py-3.5 px-5">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                        {{ $event->event_type === 'join' ? 'Direct Join' : ucfirst($event->event_type) }}
+                                    @if($event->source === 'ads')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                        Ad Join
                                     </span>
+                                    @elseif($event->event_type === 'join_request')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                        Join Request
+                                    </span>
+                                    @else
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Direct Join
+                                    </span>
+                                    @endif
                                 </td>
                                 <td class="py-3.5 px-5">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">
@@ -512,7 +522,13 @@
                                     </span>
                                 </td>
                                 <td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>
-                                <td class="py-3.5 px-5 text-slate-500">{{ $event->source ?? 'direct' }}</td>
+                                <td class="py-3.5 px-5">
+                                    @if($event->source === 'ads')
+                                    <span class="font-semibold text-amber-600">Paid Ads</span>
+                                    @else
+                                    <span class="text-slate-500">Direct / Organic</span>
+                                    @endif
+                                </td>
                                 <td class="py-3.5 px-5 text-slate-400">{{ $event->campaign?->name ?? '—' }}</td>
                                 <td class="py-3.5 px-5 text-slate-400">{{ $event->country ?? '—' }}</td>
                                 <td class="py-3.5 px-5 text-slate-400">{{ $event->device ?? '—' }}</td>

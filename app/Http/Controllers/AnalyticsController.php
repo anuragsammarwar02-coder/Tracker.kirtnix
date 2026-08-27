@@ -452,12 +452,13 @@ class AnalyticsController extends Controller
             'last_synced' => $adAccount?->last_synced_at ? $adAccount->last_synced_at->diffForHumans() : 'Never',
         ];
 
-        // Complete Join History Table with filters
+        // Complete Join History Table with filters (Actual subscriber joins only - excludes raw channel_post)
         $eventFilter = $request->input('event_type');
         $sourceFilter = $request->input('source');
         $search = $request->input('search');
 
         $joinHistory = TelegramEvent::with(['channel', 'campaign', 'click'])
+            ->whereIn('event_type', ['join', 'join_request'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
             ->when($eventFilter, fn($q) => $q->where('event_type', $eventFilter))
             ->when($sourceFilter, fn($q) => $q->where('source', $sourceFilter))
@@ -522,7 +523,7 @@ class AnalyticsController extends Controller
             ]);
         }
 
-        $client = $landingPage->client ?? Client::first();
+        $client = $landingPage->client;
         $dateRange = $request->input('date_range', 'last_30_days');
 
         $dateRangeMap = [

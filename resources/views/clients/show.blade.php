@@ -52,9 +52,9 @@
     <!-- 8 KPI Key Metric Cards (Matches Screenshot 2) -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 20px; border-top: 1px solid var(--border-subtle); padding-top: 16px;">
       <div style="background: var(--bg-subtle); padding: 10px 14px; border-radius: 8px;">
-        <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Ad spend (month)</div>
+        <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Ad spend (lifetime)</div>
         <div style="font-size: 17px; font-weight: 800; color: var(--text-main); margin-top: 3px;">
-          {{ $metaMetrics['currency_symbol'] }}{{ number_format($metaMetrics['spend_month'], 0) }}
+          {{ $metaMetrics['currency_symbol'] }}{{ number_format($metaMetrics['spend_total'], 0) }}
         </div>
       </div>
       <div style="background: var(--bg-subtle); padding: 10px 14px; border-radius: 8px;">
@@ -84,7 +84,7 @@
       <div style="background: var(--bg-subtle); padding: 10px 14px; border-radius: 8px;">
         <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Unique visitors</div>
         <div style="font-size: 17px; font-weight: 800; color: var(--text-main); margin-top: 3px;">
-          {{ number_format(round($viewsCount * 0.82) ?: 113) }}
+          {{ number_format($client->views()->where('is_unique', true)->count() ?: $viewsCount) }}
         </div>
       </div>
       <div style="background: var(--bg-subtle); padding: 10px 14px; border-radius: 8px;">
@@ -240,8 +240,8 @@
               <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-top: 1px;">{{ $metaMetrics['currency_symbol'] }}{{ number_format($metaMetrics['spend_today'], 0) }}</div>
             </div>
             <div style="background: var(--bg-subtle); padding: 8px 10px; border-radius: 6px;">
-              <div style="font-size: 9.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Spend Month</div>
-              <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-top: 1px;">{{ $metaMetrics['currency_symbol'] }}{{ number_format($metaMetrics['spend_month'], 0) }}</div>
+              <div style="font-size: 9.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Spend Lifetime</div>
+              <div style="font-size: 14px; font-weight: 800; color: var(--text-main); margin-top: 1px;">{{ $metaMetrics['currency_symbol'] }}{{ number_format($metaMetrics['spend_total'], 0) }}</div>
             </div>
             <div style="background: var(--bg-subtle); padding: 8px 10px; border-radius: 6px;">
               <div style="font-size: 9.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Clicks</div>

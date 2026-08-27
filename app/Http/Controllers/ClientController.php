@@ -119,27 +119,23 @@ class ClientController extends Controller
             'views',
         ]);
 
-        $viewsCount = $client->views()->count() ?: 4820;
-        $clicksCount = $client->clicks()->count() ?: 1480;
-        $joinsCount = $client->telegramEvents()->where('event_type', 'join')->count() ?: 1480;
-        $leavesCount = $client->telegramEvents()->where('event_type', 'leave')->count() ?: 84;
-
-        $ctr = $viewsCount > 0 ? round(($clicksCount / $viewsCount) * 100, 2) : 30.7;
-        $joinRate = $clicksCount > 0 ? round(($joinsCount / $clicksCount) * 100, 2) : 100.0;
-        $costPerJoin = $joinsCount > 0 ? round(($client->campaigns->sum('spend') ?: 1420.50) / $joinsCount, 2) : 0.96;
+        $viewsCount = $client->views()->count();
+        $clicksCount = $client->clicks()->count();
+        $joinsCount = $client->telegramEvents()->whereIn('event_type', ['join', 'join_request'])->count();
+        $leavesCount = $client->telegramEvents()->where('event_type', 'leave')->count();
 
         // Scoped Meta Ads Account Details and Real Data Metrics
         $assignedAdAccount = $client->adAccount;
         $metaMetrics = [
-            'connected' => (bool) $assignedAdAccount,
-            'account_name' => $assignedAdAccount?->name ?? 'Not Assigned',
-            'account_id' => $assignedAdAccount?->account_id ?? 'None',
-            'business_name' => $assignedAdAccount?->metaBusiness?->name ?? 'Personal / Agency',
-            'currency' => $assignedAdAccount?->currency ?? 'INR',
-            'currency_symbol' => $assignedAdAccount?->currency_symbol ?? '₹',
-            'status' => $assignedAdAccount?->status ?? 'Inactive',
+            'connected' => false,
+            'account_name' => 'Not Assigned',
+            'account_id' => 'None',
+            'business_name' => 'Personal / Agency',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'status' => 'Inactive',
             'timezone' => 'Asia/Kolkata',
-            'last_sync' => $assignedAdAccount?->last_synced_at ? $assignedAdAccount->last_synced_at->diffForHumans() : 'Never',
+            'last_sync' => 'Never',
             'spend_today' => 0.00,
             'spend_month' => 0.00,
             'spend_total' => 0.00,
@@ -155,50 +151,12 @@ class ClientController extends Controller
         ];
 
         if ($assignedAdAccount) {
-            $campaigns = Campaign::where('ad_account_id', $assignedAdAccount->id)->get();
-            $campaignIds = $campaigns->pluck('id');
-
-            $spendMonth = (float) CampaignInsight::whereIn('campaign_id', $campaignIds)
-                ->where('date', '>=', now()->startOfMonth()->format('Y-m-d'))
-                ->sum('spend');
-            if ($spendMonth <= 0) {
-                $spendMonth = (float) $campaigns->sum('spend');
-            }
-
-            $spendToday = (float) CampaignInsight::whereIn('campaign_id', $campaignIds)
-                ->where('date', now()->format('Y-m-d'))
-                ->sum('spend');
-            if ($spendToday <= 0 && $spendMonth > 0) {
-                $spendToday = round($spendMonth * 0.25, 2);
-            }
-
-            $impressions = (int) $campaigns->sum('impressions');
-            $reach = (int) $campaigns->sum('reach');
-            $clicks = (int) CampaignInsight::whereIn('campaign_id', $campaignIds)->sum('clicks');
-            if ($clicks <= 0) {
-                $clicks = (int) \App\Models\CtaClick::whereIn('campaign_id', $campaignIds)->count();
-            }
-            if ($clicks <= 0 && $spendMonth > 0) {
-                $clicks = max(1, (int) round($spendMonth / 5.2));
-            }
-            $leads = (int) $campaigns->sum('subscribers');
-
-            $ctr = $impressions > 0 ? round(($clicks / $impressions) * 100, 2) : 2.56;
-            $cpc = $clicks > 0 ? round($spendMonth / $clicks, 2) : 5.00;
-            $cpm = $impressions > 0 ? round(($spendMonth / $impressions) * 1000, 2) : 124.00;
-
-            $metaMetrics['spend_today'] = $spendToday;
-            $metaMetrics['spend_month'] = $spendMonth;
-            $metaMetrics['spend_total'] = (float) $campaigns->sum('spend');
-            $metaMetrics['clicks'] = $clicks;
-            $metaMetrics['impressions'] = $impressions;
-            $metaMetrics['reach'] = $reach;
-            $metaMetrics['leads'] = $leads;
-            $metaMetrics['ctr'] = $ctr;
-            $metaMetrics['cpc'] = $cpc;
-            $metaMetrics['cpm'] = $cpm;
-            $metaMetrics['campaigns_count'] = $campaigns->count();
+            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($assignedAdAccount);
         }
+
+        $ctr = $viewsCount > 0 ? round(($clicksCount / $viewsCount) * 100, 2) : 0.00;
+        $joinRate = $clicksCount > 0 ? round(($joinsCount / $clicksCount) * 100, 2) : 0.00;
+        $costPerJoin = $joinsCount > 0 ? round(($metaMetrics['spend_total'] ?? 0.00) / $joinsCount, 2) : 0.00;
 
         $availableAdAccounts = AdAccount::with('metaBusiness')->orderBy('name')->get();
         $hasGlobalMetaConnection = MetaConnection::where('status', 'active')->exists();
