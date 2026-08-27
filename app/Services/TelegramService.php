@@ -179,7 +179,7 @@ class TelegramService
                     'chat_id' => $chatId,
                 ]);
                 $countJson = $countRes->json();
-                $memberCount = $countJson['result'] ?? 13587;
+                $memberCount = $countJson['result'] ?? 0;
 
                 $channel = TelegramChannel::updateOrCreate(
                     ['telegram_bot_id' => $bot->id, 'telegram_chat_id' => $chatId],
@@ -329,7 +329,7 @@ class TelegramService
                 'title' => $bot->channel_title ?? 'Configured Bot Channel',
                 'username' => null,
                 'type' => 'channel',
-                'member_count' => 13587,
+                'member_count' => 0,
                 'is_bot_admin' => true,
                 'bot_status' => 'administrator',
                 'client_id' => $bot->client_id,

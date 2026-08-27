@@ -365,13 +365,18 @@ class AnalyticsController extends Controller
         $pendingRequests = (clone $eventsQuery)->where('event_type', 'pending')->count();
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
-        // 4. Meta Ads Metrics from Scoped Campaigns
-        $campaignSpend = (float) $campaigns->sum('spend');
-        if ($campaignSpend <= 0 && $adAccount && (float) $adAccount->lifetime_spend > 0) {
-            $campaignSpend = (float) $adAccount->lifetime_spend;
+        // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account
+        $metaMetrics = null;
+        if ($adAccount) {
+            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, $request->has('sync'));
+            $campaignSpend = (float) $metaMetrics['spend_total'];
+            $campaignReach = (int) $metaMetrics['reach'];
+            $campaignImpressions = (int) $metaMetrics['impressions'];
+        } else {
+            $campaignSpend = (float) $campaigns->sum('spend');
+            $campaignReach = (int) $campaigns->sum('reach');
+            $campaignImpressions = (int) $campaigns->sum('impressions');
         }
-        $campaignReach = (int) $campaigns->sum('reach');
-        $campaignImpressions = (int) $campaigns->sum('impressions');
 
         // Derived Metrics
         $convRate = $totalLpViews > 0 
@@ -482,6 +487,7 @@ class AnalyticsController extends Controller
             'activeDailyBudgetSum',
             'campaignLifetimeBudgetSum',
             'kpis',
+            'metaMetrics',
             'joinHistory',
             'dateRange',
             'formattedDateRange',
@@ -569,13 +575,16 @@ class AnalyticsController extends Controller
         $pendingRequests = (clone $eventsQuery)->where('event_type', 'pending')->count();
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
-        // 4. Meta Ads Metrics
-        $campaignSpend = (float) $campaigns->sum('spend');
-        if ($campaignSpend <= 0 && $adAccount && (float) $adAccount->lifetime_spend > 0) {
-            $campaignSpend = (float) $adAccount->lifetime_spend;
+        // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account
+        $campaignSpend = 0.00;
+        $campaignReach = 0;
+        $campaignImpressions = 0;
+        if ($adAccount) {
+            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount);
+            $campaignSpend = (float) $metaMetrics['spend_total'];
+            $campaignReach = (int) $metaMetrics['reach'];
+            $campaignImpressions = (int) $metaMetrics['impressions'];
         }
-        $campaignReach = (int) $campaigns->sum('reach');
-        $campaignImpressions = (int) $campaigns->sum('impressions');
 
         $costPerClick = $tgClicks > 0 
             ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2)

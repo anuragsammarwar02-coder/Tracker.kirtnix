@@ -262,4 +262,96 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         // Must NEVER see raw channel_post event as subscriber join history
         $response->assertDontSee('channel_post');
     }
+
+    public function test_analytics_detail_page_is_strictly_isolated_between_clients(): void
+    {
+        $lpA = LandingPage::create([
+            'client_id' => $this->clientA->id,
+            'title' => 'Client A Page',
+            'slug' => 'client-a-page',
+            'is_published' => true,
+        ]);
+
+        $lpB = LandingPage::create([
+            'client_id' => $this->clientB->id,
+            'title' => 'Client B Page',
+            'slug' => 'client-b-page',
+            'is_published' => true,
+        ]);
+
+        Campaign::create([
+            'client_id' => $this->clientA->id,
+            'ad_account_id' => $this->adAccountA->id,
+            'campaign_id' => 'cmp_a_unique',
+            'name' => 'Alpha Campaign A',
+            'slug' => 'alpha-campaign-a',
+            'status' => 'ACTIVE',
+            'spend' => 37500.00,
+            'reach' => 88000,
+            'impressions' => 190000,
+            'clicks' => 5200,
+        ]);
+
+        Campaign::create([
+            'client_id' => $this->clientB->id,
+            'ad_account_id' => $this->adAccountB->id,
+            'campaign_id' => 'cmp_b_unique',
+            'name' => 'Beta Campaign B',
+            'slug' => 'beta-campaign-b',
+            'status' => 'ACTIVE',
+            'spend' => 4500.00,
+            'reach' => 12000,
+            'impressions' => 22000,
+            'clicks' => 310,
+        ]);
+
+        // 1. Check Page A
+        $resA = $this->actingAs($this->user)->get(route('analytics.detail', $lpA->slug));
+        $resA->assertOk();
+        $resA->assertSee('Kirtnix Official 2025');
+        $resA->assertSee('act_4151051451781245');
+        $resA->assertSee('Alpha Campaign A');
+        $resA->assertSee('37,500');
+        // Scoped: Must NOT see Client B ad account or campaigns
+        $resA->assertDontSee('US Global Forex');
+        $resA->assertDontSee('act_9988776655443322');
+        $resA->assertDontSee('Beta Campaign B');
+        $resA->assertDontSee('4,500');
+
+        // 2. Check Page B
+        $resB = $this->actingAs($this->user)->get(route('analytics.detail', $lpB->slug));
+        $resB->assertOk();
+        $resB->assertSee('US Global Forex');
+        $resB->assertSee('act_9988776655443322');
+        $resB->assertSee('Beta Campaign B');
+        $resB->assertSee('4,500');
+        // Scoped: Must NOT see Client A ad account or campaigns
+        $resB->assertDontSee('Kirtnix Official 2025');
+        $resB->assertDontSee('act_4151051451781245');
+        $resB->assertDontSee('Alpha Campaign A');
+        $resB->assertDontSee('37,500');
+    }
+
+    public function test_cache_keys_are_strictly_client_and_ad_account_isolated(): void
+    {
+        $service = app(\App\Services\MetaSyncService::class);
+
+        $metricsA = $service->getAdAccountMetrics($this->adAccountA);
+        $metricsB = $service->getAdAccountMetrics($this->adAccountB);
+
+        $this->assertEquals('Kirtnix Official 2025', $metricsA['account_name']);
+        $this->assertEquals('act_4151051451781245', $metricsA['account_id']);
+        $this->assertEquals('INR', $metricsA['currency']);
+
+        $this->assertEquals('US Global Forex', $metricsB['account_name']);
+        $this->assertEquals('act_9988776655443322', $metricsB['account_id']);
+        $this->assertEquals('USD', $metricsB['currency']);
+
+        $cacheKeyA = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}";
+        $cacheKeyB = "meta_analytics:client_{$this->clientB->id}:acc_{$this->adAccountB->id}";
+
+        $this->assertTrue(\Illuminate\Support\Facades\Cache::has($cacheKeyA));
+        $this->assertTrue(\Illuminate\Support\Facades\Cache::has($cacheKeyB));
+        $this->assertNotEquals($cacheKeyA, $cacheKeyB);
+    }
 }

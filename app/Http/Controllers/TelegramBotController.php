@@ -40,10 +40,12 @@ class TelegramBotController extends Controller
         $liveMembers = $selectedBot
             ? TelegramEvent::with(['channel', 'campaign', 'click'])
                 ->where('telegram_bot_id', $selectedBot->id)
+                ->whereIn('event_type', ['join', 'leave', 'join_request', 'pending'])
                 ->latest('event_time')
                 ->limit(20)
                 ->get()
             : TelegramEvent::with(['channel', 'campaign', 'click'])
+                ->whereIn('event_type', ['join', 'leave', 'join_request', 'pending'])
                 ->latest('event_time')
                 ->limit(20)
                 ->get();

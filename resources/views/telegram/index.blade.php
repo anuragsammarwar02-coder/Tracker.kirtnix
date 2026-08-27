@@ -268,7 +268,7 @@
                             </form>
                         </td>
                         <td class="py-3.5 px-4 font-semibold text-slate-900 dark:text-slate-100">
-                            {{ number_format($channel->member_count ?: 13587) }} members
+                            {{ number_format($channel->member_count ?: 0) }} members
                         </td>
                         <td class="py-3.5 px-4">
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">

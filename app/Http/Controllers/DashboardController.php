@@ -58,18 +58,15 @@ class DashboardController extends Controller
         // Calculate Real Client/Agency Spend & Reach strictly scoped to assigned Meta Ad Account
         if ($selectedClient) {
             $adAccount = $selectedClient->adAccount;
-            $campaignsQuery = Campaign::where(function ($q) use ($selectedClient, $adAccount) {
-                $q->where('client_id', $selectedClient->id);
-                if ($adAccount) {
-                    $q->orWhere('ad_account_id', $adAccount->id);
-                }
-            });
-            $campaigns = $campaignsQuery->get();
-            $totalSpend = (float) $campaigns->sum('spend');
-            if ($totalSpend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
-                $totalSpend = (float) $adAccount->lifetime_spend;
+            if ($adAccount) {
+                $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount);
+                $totalSpend = (float) $metaMetrics['spend_total'];
+                $totalReach = (int) $metaMetrics['reach'];
+            } else {
+                $campaigns = Campaign::where('client_id', $selectedClient->id)->get();
+                $totalSpend = (float) $campaigns->sum('spend');
+                $totalReach = (int) $campaigns->sum('reach');
             }
-            $totalReach = (int) $campaigns->sum('reach');
         } else {
             $activeClients = Client::with(['adAccount'])->get();
             $activeClientIds = $activeClients->pluck('id')->all();

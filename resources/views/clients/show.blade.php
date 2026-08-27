@@ -426,8 +426,8 @@
                 </a>
               </td>
               <td>
-                <div>{{ $lp->views()->count() ?: 4820 }} views</div>
-                <div style="font-size: 11px; color: #B45309;">{{ $lp->clicks()->count() ?: 1480 }} clicks</div>
+                <div>{{ number_format($lp->views()->count()) }} views</div>
+                <div style="font-size: 11px; color: #B45309;">{{ number_format($lp->clicks()->count()) }} clicks</div>
               </td>
               <td><span class="pill pill-green">Live</span></td>
               <td style="text-align: right;">

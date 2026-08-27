@@ -217,7 +217,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 border-b border-slate-100 p-5 gap-4">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">LIFETIME SPEND</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($adAccount->lifetime_spend ?? 0, 2) }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($metaMetrics['spend_total'] ?? ($adAccount->lifetime_spend ?? 0), 2) }}</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACCOUNT SPEND LIMIT</span>
@@ -249,7 +249,7 @@
                 <div class="bg-[#f8fafc]/50 px-5 py-3.5 flex items-center justify-between">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">CAMPAIGNS</span>
-                        <span class="text-slate-800 font-bold text-xs mt-0.5 block">{{ $campaigns->where('status', 'active')->count() + $campaigns->where('status', 'ACTIVE')->count() }} active / {{ $campaigns->count() }} total</span>
+                        <span class="text-slate-800 font-bold text-xs mt-0.5 block">{{ $campaigns->where('status', 'active')->count() + $campaigns->where('status', 'ACTIVE')->count() }} active / {{ $metaMetrics['campaigns_count'] ?? $campaigns->count() }} total</span>
                     </div>
                 </div>
             </div>

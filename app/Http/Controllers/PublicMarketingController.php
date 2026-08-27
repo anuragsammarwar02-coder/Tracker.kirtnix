@@ -20,13 +20,13 @@ class PublicMarketingController extends Controller
     public function analytics()
     {
         try {
-            $clientCount = Client::count() ?: 18;
-            $campaignCount = Campaign::count() ?: 45;
-            $pageCount = LandingPage::count() ?: 62;
+            $clientCount = Client::count();
+            $campaignCount = Campaign::count();
+            $pageCount = LandingPage::count();
         } catch (\Throwable $e) {
-            $clientCount = 18;
-            $campaignCount = 45;
-            $pageCount = 62;
+            $clientCount = 0;
+            $campaignCount = 0;
+            $pageCount = 0;
         }
 
         return view('marketing.analytics_landing', compact('clientCount', 'campaignCount', 'pageCount'));
