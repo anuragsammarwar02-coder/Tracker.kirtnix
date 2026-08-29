@@ -681,6 +681,7 @@ class AnalyticsController extends Controller
         $campaignSpend = 0.00;
         $campaignReach = 0;
         $campaignImpressions = 0;
+        $metaMetrics = null;
         if ($adAccount) {
             $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, false, $dateRange);
             $campaignSpend = (float) (isset($metaMetrics['spend_scoped']) ? $metaMetrics['spend_scoped'] : ($metaMetrics['spend_total'] ?? 0.00));
