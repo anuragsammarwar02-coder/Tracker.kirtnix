@@ -405,8 +405,10 @@
     <a
       id="btn-join-telegram-alt"
       class="cta-secondary"
-      href="#btn-join-telegram"
-      onclick="document.getElementById('btn-join-telegram').scrollIntoView({behavior:'smooth'});return false;"
+      href="{{ $primaryCta ? route('public.cta_redirect', $primaryCta->tracking_token) : '#' }}"
+      data-kx-cta="1"
+      data-kx-fallback="{{ $landingPage->telegram_destination }}"
+      data-kx-token="{{ $primaryCta?->tracking_token }}"
     >
       {{ $landingPage->secondary_cta_text }}
     </a>
@@ -415,13 +417,13 @@
     <footer>
       <p>{{ $landingPage->footer_text ?? '© 2026 ' . $landingPage->brand_name }}</p>
       <div class="footer-links">
-        <a href="#btn-join-telegram" onclick="document.getElementById('btn-join-telegram').scrollIntoView({behavior:'smooth'});return false;">Telegram</a>
+        <a href="{{ $primaryCta ? route('public.cta_redirect', $primaryCta->tracking_token) : '#btn-join-telegram' }}" data-kx-cta="1">Telegram</a>
         <a href="#disclaimer" onclick="document.querySelector('.disclaimer').scrollIntoView({behavior:'smooth'});return false;">Disclaimer</a>
       </div>
     </footer>
   </div>
 
   <!-- KirtniX Tracker Client Script -->
-  <script src="/api/public/kx.js?lp={{ $landingPage->tracking_token }}" data-kx-lp="{{ $landingPage->tracking_token }}"></script>
+  <script src="/api/public/kx.js?lp={{ $landingPage->tracking_token ?? $landingPage->slug }}" data-kx-lp="{{ $landingPage->tracking_token ?? $landingPage->slug }}"></script>
 </body>
 </html>

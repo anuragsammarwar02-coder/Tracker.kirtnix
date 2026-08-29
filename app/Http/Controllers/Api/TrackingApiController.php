@@ -13,6 +13,7 @@ use App\Services\MetaCapiService;
 use App\Services\TelegramService;
 use App\Services\TrackingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class TrackingApiController extends Controller
@@ -156,15 +157,28 @@ class TrackingApiController extends Controller
         $session = $sessionId ? TrackingSession::find($sessionId) : TrackingSession::where('visitor_id', $visitorId)->latest('id')->first();
         $cta = $ctaId ? Cta::find($ctaId) : $landingPage?->ctas?->first();
 
+        if (!$session && $landingPage) {
+            $session = TrackingSession::create([
+                'session_id' => (string) Str::uuid(),
+                'visitor_id' => $visitorId,
+                'client_id' => $landingPage->client_id,
+                'landing_page_id' => $landingPage->id,
+                'campaign_id' => $landingPage->campaign_id,
+                'user_agent' => $request->userAgent(),
+                'utm_source' => $request->input('utm_source'),
+                'utm_campaign' => $request->input('utm_campaign'),
+            ]);
+        }
+
         $existingClick = CtaClick::where('visitor_id', $visitorId)
             ->where('landing_page_id', $landingPage?->id)
             ->where('created_at', '>=', now()->subHours(24))
             ->first();
 
         $isUnique = is_null($existingClick);
-        $destinationUrl = $request->input('destination_url', 'https://t.me');
+        $destinationUrl = $request->input('destination_url', $landingPage?->telegram_destination ?? 'https://t.me');
         $resolvedLinks = $this->telegramService->resolveDeepLinks($destinationUrl);
-        $metaEventId = 'lead_' . Str::random(16) . '_' . time();
+        $metaEventId = $request->input('event_id') ?? ('cta_' . Str::random(16) . '_' . time());
 
         $click = CtaClick::create([
             'tracking_session_id' => $session?->id,
@@ -183,6 +197,13 @@ class TrackingApiController extends Controller
 
         if ($cta) {
             $cta->increment('click_count');
+        }
+
+        // Dispatch Meta CAPI Website Subscribe event for real-time Meta Ads Manager results
+        try {
+            $this->metaCapiService->sendCtaClickEvent($click, 'Subscribe');
+        } catch (\Throwable $e) {
+            Log::info("CAPI Click dispatch notice: " . $e->getMessage());
         }
 
         return response()->json([

@@ -477,12 +477,16 @@ class AnalyticsController extends Controller
         $metaClicks = $metaMetrics ? (int) ($metaMetrics['clicks'] ?? 0) : 0;
         if ($metaClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $metaClicks, 2);
+            $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
         } elseif ($metaMetrics && isset($metaMetrics['cpc']) && (float) $metaMetrics['cpc'] > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format((float) $metaMetrics['cpc'], 2);
+            $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
         } elseif ($tgClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2);
+            $cpcSubtitle = 'Spend / Telegram CTA clicks (CPC)';
         } else {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . '0.00';
+            $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
         }
 
         $costPerSub = $subscribers > 0 
@@ -497,6 +501,7 @@ class AnalyticsController extends Controller
             'unique_visitors' => $uniqueVisitors,
             'tg_clicks' => $tgClicks,
             'cost_per_click' => $costPerClick,
+            'cpc_subtitle' => $cpcSubtitle,
             'conversion_rate' => $convRate,
             'direct_joins' => $directJoins,
             'subscribers' => $subscribers,
@@ -699,12 +704,16 @@ class AnalyticsController extends Controller
         $metaClicks = $metaMetrics ? (int) ($metaMetrics['clicks'] ?? 0) : 0;
         if ($metaClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $metaClicks, 2);
+            $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
         } elseif ($metaMetrics && isset($metaMetrics['cpc']) && (float) $metaMetrics['cpc'] > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format((float) $metaMetrics['cpc'], 2);
+            $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
         } elseif ($tgClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2);
+            $cpcSubtitle = 'Spend / Telegram CTA clicks (CPC)';
         } else {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . '0.00';
+            $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
         }
 
         $costPerSub = $subscribers > 0 
@@ -724,6 +733,7 @@ class AnalyticsController extends Controller
                 'unique_visitors' => number_format($uniqueVisitors),
                 'tg_clicks' => number_format($tgClicks),
                 'cost_per_click' => $costPerClick,
+                'cpc_subtitle' => $cpcSubtitle,
                 'conversion_rate' => $convRate,
                 'direct_joins' => number_format($directJoins),
                 'subscribers' => number_format($subscribers),

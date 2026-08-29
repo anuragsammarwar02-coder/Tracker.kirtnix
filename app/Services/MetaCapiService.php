@@ -23,6 +23,41 @@ class MetaCapiService
     }
 
     /**
+     * Resolve valid Meta Pixel ID and Access Token with intelligent fallbacks.
+     */
+    public function resolveCredentials(?LandingPage $landingPage): array
+    {
+        $pixelId = trim($landingPage?->meta_pixel_id ?? '');
+
+        // If landing page has pixel code in custom_head_code, auto-extract pixel ID
+        if (empty($pixelId) && !empty($landingPage?->custom_head_code)) {
+            if (preg_match('/fbq\([\'"]init[\'"],\s*[\'"](\d+)[\'"]\)/i', $landingPage->custom_head_code, $matches)) {
+                $pixelId = $matches[1];
+                try {
+                    $landingPage->update(['meta_pixel_id' => $pixelId]);
+                } catch (\Throwable $e) {
+                    // Non-fatal if update fails
+                }
+            }
+        }
+
+        // Fallback to system settings or default
+        if (empty($pixelId)) {
+            $pixelId = trim(Setting::get('meta_pixel_id', Setting::get('default_meta_pixel_id', '1018611380802707')));
+        }
+
+        // Resolve Access Token: LandingPage -> Setting meta_access_token -> Setting meta_system_user_token -> MetaConnection
+        $accessToken = trim(
+            $landingPage?->meta_access_token 
+            ?: (Setting::get('meta_access_token') 
+            ?: (Setting::get('meta_system_user_token') 
+            ?: (\App\Models\MetaConnection::first()?->access_token ?? '')))
+        );
+
+        return [$pixelId, $accessToken];
+    }
+
+    /**
      * Dispatch server-side Conversion Event to Meta Graph API for a generic request.
      */
     public function sendEvent(
@@ -32,8 +67,7 @@ class MetaCapiService
         Request $request,
         array $customData = []
     ): array {
-        $pixelId = trim($landingPage->meta_pixel_id ?? Setting::get('meta_pixel_id', ''));
-        $accessToken = trim($landingPage->meta_access_token ?? Setting::get('meta_access_token', ''));
+        [$pixelId, $accessToken] = $this->resolveCredentials($landingPage);
 
         if (empty($pixelId) || empty($accessToken)) {
             return [
@@ -46,14 +80,14 @@ class MetaCapiService
         $fbc = $request->cookie('_fbc') ?? ($fbclid ? "fb.1." . time() . ".{$fbclid}" : null);
         $fbp = $request->cookie('_fbp');
 
-        $userData = [
+        $userData = array_filter([
             'client_ip_address' => $request->ip(),
             'client_user_agent' => $request->userAgent(),
-        ];
+            'fbc' => $fbc,
+            'fbp' => $fbp,
+        ]);
 
-        if ($fbc) $userData['fbc'] = $fbc;
-        if ($fbp) $userData['fbp'] = $fbp;
-
+        $apiVersion = Setting::get('meta_api_version', 'v21.0');
         $eventPayload = [
             'event_name' => $eventName,
             'event_time' => time(),
@@ -73,9 +107,9 @@ class MetaCapiService
         }
 
         try {
-            $response = Http::timeout(5)
+            $response = Http::timeout(6)
                 ->asJson()
-                ->post("https://graph.facebook.com/v19.0/{$pixelId}/events?access_token={$accessToken}", $postData);
+                ->post("https://graph.facebook.com/{$apiVersion}/{$pixelId}/events?access_token={$accessToken}", $postData);
 
             if ($response->successful()) {
                 return [
@@ -101,15 +135,111 @@ class MetaCapiService
     }
 
     /**
-     * Dispatch verified Telegram Conversion to Meta Conversions API.
+     * Dispatch CTA Click to Meta Conversions API (Website Subscribe / Lead).
      */
-    public function sendConversionEvent(Conversion $conversion, string $eventName = 'CompleteRegistration'): array
+    public function sendCtaClickEvent(CtaClick $click, string $eventName = 'Subscribe'): array
+    {
+        $landingPage = $click->landingPage;
+        [$pixelId, $accessToken] = $this->resolveCredentials($landingPage);
+
+        if (empty($pixelId) || empty($accessToken)) {
+            $click->update([
+                'meta_capi_status' => 'skipped',
+            ]);
+            return [
+                'success' => false,
+                'status' => 'skipped',
+                'message' => 'Pixel credentials not configured',
+            ];
+        }
+
+        $session = $click->session;
+        $eventId = $click->meta_event_id ?: 'cta_' . $click->id . '_' . time();
+        if (empty($click->meta_event_id)) {
+            $click->update(['meta_event_id' => $eventId]);
+        }
+
+        $userData = array_filter([
+            'client_ip_address' => $session?->ip_address,
+            'client_user_agent' => $session?->user_agent,
+            'fbc' => $session?->fbc,
+            'fbp' => $session?->fbp,
+            'external_id' => $this->hashField($click->visitor_id),
+        ]);
+
+        $eventSourceUrl = $landingPage?->public_url ?? url('/lp/' . ($landingPage?->slug ?? 'kirtnix-digital'));
+        $apiVersion = Setting::get('meta_api_version', 'v21.0');
+
+        $eventPayload = [
+            'event_name' => $eventName,
+            'event_time' => $click->clicked_at ? $click->clicked_at->timestamp : time(),
+            'event_id' => $eventId,
+            'action_source' => 'website',
+            'event_source_url' => $eventSourceUrl,
+            'user_data' => $userData,
+            'custom_data' => [
+                'button_text' => 'Join Telegram',
+                'destination_url' => $click->destination_url,
+                'currency' => 'INR',
+                'value' => 0.00,
+            ],
+        ];
+
+        $postData = [
+            'data' => [$eventPayload],
+        ];
+
+        if (!empty($landingPage?->meta_test_event_code)) {
+            $postData['test_event_code'] = $landingPage->meta_test_event_code;
+        }
+
+        try {
+            $response = Http::timeout(6)
+                ->asJson()
+                ->post("https://graph.facebook.com/{$apiVersion}/{$pixelId}/events?access_token={$accessToken}", $postData);
+
+            if ($response->successful()) {
+                $click->update([
+                    'meta_capi_status' => 'sent',
+                    'meta_sent_at' => now(),
+                ]);
+                return [
+                    'success' => true,
+                    'status' => 'sent',
+                    'data' => $response->json(),
+                ];
+            }
+
+            $click->update([
+                'meta_capi_status' => 'failed',
+            ]);
+            return [
+                'success' => false,
+                'status' => 'failed',
+                'error' => $response->json(),
+            ];
+        } catch (\Exception $e) {
+            $click->update([
+                'meta_capi_status' => 'failed',
+            ]);
+            return [
+                'success' => false,
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Dispatch verified Telegram Conversion to Meta Conversions API.
+     * Default event is 'Subscribe' matching Meta Ads Manager optimization goal.
+     */
+    public function sendConversionEvent(Conversion $conversion, string $eventName = 'Subscribe'): array
     {
         $landingPage = $conversion->landingPage;
-        $pixelId = trim($landingPage?->meta_pixel_id ?? Setting::get('meta_pixel_id', ''));
-        $accessToken = trim($landingPage?->meta_access_token ?? Setting::get('meta_access_token', ''));
+        [$pixelId, $accessToken] = $this->resolveCredentials($landingPage);
 
-        // If not configured, record as skipped/pending without failing the verified Telegram join
+        // If not configured, record as skipped without failing the verified Telegram join
         if (empty($pixelId) || empty($accessToken)) {
             $conversion->update([
                 'meta_capi_status' => 'skipped',
@@ -125,18 +255,25 @@ class MetaCapiService
         $eventId = $conversion->meta_event_id ?: 'conv_' . $conversion->id . '_' . time();
         $conversion->update(['meta_event_id' => $eventId]);
 
+        $session = $conversion->session;
         $userData = array_filter([
-            'fbc' => $conversion->fbc,
-            'fbp' => $conversion->fbp,
+            'client_ip_address' => $session?->ip_address,
+            'client_user_agent' => $session?->user_agent,
+            'fbc' => $conversion->fbc ?: $session?->fbc,
+            'fbp' => $conversion->fbp ?: $session?->fbp,
             'external_id' => $this->hashField($conversion->visitor_id ?: $conversion->telegram_user_id),
             'country' => $this->hashField($conversion->country ?? 'IN'),
         ]);
+
+        $eventSourceUrl = $landingPage?->public_url ?? url('/lp/' . ($landingPage?->slug ?? 'kirtnix-digital'));
+        $apiVersion = Setting::get('meta_api_version', 'v21.0');
 
         $eventPayload = [
             'event_name' => $eventName,
             'event_time' => $conversion->event_time ? $conversion->event_time->timestamp : time(),
             'event_id' => $eventId,
-            'action_source' => 'other',
+            'action_source' => 'website',
+            'event_source_url' => $eventSourceUrl,
             'user_data' => $userData,
             'custom_data' => [
                 'channel_title' => $conversion->channel?->title ?? 'Telegram Channel',
@@ -159,7 +296,7 @@ class MetaCapiService
         try {
             $response = Http::timeout(6)
                 ->asJson()
-                ->post("https://graph.facebook.com/v19.0/{$pixelId}/events?access_token={$accessToken}", $postData);
+                ->post("https://graph.facebook.com/{$apiVersion}/{$pixelId}/events?access_token={$accessToken}", $postData);
 
             if ($response->successful()) {
                 $conversion->update([

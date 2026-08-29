@@ -271,14 +271,24 @@
       }
     }
 
+    var clickEventId = 'cta_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now();
+
     if (typeof window.fbq === 'function') {
       try {
+        window.fbq('track', 'Subscribe', {
+          content_name: el.innerText ? el.innerText.trim() : 'Telegram CTA',
+          content_category: 'Telegram',
+          source: 'kirtnix_tracker',
+          visitor_id: visitorId,
+          value: 0.00,
+          currency: 'INR'
+        }, { eventID: clickEventId });
         window.fbq('track', 'Lead', {
           content_name: el.innerText ? el.innerText.trim() : 'Telegram CTA',
           content_category: 'Telegram',
           source: 'kirtnix_tracker',
           visitor_id: visitorId
-        });
+        }, { eventID: clickEventId });
         window.fbq('trackCustom', 'TelegramClick', {
           button_text: el.innerText ? el.innerText.trim() : 'Join Telegram',
           destination: webUrl
@@ -292,46 +302,58 @@
       visitor_id: visitorId,
       session_id: trackingSessionId,
       destination_url: webUrl,
+      event_id: clickEventId,
       button_text: el.innerText ? el.innerText.trim() : 'Join Telegram',
       utm_source: urlParams.utm_source || 'direct',
       utm_campaign: urlParams.utm_campaign || ''
     };
 
-    if (navigator.sendBeacon) {
+    var payloadStr = JSON.stringify(clickPayload);
+
+    // Guaranteed click delivery via modern fetch keepalive + sendBeacon fallback
+    if (window.fetch) {
       try {
-        var blob = new Blob([JSON.stringify(clickPayload)], { type: 'application/json' });
-        navigator.sendBeacon(baseUrl + '/api/track/click', blob);
-      } catch(beaconErr) {
-        var clickXhr = new XMLHttpRequest();
-        clickXhr.open('POST', baseUrl + '/api/track/click', true);
-        clickXhr.setRequestHeader('Content-Type', 'application/json');
-        clickXhr.send(JSON.stringify(clickPayload));
-      }
-    } else {
-      var clickXhr = new XMLHttpRequest();
-      clickXhr.open('POST', baseUrl + '/api/track/click', true);
-      clickXhr.setRequestHeader('Content-Type', 'application/json');
-      clickXhr.send(JSON.stringify(clickPayload));
+        fetch(baseUrl + '/api/track/click', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payloadStr,
+          keepalive: true
+        }).catch(function() {});
+      } catch(fetchErr) {}
     }
 
+    if (navigator.sendBeacon) {
+      try {
+        var blob = new Blob([payloadStr], { type: 'application/json' });
+        navigator.sendBeacon(baseUrl + '/api/track/click', blob);
+      } catch(beaconErr) {}
+    }
+
+    e.preventDefault();
+
     var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    var redirected = false;
 
-    if (isMobile && deepLink) {
-      e.preventDefault();
-      var now = Date.now();
-      window.location.href = deepLink;
+    function doRedirect() {
+      if (redirected) return;
+      redirected = true;
 
-      setTimeout(function() {
-        if (Date.now() - now < 2000 && webUrl && webUrl !== '#') {
-          window.location.href = webUrl;
-        }
-      }, 1200);
-    } else if (el.tagName === 'BUTTON' || !rawHref || rawHref === '#') {
-      e.preventDefault();
-      if (webUrl && webUrl !== '#') {
+      if (isMobile && deepLink) {
+        var now = Date.now();
+        window.location.href = deepLink;
+
+        setTimeout(function() {
+          if (Date.now() - now < 2500 && webUrl && webUrl !== '#') {
+            window.location.href = webUrl;
+          }
+        }, 1200);
+      } else if (webUrl && webUrl !== '#') {
         window.location.href = webUrl;
       }
     }
+
+    // Allow 120ms for the browser network layer to dispatch keepalive fetch & pixel beacons
+    setTimeout(doRedirect, 120);
   }
 
   function bindCtaClicks() {

@@ -401,7 +401,7 @@
                     </div>
                     <div>
                         <span id="kpi-cost-per-click" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $kpis['cost_per_click'] ?? '₹0.00' }}</span>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Spend / Meta ad clicks (CPC)</p>
+                        <p id="kpi-cpc-subtitle" class="text-[11px] text-slate-400 mt-0.5">{{ $kpis['cpc_subtitle'] ?? 'Spend / Telegram CTA clicks (CPC)' }}</p>
                     </div>
                 </div>
 
@@ -633,6 +633,10 @@
                         updateKpi('kpi-unique-visitors', data.kpis.unique_visitors);
                         updateKpi('kpi-tg-clicks', data.kpis.tg_clicks);
                         updateKpi('kpi-cost-per-click', data.kpis.cost_per_click);
+                        if (data.kpis.cpc_subtitle) {
+                            const subEl = document.getElementById('kpi-cpc-subtitle');
+                            if (subEl) subEl.textContent = data.kpis.cpc_subtitle;
+                        }
                         updateKpi('kpi-conversion-rate', data.kpis.conversion_rate);
                         updateKpi('kpi-direct-joins', data.kpis.direct_joins);
                         updateKpi('kpi-subscribers', data.kpis.subscribers);

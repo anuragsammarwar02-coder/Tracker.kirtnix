@@ -778,9 +778,9 @@ class TelegramService
                     'event_time' => now(),
                 ]);
 
-                // Dispatch Meta CAPI for verified conversion
+                // Dispatch Meta CAPI for verified conversion (Subscribe optimization event)
                 if ($isVerified) {
-                    $this->metaCapiService->sendConversionEvent($conversion);
+                    $this->metaCapiService->sendConversionEvent($conversion, 'Subscribe');
                 }
             }
         }

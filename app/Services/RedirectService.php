@@ -6,6 +6,7 @@ use App\Models\Cta;
 use App\Models\CtaClick;
 use App\Models\TrackingSession;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class RedirectService
@@ -118,27 +119,11 @@ class RedirectService
         // Increment counter on CTA model
         $cta->increment('click_count');
 
-        // Dispatch Meta CAPI Lead Event if configured
-        $landingPage = $cta->landingPage;
-        if ($landingPage && !empty($landingPage->meta_pixel_id) && !empty($landingPage->meta_access_token)) {
-            $capiResult = $this->metaCapiService->sendEvent(
-                landingPage: $landingPage,
-                eventName: 'Lead',
-                eventId: $metaEventId,
-                request: $request,
-                customData: [
-                    'content_name' => $cta->name,
-                    'content_category' => 'Telegram Join CTA',
-                    'landing_page_title' => $landingPage->title,
-                ]
-            );
-
-            $click->update([
-                'meta_capi_status' => $capiResult['success'] ? 'sent' : 'failed',
-                'meta_capi_response' => json_encode($capiResult),
-            ]);
-        } else {
-            $click->update(['meta_capi_status' => 'skipped']);
+        // Dispatch Meta CAPI Subscribe Event for real-time Meta Ads Manager results
+        try {
+            $this->metaCapiService->sendCtaClickEvent($click, 'Subscribe');
+        } catch (\Throwable $e) {
+            Log::info("RedirectService CAPI notice: " . $e->getMessage());
         }
 
         return [
