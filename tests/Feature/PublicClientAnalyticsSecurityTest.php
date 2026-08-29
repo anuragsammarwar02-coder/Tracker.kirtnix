@@ -17,8 +17,10 @@ class PublicClientAnalyticsSecurityTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
-    protected Client $client;
-    protected LandingPage $landingPage;
+    protected Client $clientChannel;
+    protected Client $kirtnixDigital;
+    protected LandingPage $lpChannel;
+    protected LandingPage $lpDigital;
     protected AdAccount $adAccount;
 
     protected function setUp(): void
@@ -49,24 +51,42 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'lifetime_spend' => 12000.00,
         ]);
 
-        $this->client = Client::create([
-            'kx_code' => 'KX-CLIENTCHANNEL',
+        // Client 1: clientchannel
+        $this->clientChannel = Client::create([
+            'kx_code' => 'clientchannel',
             'company_name' => 'Client Channel Corp',
             'client_name' => 'Channel Owner',
             'ad_account_id' => $this->adAccount->id,
             'status' => 'active',
         ]);
 
-        $this->landingPage = LandingPage::create([
-            'client_id' => $this->client->id,
+        $this->lpChannel = LandingPage::create([
+            'client_id' => $this->clientChannel->id,
             'title' => 'Client Channel Page',
             'slug' => 'clientchannel',
             'is_published' => true,
             'is_active' => true,
         ]);
 
+        // Client 2: kirtnix-digital
+        $this->kirtnixDigital = Client::create([
+            'kx_code' => 'kirtnix-digital',
+            'company_name' => 'Kirtnix Digital',
+            'client_name' => 'Anurag Sammarwar',
+            'ad_account_id' => $this->adAccount->id,
+            'status' => 'active',
+        ]);
+
+        $this->lpDigital = LandingPage::create([
+            'client_id' => $this->kirtnixDigital->id,
+            'title' => 'Kirtnix Digital Landing',
+            'slug' => 'kirtnix-digital',
+            'is_published' => true,
+            'is_active' => true,
+        ]);
+
         Campaign::create([
-            'client_id' => $this->client->id,
+            'client_id' => $this->clientChannel->id,
             'ad_account_id' => $this->adAccount->id,
             'campaign_id' => 'cmp_clientchannel_1',
             'name' => 'Channel Growth Campaign',
@@ -79,34 +99,66 @@ class PublicClientAnalyticsSecurityTest extends TestCase
     }
 
     /**
-     * Requirement 1 & 7: Exact allowlisted URL /analytics/detail/clientchannel opens WITHOUT login (200 OK)
+     * Requirement: GET /analytics/detail/clientchannel opens WITHOUT login (200 OK)
      */
-    public function test_exact_clientchannel_url_is_accessible_without_login(): void
+    public function test_clientchannel_url_is_accessible_without_login(): void
     {
         $response = $this->get('/analytics/detail/clientchannel');
         $response->assertStatus(200);
         $response->assertSee('Client Channel');
-        $response->assertSee('/analytics/detail/clientchannel');
-        // Verify internal agency admin navigation is hidden from unauthenticated guests
         $response->assertDontSee('Landing pages</a>', false);
     }
 
     /**
-     * Requirement 1: Query parameters such as date_range work seamlessly on the public client page
+     * Requirement: GET /analytics/detail/kirtnix-digital opens WITHOUT login (200 OK)
      */
-    public function test_clientchannel_url_accepts_date_range_without_login(): void
+    public function test_kirtnix_digital_url_is_accessible_without_login(): void
     {
-        $response = $this->get('/analytics/detail/clientchannel?date_range=last_7_days');
+        $response = $this->get('/analytics/detail/kirtnix-digital');
         $response->assertStatus(200);
-        $response->assertSee('Client Channel');
+        $response->assertSee('Kirtnix Digital');
+        $response->assertDontSee('Landing pages</a>', false);
     }
 
     /**
-     * Requirement 6: Live metrics real-time polling endpoint works for clientchannel without login
+     * Requirement: Any newly created valid client URL works WITHOUT login (fully dynamic)
      */
-    public function test_clientchannel_live_metrics_is_accessible_without_login(): void
+    public function test_another_valid_client_slug_is_accessible_without_login(): void
     {
-        $response = $this->get('/analytics/detail/clientchannel/live-metrics');
+        $newClient = Client::create([
+            'kx_code' => 'another-valid-client',
+            'company_name' => 'Apex Forex Pro',
+            'client_name' => 'Rohit Verma',
+            'status' => 'active',
+        ]);
+
+        // Access via slugified company name
+        $resBySlug = $this->get('/analytics/detail/apex-forex-pro');
+        $resBySlug->assertStatus(200);
+        $resBySlug->assertSee('Apex Forex Pro');
+
+        // Access via kx_code
+        $resByCode = $this->get('/analytics/detail/another-valid-client');
+        $resByCode->assertStatus(200);
+        $resByCode->assertSee('Apex Forex Pro');
+    }
+
+    /**
+     * Requirement: Query parameters such as date_range work seamlessly without login
+     */
+    public function test_valid_client_url_accepts_date_range_without_login(): void
+    {
+        $response = $this->get('/analytics/detail/kirtnix-digital?date_range=last_7_days');
+        $response->assertStatus(200);
+        $response->assertSee('Kirtnix Digital');
+    }
+
+    /**
+     * Requirement: GET /analytics/detail/kirtnix-digital/live-metrics works without login
+     */
+    public function test_kirtnix_digital_live_metrics_is_accessible_without_login(): void
+    {
+        $response = $this->get('/analytics/detail/kirtnix-digital/live-metrics');
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'ok',
@@ -125,16 +177,49 @@ class PublicClientAnalyticsSecurityTest extends TestCase
     }
 
     /**
-     * Requirement 2: Only GET requests are permitted publicly; POST requests are rejected
+     * Requirement: GET /analytics/detail/clientchannel/live-metrics works without login
      */
-    public function test_post_request_to_clientchannel_is_not_allowed_publicly(): void
+    public function test_clientchannel_live_metrics_is_accessible_without_login(): void
     {
-        $response = $this->post('/analytics/detail/clientchannel', []);
-        $this->assertNotEquals(200, $response->getStatusCode());
+        $response = $this->get('/analytics/detail/clientchannel/live-metrics');
+        $response->assertStatus(200);
+        $this->assertTrue($response->json('ok'));
     }
 
     /**
-     * Requirement 4 & 7: Root URL https://tracker.kirtnix.in redirects unauthenticated users to login
+     * Requirement: GET /analytics/detail/non-existent-client MUST NOT expose analytics data
+     * (unauthenticated user is redirected to login)
+     */
+    public function test_invalid_slug_non_existent_client_redirects_unauthenticated_to_login(): void
+    {
+        $response = $this->get('/analytics/detail/non-existent-client');
+        $response->assertRedirect(route('login'));
+    }
+
+    /**
+     * Requirement: Invalid slug on live-metrics endpoint returns 404
+     */
+    public function test_invalid_slug_live_metrics_returns_404(): void
+    {
+        $response = $this->get('/analytics/detail/non-existent-client/live-metrics');
+        $response->assertStatus(404);
+        $response->assertJson(['ok' => false, 'error' => 'Client not found.']);
+    }
+
+    /**
+     * Requirement: Only GET requests are permitted publicly; POST requests are rejected
+     */
+    public function test_post_request_to_client_analytics_is_not_allowed_publicly(): void
+    {
+        $res1 = $this->post('/analytics/detail/kirtnix-digital', []);
+        $this->assertNotEquals(200, $res1->getStatusCode());
+
+        $res2 = $this->post('/analytics/detail/clientchannel', []);
+        $this->assertNotEquals(200, $res2->getStatusCode());
+    }
+
+    /**
+     * Requirement: Root URL https://tracker.kirtnix.in redirects unauthenticated users to login
      */
     public function test_root_url_redirects_unauthenticated_to_login(): void
     {
@@ -143,7 +228,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
     }
 
     /**
-     * Requirement 3 & 7: https://tracker.kirtnix.in/analytics redirects unauthenticated users to login
+     * Requirement: https://tracker.kirtnix.in/analytics redirects unauthenticated users to login
      */
     public function test_analytics_base_url_redirects_unauthenticated_to_login(): void
     {
@@ -152,7 +237,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
     }
 
     /**
-     * Requirement 3 & 7: https://tracker.kirtnix.in/analytics/detail redirects unauthenticated users to login
+     * Requirement: https://tracker.kirtnix.in/analytics/detail redirects unauthenticated users to login
      */
     public function test_analytics_detail_base_url_redirects_unauthenticated_to_login(): void
     {
@@ -161,7 +246,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
     }
 
     /**
-     * Requirement 5: Trailing slash variation /analytics/detail/ redirects unauthenticated users to login
+     * Requirement: Trailing slash variation /analytics/detail/ redirects unauthenticated users to login
      */
     public function test_analytics_detail_trailing_slash_redirects_unauthenticated_to_login(): void
     {
@@ -170,7 +255,16 @@ class PublicClientAnalyticsSecurityTest extends TestCase
     }
 
     /**
-     * Requirement 5 & 7: /analytics/detail/clientchannel/anything redirects unauthenticated users to login
+     * Requirement: /analytics/detail/kirtnix-digital/anything redirects unauthenticated users to login
+     */
+    public function test_kirtnix_digital_subpath_anything_redirects_unauthenticated_to_login(): void
+    {
+        $response = $this->get('/analytics/detail/kirtnix-digital/anything');
+        $response->assertRedirect(route('login'));
+    }
+
+    /**
+     * Requirement: /analytics/detail/clientchannel/anything redirects unauthenticated users to login
      */
     public function test_clientchannel_subpath_anything_redirects_unauthenticated_to_login(): void
     {
@@ -179,28 +273,16 @@ class PublicClientAnalyticsSecurityTest extends TestCase
     }
 
     /**
-     * Requirement 5: Arbitrary nested subpaths under clientchannel redirect unauthenticated users to login
+     * Requirement: Deep nested arbitrary subpaths redirect unauthenticated users to login
      */
-    public function test_clientchannel_deep_subpaths_redirect_unauthenticated_to_login(): void
+    public function test_arbitrary_nested_subpaths_redirect_unauthenticated_to_login(): void
     {
-        $response = $this->get('/analytics/detail/clientchannel/foo/bar');
+        $response = $this->get('/analytics/detail/kirtnix-digital/foo/bar/test');
         $response->assertRedirect(route('login'));
     }
 
     /**
-     * Requirement 3: Non-allowlisted analytics detail slugs redirect unauthenticated users to login
-     */
-    public function test_other_analytics_slugs_redirect_unauthenticated_to_login(): void
-    {
-        $response = $this->get('/analytics/detail/other-private-client');
-        $response->assertRedirect(route('login'));
-
-        $response2 = $this->get('/analytics/other-private-client');
-        $response2->assertRedirect(route('login'));
-    }
-
-    /**
-     * Requirement 8: Authenticated administrators retain full access to all routes
+     * Requirement: Authenticated administrators retain full access to all routes
      */
     public function test_authenticated_admin_retains_full_access(): void
     {
@@ -220,7 +302,11 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         $resDetail = $this->actingAs($this->user)->get('/analytics/detail/clientchannel');
         $resDetail->assertStatus(200);
 
-        // 5. Landing pages admin navigation is visible for authenticated admin
+        // 5. Analytics detail for kirtnix-digital is accessible
+        $resDetail2 = $this->actingAs($this->user)->get('/analytics/detail/kirtnix-digital');
+        $resDetail2->assertStatus(200);
+
+        // 6. Landing pages admin navigation is visible for authenticated admin
         $resDetail->assertSee('Landing pages');
     }
 }

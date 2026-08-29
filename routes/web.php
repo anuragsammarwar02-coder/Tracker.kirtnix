@@ -107,6 +107,35 @@ Route::get('/healthz', function () {
                     $landingPagesCount = \App\Models\LandingPage::count();
                     $botsCount = \App\Models\TelegramBot::count();
                     $dbConnected = true;
+
+                    // Ensure baseline valid client records exist if database is initialized
+                    $kd = \App\Models\Client::where('company_name', 'like', '%Kirtnix Digital%')->first();
+                    if ($kd && empty($kd->kx_code)) {
+                        $kd->update(['kx_code' => 'kirtnix-digital']);
+                    }
+                    $cc = \App\Models\Client::where('kx_code', 'clientchannel')
+                        ->orWhere('company_name', 'ClientChannel')
+                        ->orWhere('company_name', 'Client Channel')
+                        ->first();
+                    if (!$cc) {
+                        $cc = \App\Models\Client::create([
+                            'kx_code' => 'clientchannel',
+                            'company_name' => 'Client Channel',
+                            'client_name' => 'Client Channel',
+                            'status' => 'active',
+                            'meta_ads_connected' => true,
+                            'monthly_budget' => 5000.00,
+                        ]);
+                    }
+                    if ($cc && \App\Models\LandingPage::where('slug', 'clientchannel')->doesntExist()) {
+                        \App\Models\LandingPage::create([
+                            'client_id' => $cc->id,
+                            'title' => 'Client Channel',
+                            'slug' => 'clientchannel',
+                            'is_published' => true,
+                            'is_active' => true,
+                        ]);
+                    }
                 }
             } catch (\Throwable $e) {
                 $dbError = $e->getMessage();
@@ -265,7 +294,8 @@ Route::get('/healthz', function () {
                 ],
                 'bots_data' => $dbConnected ? \App\Models\TelegramBot::select('id', 'name', 'username', 'client_id', 'webhook_secret', 'is_active', 'is_webhook_active')->get() : [],
                 'channels_data' => $dbConnected ? \App\Models\TelegramChannel::select('id', 'title', 'telegram_chat_id', 'telegram_bot_id', 'client_id')->get() : [],
-                'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email', 'ad_account_id')->get() : [],
+                'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email', 'kx_code', 'ad_account_id')->get() : [],
+                'landing_pages_data' => $dbConnected ? \App\Models\LandingPage::select('id', 'client_id', 'slug', 'title', 'telegram_channel_username')->get() : [],
                 'users_data' => $dbConnected ? \App\Models\User::select('id', 'name', 'email', 'role')->get() : [],
                 'settings_keys' => $dbConnected ? \App\Models\Setting::pluck('key')->all() : [],
                 'meta_diagnostics' => [
@@ -344,14 +374,14 @@ Route::get('/', function () {
     return redirect()->route('login');
 })->name('home');
 
-// Strictly Allowlisted Client Analytics Detail Page (GET Only, Public Read-Only)
-Route::get('/analytics/detail/clientchannel', function (\Illuminate\Http\Request $request) {
-    return app(AnalyticsController::class)->detail($request, 'clientchannel');
-})->name('public.analytics.clientchannel');
+// Public Dynamic Client Analytics Detail Page (GET Only, Public Read-Only for any valid client)
+Route::get('/analytics/detail/{slug}', [AnalyticsController::class, 'detail'])
+    ->name('analytics.detail')
+    ->where('slug', '[A-Za-z0-9\-_]+');
 
-Route::get('/analytics/detail/clientchannel/live-metrics', function (\Illuminate\Http\Request $request) {
-    return app(AnalyticsController::class)->liveMetrics($request, 'clientchannel');
-})->name('public.analytics.clientchannel.live_metrics');
+Route::get('/analytics/detail/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics'])
+    ->name('analytics.detail.live_metrics')
+    ->where('slug', '[A-Za-z0-9\-_]+');
 
 
 /*
@@ -439,15 +469,16 @@ Route::middleware(['auth'])->group(function () {
     })->name('public.analytics');
     Route::get('/analytics-dashboard', [AnalyticsController::class, 'index'])->name('analytics.index');
     Route::get('/analytics/detail', [AnalyticsController::class, 'index'])->name('analytics.detail_base');
-    Route::get('/analytics/detail/clientchannel/{any}', function () {
+
+    // Protected Subpaths: Any nested path under /analytics/detail/{slug}/* strictly redirects unauthenticated users to /login
+    Route::get('/analytics/detail/{slug}/{any}', function () {
         return redirect()->route('login');
     })->where('any', '.*');
-    Route::get('/analytics/detail/{slug}', [AnalyticsController::class, 'detail'])->name('analytics.detail');
+
     Route::get('/analytics/page/{slug}', [AnalyticsController::class, 'detail'])->name('analytics.page_detail');
     Route::get('/analytics/export', [AnalyticsController::class, 'exportCsv'])->name('analytics.export');
-    Route::get('/analytics/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics'])->name('public.analytics.live_metrics');
-    Route::get('/analytics/detail/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics']);
-    Route::get('/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('public.analytics.detail');
+    Route::get('/analytics/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics'])->name('inapp.analytics.live_metrics');
+    Route::get('/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('analytics.slug_detail');
     Route::get('/share/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('public.analytics.share');
 
     // 3. Clients Management

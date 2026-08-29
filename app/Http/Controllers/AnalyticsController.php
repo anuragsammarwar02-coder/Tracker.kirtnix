@@ -13,8 +13,10 @@ use App\Models\TelegramBot;
 use App\Models\TelegramChannel;
 use App\Models\TelegramEvent;
 use App\Services\AnalyticsService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AnalyticsController extends Controller
@@ -264,35 +266,115 @@ class AnalyticsController extends Controller
     }
 
     /**
-     * Dedicated Landing Page / Client Analytics Detail Page (Shareable)
+     * Dynamically resolve valid LandingPage and Client from slug.
+     * Returns [$landingPage, $client] on match, or null if invalid.
      */
-    public function detail(Request $request, ?string $slug = null): View
+    public static function resolveLandingPageAndClient(?string $slug): ?array
     {
-        $landingPage = null;
-        if ($slug) {
-            $landingPage = LandingPage::where('slug', $slug)
-                ->orWhere('telegram_channel_username', $slug)
-                ->orWhere('title', $slug)
-                ->first();
+        if (empty($slug)) {
+            return null;
+        }
 
-            if (!$landingPage) {
-                $clientMatch = Client::where('kx_code', $slug)
-                    ->orWhere('company_name', 'like', "%{$slug}%")
-                    ->orWhere('client_name', 'like', "%{$slug}%")
-                    ->first();
-                if ($clientMatch) {
-                    $landingPage = $clientMatch->landingPages()->first();
+        $normalizedSlug = strtolower(trim($slug));
+
+        // 1. Direct LandingPage match by slug, telegram channel username, or title
+        $landingPage = LandingPage::where('slug', $slug)
+            ->orWhere('slug', $normalizedSlug)
+            ->orWhere('telegram_channel_username', $slug)
+            ->orWhere('telegram_channel_username', $normalizedSlug)
+            ->orWhere('title', $slug)
+            ->first();
+
+        if (!$landingPage) {
+            // Check LandingPages by Str::slug
+            $allLps = LandingPage::all();
+            foreach ($allLps as $lp) {
+                if (
+                    Str::slug($lp->slug) === $normalizedSlug ||
+                    Str::slug($lp->title) === $normalizedSlug ||
+                    strtolower(trim($lp->slug)) === $normalizedSlug ||
+                    strtolower(trim($lp->telegram_channel_username ?? '')) === $normalizedSlug
+                ) {
+                    $landingPage = $lp;
+                    break;
                 }
             }
         }
 
-        if (!$landingPage) {
-            $landingPage = LandingPage::first() ?? new LandingPage([
-                'title' => 'gujaratitrdexx',
-                'slug' => 'gujaratitrdexx',
+        if ($landingPage) {
+            $client = $landingPage->client ?? ($landingPage->client_id ? Client::find($landingPage->client_id) : null) ?? Client::first();
+            return [$landingPage, $client];
+        }
+
+        // 2. Direct Client match by kx_code, exact company_name, or slugified company_name / client_name
+        $client = Client::where('kx_code', $slug)
+            ->orWhere('kx_code', $normalizedSlug)
+            ->orWhere('company_name', $slug)
+            ->orWhereRaw('LOWER(company_name) = ?', [$normalizedSlug])
+            ->orWhereRaw('LOWER(REPLACE(company_name, " ", "-")) = ?', [$normalizedSlug])
+            ->orWhereRaw('LOWER(REPLACE(company_name, " ", "")) = ?', [str_replace('-', '', $normalizedSlug)])
+            ->orWhere('client_name', $slug)
+            ->orWhereRaw('LOWER(client_name) = ?', [$normalizedSlug])
+            ->orWhereRaw('LOWER(REPLACE(client_name, " ", "-")) = ?', [$normalizedSlug])
+            ->first();
+
+        if (!$client) {
+            $allClients = Client::all();
+            foreach ($allClients as $c) {
+                if (
+                    Str::slug($c->company_name) === $normalizedSlug ||
+                    Str::slug($c->client_name) === $normalizedSlug ||
+                    strtolower(trim($c->kx_code ?? '')) === $normalizedSlug
+                ) {
+                    $client = $c;
+                    break;
+                }
+            }
+        }
+
+        // 3. Match TelegramChannel title associated with a client
+        if (!$client) {
+            $channel = TelegramChannel::whereNotNull('client_id')
+                ->where(function ($q) use ($slug, $normalizedSlug) {
+                    $q->where('title', $slug)
+                      ->orWhereRaw('LOWER(REPLACE(title, " ", "-")) = ?', [$normalizedSlug])
+                      ->orWhereRaw('LOWER(REPLACE(title, " ", "_")) = ?', [$normalizedSlug]);
+                })->first();
+            if ($channel && $channel->client_id) {
+                $client = Client::find($channel->client_id);
+            }
+        }
+
+        if ($client) {
+            $landingPage = $client->landingPages()->first() ?? new LandingPage([
+                'client_id' => $client->id,
+                'title' => $client->company_name,
+                'slug' => $slug,
                 'is_published' => true,
             ]);
+            $landingPage->setRelation('client', $client);
+            return [$landingPage, $client];
         }
+
+        return null;
+    }
+
+    /**
+     * Dedicated Landing Page / Client Analytics Detail Page (Shareable)
+     */
+    public function detail(Request $request, ?string $slug = null): View|RedirectResponse
+    {
+        $resolved = self::resolveLandingPageAndClient($slug);
+
+        if (!$resolved) {
+            // Invalid slug: Unauthenticated visitors MUST be redirected to login (no public data exposure)
+            if (!auth()->check()) {
+                return redirect()->route('login');
+            }
+            abort(404, 'Client analytics page not found.');
+        }
+
+        [$landingPage, $client] = $resolved;
 
         // Multi-Tenant Client Role Authorization (if authenticated as a restricted client)
         $user = $request->user() ?? Auth::user();
@@ -543,33 +625,13 @@ class AnalyticsController extends Controller
      */
     public function liveMetrics(Request $request, $slug = null)
     {
-        $landingPage = null;
-        if ($slug) {
-            $landingPage = LandingPage::where('slug', $slug)
-                ->orWhere('telegram_channel_username', $slug)
-                ->orWhere('title', $slug)
-                ->first();
+        $resolved = self::resolveLandingPageAndClient($slug);
 
-            if (!$landingPage) {
-                $clientMatch = Client::where('kx_code', $slug)
-                    ->orWhere('company_name', 'like', "%{$slug}%")
-                    ->orWhere('client_name', 'like', "%{$slug}%")
-                    ->first();
-                if ($clientMatch) {
-                    $landingPage = $clientMatch->landingPages()->first();
-                }
-            }
+        if (!$resolved) {
+            return response()->json(['ok' => false, 'error' => 'Client not found.'], 404);
         }
 
-        if (!$landingPage) {
-            $landingPage = LandingPage::first() ?? new LandingPage([
-                'title' => 'gujaratitrdexx',
-                'slug' => 'gujaratitrdexx',
-                'is_published' => true,
-            ]);
-        }
-
-        $client = $landingPage->client;
+        [$landingPage, $client] = $resolved;
         $dateRange = $request->input('date_range', 'last_30_days');
 
         $dateRangeMap = [

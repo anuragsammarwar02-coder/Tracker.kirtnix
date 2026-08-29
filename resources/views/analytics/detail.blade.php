@@ -86,7 +86,7 @@
                     <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $landingPage->title ?? 'gujaratitrdexx' }}</h1>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500 font-medium">
-                    <span class="font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">/analytics/detail/{{ $landingPage->slug ?? 'clientchannel' }}</span>
+                    <span class="font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">/analytics/detail/{{ $landingPage->slug ?? $client->kx_code ?? 'analytics' }}</span>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         published
                     </span>
