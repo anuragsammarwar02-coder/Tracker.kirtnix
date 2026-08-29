@@ -297,14 +297,22 @@ Route::get('/healthz', function () {
                 'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email', 'kx_code', 'ad_account_id')->get() : [],
                 'ad_account_134' => $dbConnected ? \App\Models\AdAccount::find(134) : null,
                 'meta_raw_act' => ($dbConnected && request()->has('meta_raw')) ? (function() {
-                    $adAccount = \App\Models\AdAccount::find(134);
-                    $conn = \App\Models\MetaConnection::first();
-                    $token = $conn?->access_token ?? \App\Models\Setting::get('meta_system_user_token');
-                    $rawId = str_replace('act_', '', $adAccount?->account_id ?? '');
-                    return \Illuminate\Support\Facades\Http::withoutVerifying()->get("https://graph.facebook.com/v21.0/act_{$rawId}", [
-                        'access_token' => $token,
-                        'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,funding_source_details',
-                    ])->json();
+                    try {
+                        $adAccount = \App\Models\AdAccount::find(134);
+                        $conn = \App\Models\MetaConnection::first();
+                        $token = $conn?->access_token ?? \App\Models\Setting::get('meta_system_user_token');
+                        $rawId = str_replace('act_', '', $adAccount?->account_id ?? '');
+                        $res = \Illuminate\Support\Facades\Http::withoutVerifying()->get("https://graph.facebook.com/v21.0/act_{$rawId}", [
+                            'access_token' => $token,
+                            'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name',
+                        ]);
+                        return [
+                            'status' => $res->status(),
+                            'body' => $res->json() ?? $res->body(),
+                        ];
+                    } catch (\Throwable $e) {
+                        return ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()];
+                    }
                 })() : null,
                 'landing_pages_data' => $dbConnected ? \App\Models\LandingPage::select('id', 'client_id', 'slug', 'title', 'telegram_channel_username')->get() : [],
                 'users_data' => $dbConnected ? \App\Models\User::select('id', 'name', 'email', 'role')->get() : [],
