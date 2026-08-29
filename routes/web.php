@@ -296,7 +296,7 @@ Route::get('/healthz', function () {
                 'channels_data' => $dbConnected ? \App\Models\TelegramChannel::select('id', 'title', 'telegram_chat_id', 'telegram_bot_id', 'client_id')->get() : [],
                 'clients_data' => $dbConnected ? \App\Models\Client::select('id', 'company_name', 'client_name', 'email', 'kx_code', 'ad_account_id')->get() : [],
                 'ad_account_134' => $dbConnected ? \App\Models\AdAccount::find(134) : null,
-                'meta_raw_act' => ($dbConnected && $request->has('meta_raw')) ? (function() {
+                'meta_raw_act' => ($dbConnected && request()->has('meta_raw')) ? (function() {
                     $adAccount = \App\Models\AdAccount::find(134);
                     $conn = \App\Models\MetaConnection::first();
                     $token = $conn?->access_token ?? \App\Models\Setting::get('meta_system_user_token');
