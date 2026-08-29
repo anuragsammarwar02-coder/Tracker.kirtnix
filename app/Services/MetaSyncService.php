@@ -147,7 +147,7 @@ class MetaSyncService
         try {
             $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/adaccounts", [
                 'access_token' => $token,
-                'fields' => 'id,account_id,name,currency,account_status,spend_limit,balance,amount_spent,daily_budget,funding_source_details',
+                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
                 'limit' => 100,
             ]);
 
@@ -161,10 +161,10 @@ class MetaSyncService
                     $statusNum = $acc['account_status'] ?? 1;
                     $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
 
-                    $spendLimit = isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00;
+                    $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : (isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00);
                     $balance = isset($acc['balance']) ? ((float) $acc['balance'] / 100) : 0.00;
                     $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
-                    $dailyBudget = isset($acc['daily_budget']) ? ((float) $acc['daily_budget'] / 100) : 0.00;
+                    $dailyBudget = 0.00;
 
                     $record = AdAccount::updateOrCreate(
                         ['account_id' => $accId],
@@ -218,7 +218,7 @@ class MetaSyncService
             // 1. Sync live ad account metadata from Meta
             $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}", [
                 'access_token' => $token,
-                'fields' => 'id,account_id,name,currency,account_status,spend_limit,spend_cap,balance,amount_spent,daily_budget,funding_source_details,timezone_name',
+                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
             ]);
 
             if ($accRes->successful() && !empty($accRes->json())) {
@@ -226,16 +226,17 @@ class MetaSyncService
                 $spendLimit = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : 0.00);
                 $balance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : 0.00;
                 $lifetimeSpend = isset($accData['amount_spent']) ? ((float) $accData['amount_spent'] / 100) : (float)$adAccount->lifetime_spend;
-                $dailyBudget = isset($accData['daily_budget']) ? ((float) $accData['daily_budget'] / 100) : 0.00;
 
                 $adAccount->update([
                     'spend_limit' => $spendLimit,
                     'balance' => $balance,
                     'lifetime_spend' => $lifetimeSpend,
-                    'active_daily_budget' => $dailyBudget,
                     'currency' => $accData['currency'] ?? $adAccount->currency,
                     'last_synced_at' => now(),
                 ]);
+                $adAccount->spend_limit = $spendLimit;
+                $adAccount->balance = $balance;
+                $adAccount->lifetime_spend = $lifetimeSpend;
             }
 
             // 2. Sync campaigns and insights from Meta with pagination
@@ -373,7 +374,7 @@ class MetaSyncService
                 // 1. Account Metadata & Lifetime Spend
                 $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}", [
                     'access_token' => $token,
-                    'fields' => 'id,account_id,name,currency,account_status,spend_limit,spend_cap,balance,amount_spent,daily_budget,timezone_name,timezone_offset_hours_utc',
+                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
                 ]);
 
                 if ($accRes->successful() && !empty($accRes->json())) {
@@ -397,6 +398,9 @@ class MetaSyncService
                         'currency' => $currency,
                         'last_synced_at' => now(),
                     ]);
+                    $adAccount->spend_limit = $spendCap;
+                    $adAccount->balance = $balance;
+                    $adAccount->lifetime_spend = $spendTotal;
                 }
 
                 // 2. Date-Scoped Reporting Insights for selected date range

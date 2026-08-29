@@ -541,7 +541,7 @@ class AnalyticsController extends Controller
         if ($spendCap > 0) {
             $remainingBudget = max(0, $spendCap - $totalBudgetSpend);
             $hasRemainingBudget = true;
-            $remainingSource = 'Account spend limit from Meta (Remaining in Meta billing)';
+            $remainingSource = 'Remaining fund in Meta ad account (Account spend limit from Meta)';
         } elseif ($accountBalance > 0) {
             $remainingBudget = $accountBalance;
             $hasRemainingBudget = true;
