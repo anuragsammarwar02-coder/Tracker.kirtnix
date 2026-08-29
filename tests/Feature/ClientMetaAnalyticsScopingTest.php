@@ -587,23 +587,24 @@ class ClientMetaAnalyticsScopingTest extends TestCase
             'active_daily_budget' => 500.00,
         ]);
 
-        // Today: Budget should be 1 day of daily budget = ₹500.00
+        // Box 1: Today's Spending shows today's spend, Box 2: Total Budget Spend shows lifetime spend
         $resToday = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'today']));
         $resToday->assertOk();
-        $resToday->assertSee('₹500.00');
-        $resToday->assertSee('Active daily budget (1 day)');
+        $resToday->assertSee("Today's Spending", false);
+        $resToday->assertSee('Actual spending for today');
+        $resToday->assertSee('Total Budget Spend');
+        $resToday->assertSee('Actual spending since account creation');
+        $resToday->assertSee('Remaining Budget');
 
-        // Last 7 days: Budget should be 7 days = ₹3,500.00
         $res7d = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'last_7_days']));
         $res7d->assertOk();
-        $res7d->assertSee('₹3,500.00');
-        $res7d->assertSee('Active daily budget (7 days)');
+        $res7d->assertSee("Today's Spending", false);
+        $res7d->assertSee('Total Budget Spend');
 
-        // Last 30 days: Budget should be 30 days = ₹15,000.00
         $res30d = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'last_30_days']));
         $res30d->assertOk();
-        $res30d->assertSee('₹15,000.00');
-        $res30d->assertSee('Active daily budget (30 days)');
+        $res30d->assertSee("Today's Spending", false);
+        $res30d->assertSee('Total Budget Spend');
     }
 
     public function test_date_filter_correctly_scopes_budget_and_spend_metrics(): void
@@ -660,10 +661,11 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         $resToday->assertOk();
         $resToday->assertSee('<span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹0.00</span>', false);
 
-        // Request Lifetime
+        // Request Lifetime: Box 1 (budget-spending) is Today's Spending (0.00), Box 2 (budget-total) is Total Budget Spend (1,694.91)
         $resLifetime = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'lifetime']));
         $resLifetime->assertOk();
-        $resLifetime->assertSee('<span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹1,694.91</span>', false);
+        $resLifetime->assertSee('<span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹0.00</span>', false);
+        $resLifetime->assertSee('<span id="budget-total" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹1,694.91</span>', false);
         $resLifetime->assertSee('<span id="kpi-reach" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">7,056</span>', false);
         $resLifetime->assertSee('<span id="kpi-impressions" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">8,239</span>', false);
         $resLifetime->assertSee('₹3.40');

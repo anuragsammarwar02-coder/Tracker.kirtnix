@@ -309,4 +309,111 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         // 6. Landing pages admin navigation is visible for authenticated admin
         $resDetail->assertSee('Landing pages');
     }
+
+    /**
+     * Requirement: Top 3 Budget KPI boxes match exact business requirements
+     * 1. Today's Spending matches today's actual Meta spend (never lifetime fallback)
+     * 2. Total Budget Spend matches lifetime actual Meta spend since account creation
+     * 3. Remaining Budget matches Meta Billing reported budget, and never invents a fake calculation
+     */
+    public function test_top_three_budget_kpi_boxes_render_exact_required_meanings_and_sources(): void
+    {
+        $this->adAccount->update([
+            'client_id' => $this->clientChannel->id,
+            'lifetime_spend' => 1728.62,
+            'spend_limit' => 15000.00,
+        ]);
+
+        $cacheKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}:range_lifetime";
+        $fallbackKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}";
+        $mockMetrics = [
+            'connected' => true,
+            'account_name' => 'Client Channel Ad Account',
+            'account_id' => $this->adAccount->account_id,
+            'business_name' => 'Kirtnix Agency',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'status' => 'Active',
+            'timezone' => 'Asia/Kolkata',
+            'last_sync' => 'Just now',
+            'date_range' => 'lifetime',
+            'spend_scoped' => 1728.62,
+            'spend_total' => 1728.62,
+            'lifetime_spend' => 1728.62,
+            'spend_today' => 500.00,
+            'clicks' => 40,
+            'impressions' => 1000,
+            'reach' => 800,
+            'leads' => 5,
+            'spend_limit' => 15000.00,
+            'balance' => 0.00,
+            'campaigns_count' => 1,
+        ];
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put($fallbackKey, $mockMetrics, 60);
+
+        $res = $this->get('/analytics/detail/clientchannel?date_range=lifetime');
+        $res->assertStatus(200);
+
+        // 1. Box 1: Today's Spending shows 500.00 (NOT the 1728.62 lifetime spend)
+        $res->assertSee("Today's Spending", false);
+        $res->assertSee('₹500.00');
+        $res->assertSee('Actual spending for today');
+
+        // 2. Box 2: Total Budget Spend shows 1,728.62
+        $res->assertSee('Total Budget Spend');
+        $res->assertSee('₹1,728.62');
+        $res->assertSee('Actual spending since account creation');
+
+        // 3. Box 3: Remaining Budget shows 15000 - 1728.62 = 13,271.38 (from Meta spend limit)
+        $res->assertSee('Remaining Budget');
+        $res->assertSee('₹13,271.38');
+    }
+
+    /**
+     * Requirement: No fake remaining budget is shown when Meta has no spend limit or balance
+     */
+    public function test_no_fake_remaining_budget_shown_when_meta_has_no_limit_or_balance(): void
+    {
+        $this->adAccount->update([
+            'client_id' => $this->clientChannel->id,
+            'lifetime_spend' => 1728.62,
+            'spend_limit' => 0.00,
+            'balance' => 0.00,
+        ]);
+
+        $cacheKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}:range_lifetime";
+        $fallbackKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}";
+        $mockMetrics = [
+            'connected' => true,
+            'account_name' => 'Client Channel Ad Account',
+            'account_id' => $this->adAccount->account_id,
+            'business_name' => 'Kirtnix Agency',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'status' => 'Active',
+            'timezone' => 'Asia/Kolkata',
+            'last_sync' => 'Just now',
+            'date_range' => 'lifetime',
+            'spend_scoped' => 1728.62,
+            'spend_total' => 1728.62,
+            'lifetime_spend' => 1728.62,
+            'spend_today' => 0.00,
+            'clicks' => 0,
+            'impressions' => 0,
+            'reach' => 0,
+            'spend_limit' => 0.00,
+            'balance' => 0.00,
+            'campaigns_count' => 1,
+        ];
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put($fallbackKey, $mockMetrics, 60);
+
+        $res = $this->get('/analytics/detail/clientchannel?date_range=lifetime');
+        $res->assertStatus(200);
+
+        // Must display "No limit set" and NOT a fake calculated number
+        $res->assertSee('No limit set');
+        $res->assertSee('No spend limit set in Meta billing');
+    }
 }

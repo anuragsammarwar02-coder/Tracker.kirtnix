@@ -513,68 +513,66 @@ class AnalyticsController extends Controller
 
         $spendCap = (float) ($metaMetrics['spend_limit'] ?? ($adAccount?->spend_limit ?? 0));
         $accountBalance = (float) ($metaMetrics['balance'] ?? ($adAccount?->balance ?? 0));
+        $campaignLifetimeBudgetRemaining = (float) $campaigns->sum('budget_remaining');
 
-        $daysMultiplier = match($dateRange) {
-            'today', 'yesterday' => 1,
-            'last_7_days' => 7,
-            'last_30_days' => 30,
-            'this_month' => now()->day,
-            default => 30,
-        };
-        $daysLabel = $daysMultiplier === 1 ? '1 day' : "{$daysMultiplier} days";
-
-        $totalBudgetLimit = 0.00;
-        $remainingBudget = 0.00;
-
-        if ($spendCap > 0 && $dateRange === 'lifetime') {
-            $totalBudgetLimit = $spendCap;
-            $remainingBudget = max(0, $totalBudgetLimit - ($adAccount?->lifetime_spend ?: $campaignSpend));
-            $budgetSource = 'Account spend limit from Meta';
-            $remainingSource = 'Limit minus lifetime spend';
-        } elseif ($spendCap > 0) {
-            $totalBudgetLimit = $spendCap;
-            $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
-            $budgetSource = 'Account spend limit from Meta';
-            $remainingSource = 'Limit minus period spend';
-        } elseif ($campaignLifetimeBudgetSum > 0 && $dateRange === 'lifetime') {
-            $totalBudgetLimit = $campaignLifetimeBudgetSum;
-            $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
-            $budgetSource = 'Campaign lifetime budget from Meta';
-            $remainingSource = 'Budget minus campaign spend';
-        } elseif ($activeDailyBudgetSum > 0) {
-            $totalBudgetLimit = $activeDailyBudgetSum * $daysMultiplier;
-            $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
-            $budgetSource = "Active daily budget ({$daysLabel})";
-            $remainingSource = 'Run rate minus period spend';
-        } elseif ($client && (float) $client->monthly_budget > 0) {
-            if (in_array($dateRange, ['today', 'yesterday'])) {
-                $totalBudgetLimit = round((float) $client->monthly_budget / 30, 2);
-                $budgetSource = 'Daily portion of monthly budget';
-            } elseif ($dateRange === 'last_7_days') {
-                $totalBudgetLimit = round(((float) $client->monthly_budget / 30) * 7, 2);
-                $budgetSource = '7-day portion of monthly budget';
-            } else {
-                $totalBudgetLimit = (float) $client->monthly_budget;
-                $budgetSource = 'Configured client monthly budget';
-            }
-            $remainingBudget = max(0, $totalBudgetLimit - $campaignSpend);
-            $remainingSource = 'Monthly budget minus spend';
+        // 1. Box 1: Today's Spending (Actual spending for today / selected single day - NEVER lifetime spend)
+        $spendToday = (float) ($metaMetrics['spend_today'] ?? 0.00);
+        if ($dateRange === 'yesterday') {
+            $todaySpending = $campaignSpend;
+            $todaySpendingSubtitle = 'Actual spending for yesterday';
+        } elseif ($dateRange === 'today') {
+            $todaySpending = $spendToday > 0 ? $spendToday : $campaignSpend;
+            $todaySpendingSubtitle = 'Actual spending for today';
         } else {
-            // When no spend limit or budget is configured in Meta:
-            // Strictly display 0.00 and NEVER derive Total Budget from lifetime spend
-            $totalBudgetLimit = 0.00;
-            $remainingBudget = $accountBalance > 0 ? $accountBalance : 0.00;
-            $budgetSource = 'No spend limit configured in Meta';
-            $remainingSource = $accountBalance > 0 ? 'Account prepaid balance' : 'No spend limit configured in Meta';
+            // For multi-day views (lifetime, last_30_days, last_7_days, this_month), Box 1 strictly displays today's actual spend
+            $todaySpending = $spendToday;
+            $todaySpendingSubtitle = 'Actual spending for today';
+        }
+
+        // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation)
+        $totalBudgetSpend = (float) ($metaMetrics['spend_total'] ?? ($metaMetrics['lifetime_spend'] ?? ($adAccount?->lifetime_spend ?: $campaigns->sum('spend'))));
+
+        // 3. Box 3: Remaining Budget (Actual Meta Billing / Ad Account remaining budget value)
+        // Strictly avoid fake calculations (such as daily_budget * 30 - spend).
+        $remainingBudget = 0.00;
+        $hasRemainingBudget = false;
+        $remainingSource = 'No spend limit configured in Meta billing';
+
+        if ($spendCap > 0) {
+            $remainingBudget = max(0, $spendCap - $totalBudgetSpend);
+            $hasRemainingBudget = true;
+            $remainingSource = 'Account spend limit from Meta (Remaining in Meta billing)';
+        } elseif ($accountBalance > 0) {
+            $remainingBudget = $accountBalance;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Available balance in Meta billing';
+        } elseif ($campaignLifetimeBudgetRemaining > 0) {
+            $remainingBudget = $campaignLifetimeBudgetRemaining;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Remaining budget in Meta billing';
+        } elseif ($client && (float) $client->monthly_budget > 0) {
+            $monthSpend = (float) ($metaMetrics['spend_month'] ?? ($dateRange === 'this_month' ? $campaignSpend : 0.00));
+            $remainingBudget = max(0, (float) $client->monthly_budget - $monthSpend);
+            $hasRemainingBudget = true;
+            $remainingSource = 'Remaining of monthly budget';
+        } else {
+            // When no spend limit or balance is configured in Meta billing, clearly show unconfigured state
+            $remainingBudget = 0.00;
+            $hasRemainingBudget = false;
+            $remainingSource = 'No spend limit configured in Meta (No spend limit set in Meta billing)';
         }
 
         $budget = [
-            'total_spending' => $campaignSpend,
-            'total_budget' => $totalBudgetLimit,
+            'today_spending' => $todaySpending,
+            'today_spending_subtitle' => $todaySpendingSubtitle,
+            'total_budget_spend' => $totalBudgetSpend,
+            'total_spending' => $todaySpending, // legacy fallback
+            'total_budget' => $totalBudgetSpend, // legacy fallback for existing tests
             'remaining_budget' => $remainingBudget,
+            'has_remaining_budget' => $hasRemainingBudget,
             'currency_symbol' => $adAccount?->currency_symbol ?? '₹',
-            'spending_source' => 'Actual spend for ' . ucfirst(str_replace('_', ' ', $dateRange)),
-            'budget_source' => $budgetSource,
+            'spending_source' => $todaySpendingSubtitle,
+            'budget_source' => 'Actual spending since account creation',
             'remaining_source' => $remainingSource,
             'last_synced' => $adAccount?->last_synced_at ? $adAccount->last_synced_at->diffForHumans() : 'Never',
         ];

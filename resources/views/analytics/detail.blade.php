@@ -152,27 +152,27 @@
             <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">BUDGET <span class="sr-only">Budget Overview</span></h2>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Card 1: Total spending -->
+                <!-- Card 1: Today's spending -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[120px]">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">Total Spending</span>
+                        <span class="text-xs font-medium text-slate-500">Today's Spending</span><span class="sr-only">Total Spending</span>
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_spending'], 2) }}</span>
-                        <p id="budget-spending-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['spending_source'] ?? 'Actual spend for selected period' }}</p>
+                        <span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['today_spending'] ?? $budget['total_spending'], 2) }}</span>
+                        <p id="budget-spending-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['today_spending_subtitle'] ?? 'Actual spending for today' }}</p>
                     </div>
                 </div>
 
-                <!-- Card 2: Total budget -->
+                <!-- Card 2: Total budget spend -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[120px]">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">Total Budget</span>
+                        <span class="text-xs font-medium text-slate-500">Total Budget Spend</span>
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span id="budget-total" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_budget'], 2) }}</span>
-                        <p id="budget-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['budget_source'] ?? 'Live from the connected Meta ad account' }}</p>
+                        <span id="budget-total" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['total_budget_spend'] ?? $budget['total_budget'], 2) }}</span>
+                        <p id="budget-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['budget_source'] ?? 'Actual spending since account creation' }}</p>
                     </div>
                 </div>
 
@@ -183,8 +183,12 @@
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
                     </div>
                     <div class="mt-2">
-                        <span id="budget-remaining" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['remaining_budget'], 2) }}</span>
-                        <p id="budget-remaining-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['remaining_source'] ?? 'Live from Meta ad account' }}</p>
+                        @if(!empty($budget['has_remaining_budget']))
+                            <span id="budget-remaining" class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ $budget['currency_symbol'] }}{{ number_format($budget['remaining_budget'], 2) }}</span>
+                        @else
+                            <span id="budget-remaining" class="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">No limit set</span>
+                        @endif
+                        <p id="budget-remaining-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['remaining_source'] ?? 'No spend limit set in Meta billing' }}</p>
                     </div>
                 </div>
             </div>
