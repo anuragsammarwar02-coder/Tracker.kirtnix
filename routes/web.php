@@ -45,6 +45,27 @@ Route::get('/healthz', function () {
             } catch (\Throwable $e) {}
         }
 
+        $gitPullResult = null;
+        if (request()->query('git_pull')) {
+            try {
+                $gitPullResult = @shell_exec('git pull origin main 2>&1');
+            } catch (\Throwable $e) {
+                $gitPullResult = 'Error: ' . $e->getMessage();
+            }
+        }
+
+        $gitCommit = 'unknown';
+        if (file_exists(base_path('.git/HEAD'))) {
+            $head = trim(@file_get_contents(base_path('.git/HEAD')));
+            if (str_starts_with($head, 'ref: ')) {
+                $refFile = base_path('.git/' . substr($head, 5));
+                if (file_exists($refFile)) {
+                    $gitCommit = trim(@file_get_contents($refFile));
+                }
+            } else {
+                $gitCommit = $head;
+            }
+        }
         $dbPath = config('database.connections.sqlite.database');
         $dbExists = $dbPath && $dbPath !== ':memory:' ? file_exists($dbPath) : true;
         $dbSize = ($dbExists && $dbPath !== ':memory:') ? filesize($dbPath) : 0;
@@ -273,7 +294,11 @@ Route::get('/healthz', function () {
         $html = "<!DOCTYPE html><html><head><title>Kirtnix DB Inspector</title>";
         $html .= "<style>body{font-family:monospace;background:#0d1117;color:#c9d1d9;padding:20px;} table{border-collapse:collapse;width:100%;margin-top:15px;} th,td{border:1px solid #30363d;padding:8px 12px;text-align:left;} th{background:#161b22;color:#58a6ff;} tr:nth-child(even){background:#161b22;}</style></head><body>";
         $html .= "<h2>KIRTNIX PRODUCTION DATABASE INSPECTOR (READ-ONLY)</h2>";
-        $html .= "<p><strong>Configured DB:</strong> {$dbPath}<br>";
+        if ($gitPullResult !== null) {
+            $html .= "<div style='background:#1f6feb;color:#fff;padding:10px;border-radius:6px;margin-bottom:15px;'><strong>Git Pull Output:</strong><pre>" . htmlspecialchars($gitPullResult) . "</pre></div>";
+        }
+        $html .= "<p><strong>Deployed Commit:</strong> <code>{$gitCommit}</code> | <strong>Routes Modified:</strong> " . date('Y-m-d H:i:s', filemtime(__FILE__)) . "<br>";
+        $html .= "<strong>Configured DB:</strong> {$dbPath}<br>";
         $html .= "<strong>Exists:</strong> " . ($dbExists ? 'YES' : 'NO') . " (" . number_format($dbSize) . " bytes)<br>";
         $html .= "<strong>Connected:</strong> " . ($dbConnected ? 'YES' : 'NO') . "<br>";
         $html .= "<strong>Snapshot Archive:</strong> " . ($snapshotExists ? "YES ({$snapshotSize} bytes)" : 'NO') . "<br>";
