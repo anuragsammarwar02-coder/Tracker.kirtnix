@@ -240,12 +240,9 @@ class SaaSExtendedTest extends TestCase
         $this->assertEquals('approved', $loginReq->fresh()->status);
     }
 
-    public function test_public_marketing_analytics_page_renders_for_guests()
+    public function test_root_url_redirects_unauthenticated_guests_to_login()
     {
         $response = $this->get('/');
-        $response->assertStatus(200);
-        $response->assertSee('Turn your marketing data into decisions');
-        $response->assertSee('KIRTNi');
-        $response->assertSee('Conversion Funnel');
+        $response->assertRedirect(route('login'));
     }
 }

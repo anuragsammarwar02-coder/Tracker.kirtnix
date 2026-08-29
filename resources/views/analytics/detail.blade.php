@@ -76,15 +76,17 @@
         <!-- 1. Header & Navigation -->
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-                <a href="{{ auth()->check() ? route('landing-pages.index') : '/' }}" class="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-900 transition mb-2">
+                @if(auth()->check())
+                <a href="{{ route('landing-pages.index') }}" class="inline-flex items-center text-xs font-semibold text-slate-500 hover:text-slate-900 transition mb-2">
                     <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                     Landing pages
                 </a>
+                @endif
                 <div class="flex items-center gap-3">
                     <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $landingPage->title ?? 'gujaratitrdexx' }}</h1>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500 font-medium">
-                    <span class="font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">/analytics/{{ $landingPage->slug ?? 'gujaratitrdexx' }}</span>
+                    <span class="font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">/analytics/detail/{{ $landingPage->slug ?? 'clientchannel' }}</span>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         published
                     </span>

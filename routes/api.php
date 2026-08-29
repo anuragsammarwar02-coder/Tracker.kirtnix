@@ -18,8 +18,14 @@ Route::post('/track/view', [TrackingApiController::class, 'recordView'])->name('
 Route::post('/track/invite', [TrackingApiController::class, 'getInvite'])->name('api.track.invite');
 Route::post('/track/click', [TrackingApiController::class, 'recordClick'])->name('api.track.click');
 
-// 3. Live Metrics API
-Route::get('/analytics/{slug}/live-metrics', [\App\Http\Controllers\AnalyticsController::class, 'liveMetrics'])->name('api.analytics.live_metrics');
+// 3. Live Metrics API (Scoped strictly to clientchannel without auth; other slugs require auth)
+Route::get('/analytics/clientchannel/live-metrics', [\App\Http\Controllers\AnalyticsController::class, 'liveMetrics'])->name('api.analytics.clientchannel.live_metrics');
+Route::get('/analytics/{slug}/live-metrics', function (\Illuminate\Http\Request $request, $slug) {
+    if (!auth()->check() && !auth('sanctum')->check()) {
+        return response()->json(['error' => 'Unauthenticated'], 401);
+    }
+    return app(\App\Http\Controllers\AnalyticsController::class)->liveMetrics($request, $slug);
+})->name('api.analytics.live_metrics');
 
 // 4. Conversion Meta CAPI Retry
 Route::post('/conversions/{conversion}/retry-meta', [TrackingApiController::class, 'retryMeta'])->name('api.conversions.retry_meta');

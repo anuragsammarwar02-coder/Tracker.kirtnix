@@ -312,19 +312,22 @@ Route::get('/healthz', function () {
     }
 });
 
-Route::get('/', [PublicMarketingController::class, 'home'])->name('home');
-Route::get('/analytics', function () {
+Route::get('/', function () {
     if (auth()->check()) {
-        return app(AnalyticsController::class)->index(request());
+        return redirect()->route('dashboard');
     }
-    return app(PublicMarketingController::class)->analytics();
-})->name('public.analytics');
+    return redirect()->route('login');
+})->name('home');
 
-// Dedicated Shareable Client Analytics Page & Live Polling Endpoints
-Route::get('/analytics/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics'])->name('public.analytics.live_metrics');
-Route::get('/analytics/detail/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics']);
-Route::get('/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('public.analytics.detail');
-Route::get('/share/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('public.analytics.share');
+// Strictly Allowlisted Client Analytics Detail Page (GET Only, Public Read-Only)
+Route::get('/analytics/detail/clientchannel', function (\Illuminate\Http\Request $request) {
+    return app(AnalyticsController::class)->detail($request, 'clientchannel');
+})->name('public.analytics.clientchannel');
+
+Route::get('/analytics/detail/clientchannel/live-metrics', function (\Illuminate\Http\Request $request) {
+    return app(AnalyticsController::class)->liveMetrics($request, 'clientchannel');
+})->name('public.analytics.clientchannel.live_metrics');
+
 
 /*
 |--------------------------------------------------------------------------
@@ -405,11 +408,22 @@ Route::middleware(['auth'])->group(function () {
     // 1. Overview Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // 2. In-App Analytics (Global & Detail View)
+    // 2. In-App Analytics (Global & Detail View - Protected)
+    Route::get('/analytics', function (\Illuminate\Http\Request $request) {
+        return app(AnalyticsController::class)->index($request);
+    })->name('public.analytics');
     Route::get('/analytics-dashboard', [AnalyticsController::class, 'index'])->name('analytics.index');
-    Route::get('/analytics/detail/{slug?}', [AnalyticsController::class, 'detail'])->name('analytics.detail');
+    Route::get('/analytics/detail', [AnalyticsController::class, 'index'])->name('analytics.detail_base');
+    Route::get('/analytics/detail/clientchannel/{any}', function () {
+        return redirect()->route('login');
+    })->where('any', '.*');
+    Route::get('/analytics/detail/{slug}', [AnalyticsController::class, 'detail'])->name('analytics.detail');
     Route::get('/analytics/page/{slug}', [AnalyticsController::class, 'detail'])->name('analytics.page_detail');
     Route::get('/analytics/export', [AnalyticsController::class, 'exportCsv'])->name('analytics.export');
+    Route::get('/analytics/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics'])->name('public.analytics.live_metrics');
+    Route::get('/analytics/detail/{slug}/live-metrics', [AnalyticsController::class, 'liveMetrics']);
+    Route::get('/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('public.analytics.detail');
+    Route::get('/share/analytics/{slug}', [AnalyticsController::class, 'detail'])->name('public.analytics.share');
 
     // 3. Clients Management
     Route::post('/clients/{client}/assign-ad-account', [ClientController::class, 'assignAdAccount'])->name('clients.assign_ad_account');

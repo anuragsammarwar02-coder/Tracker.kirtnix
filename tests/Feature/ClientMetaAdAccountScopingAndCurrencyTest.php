@@ -371,7 +371,7 @@ class ClientMetaAdAccountScopingAndCurrencyTest extends TestCase
             $res->assertOk();
         }
 
-        $response = $this->get("/analytics/{$lp->slug}/live-metrics");
+        $response = $this->actingAs($this->user)->get("/analytics/{$lp->slug}/live-metrics");
         $response->assertOk();
         $response->assertJson([
             'ok' => true,
