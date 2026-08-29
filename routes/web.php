@@ -303,7 +303,7 @@ Route::get('/healthz', function () {
                     $rawId = str_replace('act_', '', $adAccount?->account_id ?? '');
                     return \Illuminate\Support\Facades\Http::withoutVerifying()->get("https://graph.facebook.com/v21.0/act_{$rawId}", [
                         'access_token' => $token,
-                        'fields' => 'id,account_id,name,currency,account_status,spend_limit,spend_cap,balance,amount_spent,daily_budget,timezone_name,funding_source_details,extended_credit_info',
+                        'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,funding_source_details',
                     ])->json();
                 })() : null,
                 'landing_pages_data' => $dbConnected ? \App\Models\LandingPage::select('id', 'client_id', 'slug', 'title', 'telegram_channel_username')->get() : [],
