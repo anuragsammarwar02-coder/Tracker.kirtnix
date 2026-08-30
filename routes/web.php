@@ -45,6 +45,16 @@ Route::get('/healthz', function () {
             } catch (\Throwable $e) {}
         }
 
+        $migrateResult = null;
+        if (request()->query('migrate')) {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+                $migrateResult = \Illuminate\Support\Facades\Artisan::output();
+            } catch (\Throwable $e) {
+                $migrateResult = 'Migrate Error: ' . $e->getMessage();
+            }
+        }
+
         $gitPullResult = null;
         if (request()->query('git_pull')) {
             try {
@@ -342,6 +352,9 @@ Route::get('/healthz', function () {
         $html .= "<h2>KIRTNIX PRODUCTION DATABASE INSPECTOR (READ-ONLY)</h2>";
         if ($gitPullResult !== null) {
             $html .= "<div style='background:#1f6feb;color:#fff;padding:10px;border-radius:6px;margin-bottom:15px;'><strong>Git Pull Output:</strong><pre>" . htmlspecialchars($gitPullResult) . "</pre></div>";
+        }
+        if ($migrateResult !== null) {
+            $html .= "<div style='background:#238636;color:#fff;padding:10px;border-radius:6px;margin-bottom:15px;'><strong>Migrate Output:</strong><pre>" . htmlspecialchars($migrateResult) . "</pre></div>";
         }
         $html .= "<p><strong>Deployed Commit:</strong> <code>{$gitCommit}</code> | <strong>Routes Modified:</strong> " . date('Y-m-d H:i:s', filemtime(__FILE__)) . "<br>";
         $html .= "<strong>Configured DB:</strong> {$dbPath}<br>";
