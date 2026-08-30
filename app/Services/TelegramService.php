@@ -731,11 +731,10 @@ class TelegramService
             'event_time' => now(),
         ]);
 
-        // Create Verified Conversion Record for join / join_request
+        // Create Verified Conversion Record for join / join_request (Single source of truth for Subscribers)
         if ($channel && in_array($eventType, ['join', 'join_request'])) {
             $existingConversion = Conversion::where('telegram_channel_id', $channel->id)
                 ->where('telegram_user_id', $telegramUserId)
-                ->where('event_type', $eventType)
                 ->first();
 
             if (!$existingConversion) {
@@ -778,9 +777,18 @@ class TelegramService
                     'event_time' => now(),
                 ]);
 
-                // Dispatch Meta CAPI for verified conversion (Subscribe optimization event)
+                // Dispatch Meta CAPI for verified conversion (Subscribe optimization event - ONLY on actual Telegram join)
                 if ($isVerified) {
                     $this->metaCapiService->sendConversionEvent($conversion, 'Subscribe');
+                }
+            } else {
+                // If user transitioned from join_request to full member, update status idempotently
+                if ($eventType === 'join' && $existingConversion->event_type !== 'join') {
+                    $existingConversion->update([
+                        'event_type' => 'join',
+                        'status' => 'verified',
+                        'event_time' => now(),
+                    ]);
                 }
             }
         }

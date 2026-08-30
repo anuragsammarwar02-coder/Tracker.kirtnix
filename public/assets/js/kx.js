@@ -275,13 +275,11 @@
 
     if (typeof window.fbq === 'function') {
       try {
-        window.fbq('track', 'Subscribe', {
-          content_name: el.innerText ? el.innerText.trim() : 'Telegram CTA',
-          content_category: 'Telegram',
-          source: 'kirtnix_tracker',
-          visitor_id: visitorId,
-          value: 0.00,
-          currency: 'INR'
+        // Track CTA Click as funnel event (TelegramClick & Lead for optimization) - NEVER Subscribe (Subscribe is only for actual Telegram join)
+        window.fbq('trackCustom', 'TelegramClick', {
+          button_text: el.innerText ? el.innerText.trim() : 'Join Telegram',
+          destination: webUrl,
+          visitor_id: visitorId
         }, { eventID: clickEventId });
         window.fbq('track', 'Lead', {
           content_name: el.innerText ? el.innerText.trim() : 'Telegram CTA',
@@ -289,10 +287,6 @@
           source: 'kirtnix_tracker',
           visitor_id: visitorId
         }, { eventID: clickEventId });
-        window.fbq('trackCustom', 'TelegramClick', {
-          button_text: el.innerText ? el.innerText.trim() : 'Join Telegram',
-          destination: webUrl
-        });
       } catch(err) {}
     }
 

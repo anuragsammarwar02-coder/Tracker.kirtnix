@@ -141,7 +141,8 @@ class AnalyticsController extends Controller
         $campaignPerformance = $campaigns->map(function ($camp) use ($currencySymbol) {
             $views = $camp->views()->count();
             $clicks = $camp->clicks()->count() ?: (int) ($camp->getAttributes()['clicks'] ?? 0);
-            $joins = $camp->telegramEvents()->where('event_type', 'join')->count() ?: (int) $camp->subscribers;
+            $joins = Conversion::where('campaign_id', $camp->id)->where('status', 'verified')->count() 
+                ?: $camp->telegramEvents()->where('event_type', 'join')->count();
             $spend = (float) $camp->spend;
             $cpj = $joins > 0 ? round($spend / $joins, 2) : 0.00;
             $ctr = $views > 0 ? round(($clicks / $views) * 100, 1) : 0.0;
@@ -436,7 +437,7 @@ class AnalyticsController extends Controller
         // 3. Telegram Events from DB
         $eventsQuery = TelegramEvent::where('client_id', $client?->id)
             ->where('event_time', '>=', $startDate);
-        $subscribers = (clone $eventsQuery)->where('event_type', 'join')->count();
+        $subscribers = (clone $eventsQuery)->where('event_type', 'join')->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->where('event_type', 'join')->count();
         $directJoins = (clone $eventsQuery)->where('event_type', 'join')->where(function($q) {
             $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
         })->count();
@@ -669,7 +670,7 @@ class AnalyticsController extends Controller
         // 3. Telegram Events from DB
         $eventsQuery = TelegramEvent::where('client_id', $client?->id)
             ->where('event_time', '>=', $startDate);
-        $subscribers = (clone $eventsQuery)->where('event_type', 'join')->count();
+        $subscribers = (clone $eventsQuery)->where('event_type', 'join')->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->where('event_type', 'join')->count();
         $directJoins = (clone $eventsQuery)->where('event_type', 'join')->where(function($q) {
             $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
         })->count();

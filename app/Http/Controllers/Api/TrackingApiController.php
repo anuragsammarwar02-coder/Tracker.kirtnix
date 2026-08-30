@@ -199,9 +199,9 @@ class TrackingApiController extends Controller
             $cta->increment('click_count');
         }
 
-        // Dispatch Meta CAPI Website Subscribe event for real-time Meta Ads Manager results
+        // Optional funnel event: dispatch Lead if configured, but NEVER Subscribe on CTA click (Subscribe is strictly for confirmed Telegram joins)
         try {
-            $this->metaCapiService->sendCtaClickEvent($click, 'Subscribe');
+            $this->metaCapiService->sendCtaClickEvent($click, 'Lead');
         } catch (\Throwable $e) {
             Log::info("CAPI Click dispatch notice: " . $e->getMessage());
         }

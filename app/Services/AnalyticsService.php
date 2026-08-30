@@ -112,7 +112,7 @@ class AnalyticsService
         $totalClicks = (clone $clicksQuery)->count();
         $uniqueClicks = (clone $clicksQuery)->where('is_unique', true)->count();
 
-        $joins = (clone $eventsQuery)->where('event_type', 'join')->count();
+        $joins = (clone $eventsQuery)->where('event_type', 'join')->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->where('event_type', 'join')->count();
         $leaves = (clone $eventsQuery)->where('event_type', 'leave')->count();
         $netJoins = max(0, $joins - $leaves);
 

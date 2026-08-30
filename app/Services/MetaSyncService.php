@@ -275,15 +275,12 @@ class MetaSyncService
                     $dailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
                     $lifetimeBudget = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
 
-                    $subscribers = 0;
-                    if (!empty($insights['actions'])) {
-                        foreach ($insights['actions'] as $act) {
-                            if (in_array($act['action_type'], ['lead', 'onsite_conversion.subscribe', 'subscribe'])) {
-                                $subscribers += (int) $act['value'];
-                            }
-                        }
-                    }
-                    $costPerSub = $subscribers > 0 ? round($spend / $subscribers, 2) : 0.00;
+                    // Actual Telegram join is the single source of truth for subscribers (never Meta actions)
+                    $existingCamp = Campaign::where('campaign_id', 'cmp_' . $c['id'])->orWhere('campaign_id', $c['id'])->first();
+                    $actualSubscribers = $existingCamp 
+                        ? (\App\Models\Conversion::where('campaign_id', $existingCamp->id)->where('status', 'verified')->count() ?: $existingCamp->telegramEvents()->where('event_type', 'join')->count())
+                        : 0;
+                    $costPerSub = $actualSubscribers > 0 ? round($spend / $actualSubscribers, 2) : 0.00;
 
                     $rawStatus = $c['status'] ?? $c['effective_status'] ?? 'ACTIVE';
                     $status = ucfirst(strtolower($rawStatus));
@@ -307,7 +304,7 @@ class MetaSyncService
                             'active_daily_budget' => $dailyBudget,
                             'reach' => $reach,
                             'impressions' => $impressions,
-                            'subscribers' => $subscribers,
+                            'subscribers' => $actualSubscribers,
                             'cost_per_subscriber' => $costPerSub,
                         ]
                     );

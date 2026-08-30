@@ -137,7 +137,7 @@ class MetaCapiService
     /**
      * Dispatch CTA Click to Meta Conversions API (Website Subscribe / Lead).
      */
-    public function sendCtaClickEvent(CtaClick $click, string $eventName = 'Subscribe'): array
+    public function sendCtaClickEvent(CtaClick $click, string $eventName = 'Lead'): array
     {
         $landingPage = $click->landingPage;
         [$pixelId, $accessToken] = $this->resolveCredentials($landingPage);
