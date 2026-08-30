@@ -52,8 +52,9 @@ class PublicLandingPageController extends Controller
         $primaryCta = $landingPage->ctas->where('button_type', 'primary')->first() ?? $landingPage->ctas->first();
         $secondaryCta = $landingPage->ctas->where('button_type', 'secondary')->first() ?? $primaryCta;
 
-        $template = match ($landingPage->template_type) {
-            'gujarati_trader' => 'templates.gujarati_trader',
+        $template = match (true) {
+            !empty($landingPage->blocks_json) || $landingPage->template_type === 'visual_builder' => 'templates.visual_builder',
+            $landingPage->template_type === 'gujarati_trader' => 'templates.gujarati_trader',
             default => 'templates.forex_focus',
         };
 

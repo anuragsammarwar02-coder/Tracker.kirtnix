@@ -62,7 +62,7 @@ class LandingPageController extends Controller
         $campaigns = Campaign::where('status', 'active')->orderBy('name')->get();
         $selectedClientId = $request->query('client_id');
 
-        return view('landing_pages.create', compact('clients', 'campaigns', 'selectedClientId'));
+        return view('landing_pages.builder', compact('clients', 'campaigns', 'selectedClientId'));
     }
 
     public function store(Request $request)
@@ -71,26 +71,54 @@ class LandingPageController extends Controller
             LandingPage::withTrashed()->where('slug', trim($request->slug))->whereNotNull('deleted_at')->forceDelete();
         }
 
+        // Decode blocks_json if passed as JSON string
+        $blocksJson = null;
+        if ($request->filled('blocks_json')) {
+            $blocksJson = is_string($request->blocks_json) ? json_decode($request->blocks_json, true) : $request->blocks_json;
+        }
+
+        // Auto-extract hero fields from blocks if template is visual_builder or blocks_json is present
+        $heroBlock = null;
+        if (is_array($blocksJson)) {
+            foreach ($blocksJson as $b) {
+                if (($b['type'] ?? '') === 'hero') {
+                    $heroBlock = $b;
+                    break;
+                }
+            }
+        }
+
+        if (!$request->filled('hero_heading') && $heroBlock) {
+            $request->merge(['hero_heading' => $heroBlock['heading'] ?? $request->input('title')]);
+        }
+        if (!$request->filled('primary_cta_text') && $heroBlock) {
+            $request->merge(['primary_cta_text' => $heroBlock['button_text'] ?? 'Join Free Telegram Channel']);
+        }
+        if (!$request->filled('brand_name')) {
+            $request->merge(['brand_name' => 'VIP Trading']);
+        }
+
         $validated = $request->validate([
             'client_id' => ['required', 'exists:clients,id'],
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('landing_pages', 'slug')->whereNull('deleted_at')],
-            'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom'],
+            'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom,visual_builder'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
             'brand_logo_url' => ['nullable', 'string'],
             'badge_text' => ['nullable', 'string', 'max:255'],
-            'hero_heading' => ['required', 'string'],
+            'hero_heading' => ['nullable', 'string'],
             'hero_subheading' => ['nullable', 'string'],
             'hero_video_url' => ['nullable', 'string'],
             'hero_image_url' => ['nullable', 'string'],
             'features_json' => ['nullable', 'array'],
+            'blocks_json' => ['nullable'],
             'about_heading' => ['nullable', 'string', 'max:255'],
             'about_text' => ['nullable', 'string'],
             'disclaimer_text' => ['nullable', 'string'],
             'footer_text' => ['nullable', 'string', 'max:255'],
-            'primary_cta_text' => ['required', 'string', 'max:255'],
+            'primary_cta_text' => ['nullable', 'string', 'max:255'],
             'secondary_cta_text' => ['nullable', 'string', 'max:255'],
             'telegram_destination' => ['required', 'string'],
             'telegram_channel_username' => ['nullable', 'string'],
@@ -103,9 +131,16 @@ class LandingPageController extends Controller
             'is_active' => ['boolean'],
         ]);
 
+        $validated['blocks_json'] = $blocksJson;
         $validated['is_active'] = $request->boolean('is_active', true);
         $validated['page_source'] = 'native';
         $validated['tracking_token'] = (string) Str::uuid();
+        if (empty($validated['primary_cta_text'])) {
+            $validated['primary_cta_text'] = 'Join Free Telegram Channel';
+        }
+        if (empty($validated['hero_heading'])) {
+            $validated['hero_heading'] = $validated['title'];
+        }
 
         // Fallback default logo if empty
         if (empty($validated['brand_logo_url'])) {
@@ -325,17 +360,44 @@ class LandingPageController extends Controller
         $clients = Client::orderBy('company_name')->get();
         $campaigns = Campaign::where('client_id', $landingPage->client_id)->orderBy('name')->get();
 
+        if ($landingPage->page_source === 'native') {
+            return view('landing_pages.builder', compact('landingPage', 'clients', 'campaigns'));
+        }
+
         return view('landing_pages.edit', compact('landingPage', 'clients', 'campaigns'));
     }
 
     public function update(Request $request, LandingPage $landingPage)
     {
+        // Decode blocks_json if passed as JSON string
+        $blocksJson = null;
+        if ($request->filled('blocks_json')) {
+            $blocksJson = is_string($request->blocks_json) ? json_decode($request->blocks_json, true) : $request->blocks_json;
+        }
+
+        $heroBlock = null;
+        if (is_array($blocksJson)) {
+            foreach ($blocksJson as $b) {
+                if (($b['type'] ?? '') === 'hero') {
+                    $heroBlock = $b;
+                    break;
+                }
+            }
+        }
+
+        if (!$request->filled('hero_heading') && $heroBlock) {
+            $request->merge(['hero_heading' => $heroBlock['heading'] ?? $landingPage->hero_heading]);
+        }
+        if (!$request->filled('primary_cta_text') && $heroBlock) {
+            $request->merge(['primary_cta_text' => $heroBlock['button_text'] ?? $landingPage->primary_cta_text]);
+        }
+
         $validated = $request->validate([
             'client_id' => ['required', 'exists:clients,id'],
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('landing_pages', 'slug')->ignore($landingPage->id)->whereNull('deleted_at')],
-            'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom'],
+            'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom,visual_builder'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
             'brand_logo_url' => ['nullable', 'string'],
@@ -345,11 +407,12 @@ class LandingPageController extends Controller
             'hero_video_url' => ['nullable', 'string'],
             'hero_image_url' => ['nullable', 'string'],
             'features_json' => ['nullable', 'array'],
+            'blocks_json' => ['nullable'],
             'about_heading' => ['nullable', 'string', 'max:255'],
             'about_text' => ['nullable', 'string'],
             'disclaimer_text' => ['nullable', 'string'],
             'footer_text' => ['nullable', 'string', 'max:255'],
-            'primary_cta_text' => ['required', 'string', 'max:255'],
+            'primary_cta_text' => ['nullable', 'string', 'max:255'],
             'secondary_cta_text' => ['nullable', 'string', 'max:255'],
             'telegram_destination' => ['required', 'string'],
             'telegram_channel_username' => ['nullable', 'string'],
@@ -362,6 +425,9 @@ class LandingPageController extends Controller
             'is_active' => ['boolean'],
         ]);
 
+        if ($blocksJson !== null) {
+            $validated['blocks_json'] = $blocksJson;
+        }
         $validated['is_active'] = $request->boolean('is_active', true);
 
         $landingPage->update($validated);
@@ -372,7 +438,7 @@ class LandingPageController extends Controller
 
         $primaryCta = $landingPage->ctas()->where('button_type', 'primary')->first();
         if ($primaryCta) {
-            $primaryCta->update(['button_text' => $landingPage->primary_cta_text]);
+            $primaryCta->update(['button_text' => $landingPage->primary_cta_text ?: 'Join Free Telegram Channel']);
         }
 
         return redirect()->route('landing-pages.show', $landingPage)
