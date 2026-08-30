@@ -192,4 +192,51 @@ class LandingPage extends Model
     {
         return url('/lp/' . $this->slug);
     }
+
+    /**
+     * Generate a globally unique, sanitized slug for a landing page.
+     * If the desired slug already exists (excluding $ignoreId), appends -2, -3, etc.
+     */
+    public static function generateUniqueSlug(?string $desiredSlug, ?int $ignoreId = null, ?string $fallbackTitle = null): string
+    {
+        $raw = trim($desiredSlug ?? '');
+        if ($raw === '' && !empty($fallbackTitle)) {
+            $raw = trim($fallbackTitle);
+        }
+
+        // Sanitize: lowercase, spaces/special chars to hyphen, strip duplicate hyphens
+        $base = \Illuminate\Support\Str::slug($raw);
+        if ($base === '') {
+            $base = 'lp-' . \Illuminate\Support\Str::lower(\Illuminate\Support\Str::random(6));
+        }
+
+        // Check if base slug is available (excluding ignoreId if updating)
+        $query = static::withTrashed()->whereRaw('LOWER(slug) = ?', [strtolower($base)]);
+        if ($ignoreId !== null) {
+            $query->where('id', '!=', $ignoreId);
+        }
+
+        if (!$query->exists()) {
+            return $base;
+        }
+
+        // If taken, find next available suffix: base-2, base-3, etc.
+        $counter = 2;
+        while (true) {
+            $candidate = "{$base}-{$counter}";
+            $subQuery = static::withTrashed()->whereRaw('LOWER(slug) = ?', [strtolower($candidate)]);
+            if ($ignoreId !== null) {
+                $subQuery->where('id', '!=', $ignoreId);
+            }
+
+            if (!$subQuery->exists()) {
+                return $candidate;
+            }
+
+            $counter++;
+            if ($counter > 1000) {
+                return $base . '-' . \Illuminate\Support\Str::lower(\Illuminate\Support\Str::random(6));
+            }
+        }
+    }
 }

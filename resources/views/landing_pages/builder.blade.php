@@ -386,7 +386,14 @@
 
               <div>
                 <label class="block text-[11px] font-semibold text-slate-300 mb-1">Public URL Slug * (/lp/slug)</label>
-                <input type="text" x-model="slug" placeholder="forex-vip" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono text-[11px] focus:border-yellow-400 outline-none">
+                <input 
+                  type="text" 
+                  x-model="slug" 
+                  @input="slug = slug.toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-')"
+                  placeholder="forex-vip" 
+                  class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono text-[11px] focus:border-yellow-400 outline-none"
+                >
+                <p class="text-[10px] text-slate-500 mt-1">Globally unique path. If a duplicate exists, the system automatically appends -2, -3, etc.</p>
               </div>
 
               <div>
@@ -967,9 +974,8 @@ function visualBuilder(config) {
         return;
       }
       if (!this.slug.trim()) {
-        alert('Please enter a Public URL Slug.');
-        this.activeTab = 'settings';
-        return;
+        const base = (this.title || 'page').toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        this.slug = base || ('page-' + Math.random().toString(36).substring(2, 7));
       }
       if (!this.telegramDestination.trim()) {
         alert('Please enter a Telegram Destination link.');

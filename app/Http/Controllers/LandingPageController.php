@@ -71,6 +71,11 @@ class LandingPageController extends Controller
             LandingPage::withTrashed()->where('slug', trim($request->slug))->whereNotNull('deleted_at')->forceDelete();
         }
 
+        // 1. Generate unique & sanitized slug BEFORE validation & insertion
+        $desiredSlug = $request->input('slug') ?: $request->input('title') ?: 'page';
+        $uniqueSlug = LandingPage::generateUniqueSlug($desiredSlug, null, $request->input('title'));
+        $request->merge(['slug' => $uniqueSlug]);
+
         // Decode blocks_json if passed as JSON string
         $blocksJson = null;
         if ($request->filled('blocks_json')) {
@@ -102,7 +107,7 @@ class LandingPageController extends Controller
             'client_id' => ['required', 'exists:clients,id'],
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'title' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('landing_pages', 'slug')->whereNull('deleted_at')],
+            'slug' => ['required', 'string', 'max:255'],
             'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom,visual_builder'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
@@ -131,6 +136,7 @@ class LandingPageController extends Controller
             'is_active' => ['boolean'],
         ]);
 
+        $validated['slug'] = $uniqueSlug;
         $validated['blocks_json'] = $blocksJson;
         $validated['is_active'] = $request->boolean('is_active', true);
         $validated['page_source'] = 'native';
@@ -148,7 +154,24 @@ class LandingPageController extends Controller
             $validated['brand_logo_url'] = $client?->logo_url ?? '/assets/branding/kirtnix-logo-dark-icon.png';
         }
 
-        $landingPage = LandingPage::create($validated);
+        // Race-condition safe insertion: retry with unique suffix if collision occurs
+        $created = false;
+        $attempts = 0;
+        $landingPage = null;
+        while (!$created && $attempts < 5) {
+            try {
+                $landingPage = LandingPage::create($validated);
+                $created = true;
+            } catch (\Illuminate\Database\UniqueConstraintViolationException|\Illuminate\Database\QueryException $e) {
+                if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE constraint failed')) {
+                    $attempts++;
+                    $uniqueSlug = LandingPage::generateUniqueSlug($validated['slug'] . '-' . Str::lower(Str::random(4)));
+                    $validated['slug'] = $uniqueSlug;
+                } else {
+                    throw $e;
+                }
+            }
+        }
 
         // Create Default Primary CTA
         Cta::create([
@@ -392,11 +415,16 @@ class LandingPageController extends Controller
             $request->merge(['primary_cta_text' => $heroBlock['button_text'] ?? $landingPage->primary_cta_text]);
         }
 
+        // 1. Resolve slug uniqueness while allowing current page's own slug
+        $desiredSlug = $request->input('slug') ?: $landingPage->slug ?: $request->input('title');
+        $uniqueSlug = LandingPage::generateUniqueSlug($desiredSlug, $landingPage->id, $request->input('title'));
+        $request->merge(['slug' => $uniqueSlug]);
+
         $validated = $request->validate([
             'client_id' => ['required', 'exists:clients,id'],
             'campaign_id' => ['nullable', 'exists:campaigns,id'],
             'title' => ['required', 'string', 'max:255'],
-            'slug' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('landing_pages', 'slug')->ignore($landingPage->id)->whereNull('deleted_at')],
+            'slug' => ['required', 'string', 'max:255'],
             'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom,visual_builder'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
@@ -425,12 +453,29 @@ class LandingPageController extends Controller
             'is_active' => ['boolean'],
         ]);
 
+        $validated['slug'] = $uniqueSlug;
         if ($blocksJson !== null) {
             $validated['blocks_json'] = $blocksJson;
         }
         $validated['is_active'] = $request->boolean('is_active', true);
 
-        $landingPage->update($validated);
+        // Race-condition safe update: retry with unique suffix if collision occurs
+        $updated = false;
+        $attempts = 0;
+        while (!$updated && $attempts < 5) {
+            try {
+                $landingPage->update($validated);
+                $updated = true;
+            } catch (\Illuminate\Database\UniqueConstraintViolationException|\Illuminate\Database\QueryException $e) {
+                if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'UNIQUE constraint failed')) {
+                    $attempts++;
+                    $uniqueSlug = LandingPage::generateUniqueSlug($validated['slug'] . '-' . Str::lower(Str::random(4)), $landingPage->id);
+                    $validated['slug'] = $uniqueSlug;
+                } else {
+                    throw $e;
+                }
+            }
+        }
 
         $landingPage->ctas()->update([
             'telegram_destination' => $landingPage->telegram_destination,
