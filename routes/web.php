@@ -48,7 +48,23 @@ Route::get('/healthz', function () {
         $gitPullResult = null;
         if (request()->query('git_pull')) {
             try {
-                $gitPullResult = @shell_exec('git pull origin main 2>&1');
+                if (function_exists('shell_exec')) {
+                    $gitPullResult = @shell_exec('git pull origin main 2>&1');
+                } elseif (function_exists('exec')) {
+                    $output = [];
+                    @exec('git pull origin main 2>&1', $output);
+                    $gitPullResult = implode("\n", $output);
+                } elseif (function_exists('system')) {
+                    ob_start();
+                    @system('git pull origin main 2>&1');
+                    $gitPullResult = ob_get_clean();
+                } elseif (function_exists('passthru')) {
+                    ob_start();
+                    @passthru('git pull origin main 2>&1');
+                    $gitPullResult = ob_get_clean();
+                } else {
+                    $gitPullResult = 'Process execution disabled in PHP environment (auto-deploy active via Hostinger Git/Webhook)';
+                }
             } catch (\Throwable $e) {
                 $gitPullResult = 'Error: ' . $e->getMessage();
             }
