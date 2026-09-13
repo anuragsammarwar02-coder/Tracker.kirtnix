@@ -44,8 +44,36 @@
         </button>
     </div>
 
-    <!-- TAB 1: META INTEGRATION (MATCHES SCREENSHOT SPEC) -->
-    <div x-show="currentTab === 'meta'" class="space-y-6">
+    <!-- TAB 1: META INTEGRATION -->
+    <div x-show="currentTab === 'meta'" x-data="{ showAddAccountModal: false, showTokenHelp: false, showOAuthSettings: false }" class="space-y-6">
+        
+        <!-- Flash messages / Notifications -->
+        @if(session('success'))
+        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>{{ session('success') }}</span>
+            </div>
+        </div>
+        @endif
+
+        @if(session('error'))
+        <div class="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-start gap-2 shadow-sm">
+            <svg class="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <div class="flex-1">
+                <p class="font-bold">Meta Connection Notice:</p>
+                <p class="mt-0.5 font-normal text-rose-700 leading-relaxed">{{ session('error') }}</p>
+            </div>
+        </div>
+        @endif
+
+        @if(session('info'))
+        <div class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm">
+            <svg class="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>{{ session('info') }}</span>
+        </div>
+        @endif
+
         <!-- Main Meta Connection Card -->
         @if($metaConnection)
         <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
@@ -56,7 +84,7 @@
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
-                            <h2 class="text-base font-bold text-slate-900">Meta Integration</h2>
+                            <h2 class="text-base font-bold text-slate-900">Meta Integration Active</h2>
                             @if($metaConnection->sync_status === 'failed' || $metaConnection->status === 'expired' || $metaConnection->status === 'reauth_required')
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                                 <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
@@ -65,12 +93,12 @@
                             @else
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
-                                Connected
+                                Connected & Active
                             </span>
                             @endif
                         </div>
                         <p class="text-xs text-slate-500 mt-1 max-w-xl">
-                            One agency Facebook connection powers spend, campaign objectives, pixel and Conversions API across every client.
+                            One agency Facebook connection powers live spend, campaign objectives, pixel tracking, and Conversions API (CAPI) across every client.
                         </p>
                         @if($metaConnection->sync_status === 'failed' && $metaConnection->error_message)
                         <div class="mt-2 text-xs text-amber-700 font-medium">
@@ -81,19 +109,18 @@
                 </div>
 
                 <div class="flex items-center gap-2">
-                    @if($metaConnection->sync_status === 'failed' || $metaConnection->status === 'expired' || $metaConnection->status === 'reauth_required')
-                    <a href="{{ route('meta.oauth.redirect') }}" class="px-3.5 py-2 text-xs font-bold text-white bg-[#1877F2] hover:bg-[#166FE5] rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
-                        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                        Reconnect
-                    </a>
-                    @endif
                     <form action="{{ route('meta.sync') }}" method="POST">
                         @csrf
                         <button type="submit" class="px-3.5 py-2 text-xs font-bold text-slate-900 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
                             <svg class="w-4 h-4" style="width: 16px; height: 16px; min-width: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                            Sync accounts
+                            Sync Accounts
                         </button>
                     </form>
+
+                    <button type="button" @click="showOAuthSettings = !showOAuthSettings" class="px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        <span>Update Token</span>
+                    </button>
 
                     <form action="{{ route('meta.disconnect') }}" method="POST" onsubmit="return confirm('Are you sure you want to disconnect your Meta account? All synced ad accounts will be removed.');">
                         @csrf
@@ -107,7 +134,7 @@
             <!-- Meta Quick Specs -->
             <div class="mt-6 pt-4 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                 <div>
-                    <span class="text-slate-400 font-medium block">Connected Facebook User</span>
+                    <span class="text-slate-400 font-medium block">Connected Facebook Profile</span>
                     <span class="text-slate-900 font-bold text-sm">{{ $metaConnection->facebook_name ?? 'Connected User' }}</span>
                 </div>
                 <div>
@@ -123,43 +150,11 @@
                     <span class="text-emerald-600 font-semibold">● Active (100% Delivery)</span>
                 </div>
             </div>
-        </div>
-        @else
-        <!-- Connect Meta Form Card -->
-        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6 pb-6 border-b border-slate-100">
-                <div class="flex items-start gap-4">
-                    <div class="w-12 h-12 rounded-xl bg-[#1877F2] text-white flex items-center justify-center flex-shrink-0 shadow-sm" style="width: 48px; height: 48px; min-width: 48px; min-height: 48px;">
-                        <svg class="w-6 h-6 fill-current" style="width: 24px; height: 24px;" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                    </div>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h2 class="text-base font-bold text-slate-900">Connect Facebook & Meta Ads</h2>
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                                Disconnected
-                            </span>
-                        </div>
-                        <p class="text-xs text-slate-500 mt-1 max-w-xl">
-                            Log in with your Facebook account to automatically sync all your Ad Accounts, Businesses, and Live Campaign Spends via OAuth 2.0.
-                        </p>
-                    </div>
-                </div>
 
-                <div>
-                    <a href="{{ route('meta.oauth.redirect') }}" class="inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-xs shadow-sm hover:shadow-md transition-all duration-150 cursor-pointer">
-                        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                        <span>Continue with Facebook</span>
-                    </a>
-                </div>
-            </div>
-
-            <!-- Advanced Manual Token Option (Collapsible) -->
-            <div x-data="{ openManual: false }" class="mt-4 pt-2">
-                <button type="button" @click="openManual = !openManual" class="text-xs font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-1 cursor-pointer">
-                    <span x-text="openManual ? '▲ Hide manual token connect' : '▼ Or connect via System User Token / App ID'"></span>
-                </button>
-
-                <form x-show="openManual" x-cloak action="{{ route('meta.connect') }}" method="POST" class="mt-4 space-y-4 max-w-2xl bg-slate-50/70 p-4 rounded-xl border border-slate-200">
+            <!-- Collapsible Update Form when connected -->
+            <div x-show="showOAuthSettings" x-cloak class="mt-6 pt-4 border-t border-slate-100">
+                <h4 class="text-xs font-bold text-slate-800 mb-2">Update Meta Credentials & Access Token</h4>
+                <form action="{{ route('meta.connect') }}" method="POST" class="space-y-4 max-w-2xl bg-slate-50 p-4 rounded-xl border border-slate-200">
                     @csrf
                     <div>
                         <label class="block text-xs font-bold text-slate-700 mb-1">Meta System User Access Token (EAAB...)</label>
@@ -173,39 +168,209 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App ID</label>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App ID (Optional)</label>
                             <input 
                                 type="text" 
                                 name="app_id" 
-                                value="{{ \App\Models\Setting::get('meta_app_id', '4520673831531016') }}" 
+                                value="{{ \App\Models\Setting::get('meta_app_id', '') }}" 
+                                placeholder="e.g. 123456789012345"
                                 class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                             />
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App Secret</label>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App Secret (Optional)</label>
                             <input 
                                 type="password" 
                                 name="app_secret" 
-                                value="{{ \App\Models\Setting::get('meta_app_secret', '4400729382f0cf94b61599e165019281') }}" 
+                                value="{{ \App\Models\Setting::get('meta_app_secret', '') }}" 
+                                placeholder="••••••••••••••••"
                                 class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                             />
                         </div>
                     </div>
 
-                    <button type="submit" class="px-4 py-2 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
-                        <span>Save & Connect Token</span>
-                    </button>
+                    <div class="flex justify-end">
+                        <button type="submit" class="px-4 py-2 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
+                            <span>Update & Verify Connection</span>
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
+        @else
+        <!-- Connect Meta Container (When Disconnected) -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
+            
+            <!-- Connection Header -->
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-5 border-b border-slate-100">
+                <div class="flex items-start gap-3.5">
+                    <div class="w-12 h-12 rounded-xl bg-[#1877F2] text-white flex items-center justify-center flex-shrink-0 shadow-sm" style="width: 48px; height: 48px; min-width: 48px; min-height: 48px;">
+                        <svg class="w-6 h-6 fill-current" style="width: 24px; height: 24px;" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-base font-bold text-slate-900">Connect Facebook & Meta Ads</h2>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                Disconnected
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1 max-w-2xl">
+                            Connect your Meta Ad Account to automatically track real-time ad spends, campaign budgets, and sync Conversions API (CAPI) events.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two Connection Options Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- OPTION 1: Instant Permanent System User Token (Recommended) -->
+                <div class="lg:col-span-7 bg-gradient-to-b from-yellow-50/40 via-white to-white p-5 rounded-xl border-2 border-yellow-400/80 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full bg-yellow-400 text-slate-950 font-black text-xs flex items-center justify-center">1</span>
+                            <h3 class="text-sm font-bold text-slate-900">Instant Access Token Connect</h3>
+                        </div>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase tracking-wider">
+                            ⚡ Recommended (30 Secs)
+                        </span>
+                    </div>
+
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        The fastest and most stable method for agencies and media buyers. Paste your Meta System User Access Token or Graph API Explorer Token below.
+                    </p>
+
+                    <form action="{{ route('meta.connect') }}" method="POST" class="space-y-3.5">
+                        @csrf
+                        <div>
+                            <label class="block text-xs font-bold text-slate-800 mb-1">
+                                Meta Access Token <span class="text-rose-500">*</span>
+                                <span class="font-normal text-slate-500 text-[11px]">(Starts with EAAB... or EAAG...)</span>
+                            </label>
+                            <textarea 
+                                name="access_token" 
+                                rows="3" 
+                                required
+                                placeholder="Paste your EAAB... or EAAG... token here"
+                                class="w-full bg-white border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 shadow-sm"
+                            >{{ \App\Models\Setting::get('meta_system_user_token') }}</textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-800 mb-1">
+                                Primary Ad Account ID (Optional)
+                                <span class="font-normal text-slate-500 text-[11px]">(e.g. act_1234567890)</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                name="ad_account_id" 
+                                placeholder="e.g. act_1234567890 or 1234567890" 
+                                class="w-full bg-white border border-slate-300 rounded-lg px-3.5 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400 shadow-sm"
+                            />
+                        </div>
+
+                        <div class="pt-1 flex items-center justify-between">
+                            <button type="button" @click="showTokenHelp = !showTokenHelp" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span x-text="showTokenHelp ? 'Hide guide' : 'Where to get Meta token?'"></span>
+                            </button>
+
+                            <button type="submit" class="px-5 py-2.5 text-xs font-extrabold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-xl shadow-sm hover:shadow transition flex items-center gap-2 cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                <span>Connect & Sync Now</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Token Helper Accordion -->
+                    <div x-show="showTokenHelp" x-cloak class="mt-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-2">
+                        <p class="font-bold text-slate-900">How to get a Meta Access Token in 30 seconds:</p>
+                        <ol class="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 leading-relaxed">
+                            <li>Go to <strong>business.facebook.com</strong> &rarr; <strong>Business Settings</strong> &rarr; <strong>System Users</strong>.</li>
+                            <li>Click <strong>Generate New Token</strong> and select your Meta App.</li>
+                            <li>Select permissions: <code class="bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-800">ads_read</code>, <code class="bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-800">ads_management</code>, <code class="bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-800">read_insights</code>, <code class="bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-800">business_management</code>.</li>
+                            <li>Copy the generated token and paste it in the box above!</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- OPTION 2: OAuth 2.0 (Continue with Facebook) -->
+                <div class="lg:col-span-5 bg-slate-50/70 p-5 rounded-xl border border-slate-200 space-y-4">
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center">2</span>
+                        <h3 class="text-sm font-bold text-slate-900">Facebook OAuth Login</h3>
+                    </div>
+
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        To use the blue <strong>"Continue with Facebook"</strong> button, enter your custom Meta App credentials registered on <strong>developers.facebook.com</strong>.
+                    </p>
+
+                    <form action="{{ route('meta.connect') }}" method="POST" class="space-y-3">
+                        @csrf
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App ID</label>
+                            <input 
+                                type="text" 
+                                name="app_id" 
+                                value="{{ \App\Models\Setting::get('meta_app_id', '') }}" 
+                                placeholder="Enter Meta App ID"
+                                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App Secret</label>
+                            <input 
+                                type="password" 
+                                name="app_secret" 
+                                value="{{ \App\Models\Setting::get('meta_app_secret', '') }}" 
+                                placeholder="Enter Meta App Secret"
+                                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                            />
+                        </div>
+
+                        <!-- OAuth Callback Redirect URL Helper -->
+                        <div class="p-2.5 bg-white rounded-lg border border-slate-200 text-[11px]">
+                            <span class="text-slate-500 block font-semibold mb-1">Valid OAuth Redirect URI:</span>
+                            <div class="flex items-center justify-between gap-2 font-mono text-[10px] text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                <span class="truncate" id="redirectUriText">{{ route('meta.oauth.callback') }}</span>
+                                <button type="button" onclick="navigator.clipboard.writeText('{{ route('meta.oauth.callback') }}'); alert('Redirect URI copied to clipboard!');" class="text-blue-600 hover:text-blue-800 font-bold flex-shrink-0 cursor-pointer">
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pt-1 flex flex-col sm:flex-row items-center gap-2">
+                            <button type="submit" class="w-full sm:w-auto px-3.5 py-2 text-xs font-bold text-slate-800 bg-slate-200 hover:bg-slate-300 rounded-lg transition cursor-pointer">
+                                Save App ID
+                            </button>
+
+                            <a href="{{ route('meta.oauth.redirect') }}" class="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-xs shadow-sm transition cursor-pointer">
+                                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                                <span>Continue with Facebook</span>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+            </div>
+
+        </div>
         @endif
 
-        <!-- Synced Ad Accounts Table (Matches Reference Screenshot) -->
+        <!-- Synced Ad Accounts Table -->
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div class="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                     <h3 class="text-sm font-bold text-slate-900">Synced Meta Ad Accounts</h3>
-                    <span class="text-xs text-slate-500 font-semibold">{{ $totalSyncedAccounts }} ad accounts synced</span>
+                    <span class="text-xs text-slate-500 font-semibold">{{ $totalSyncedAccounts }} ad accounts registered & synced</span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="showAddAccountModal = true" class="px-3 py-1.5 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <span>Add Ad Account Manually</span>
+                    </button>
                 </div>
             </div>
 
@@ -213,11 +378,13 @@
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
-                            <th class="py-3 px-4">Account</th>
-                            <th class="py-3 px-4">Business</th>
+                            <th class="py-3 px-4">Account Name & ID</th>
+                            <th class="py-3 px-4">Business / Portfolio</th>
                             <th class="py-3 px-4">Currency</th>
                             <th class="py-3 px-4">Status</th>
-                            <th class="py-3 px-4 text-right">Last Synced</th>
+                            <th class="py-3 px-4">Lifetime Spend</th>
+                            <th class="py-3 px-4">Last Synced</th>
+                            <th class="py-3 px-4 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 font-medium">
@@ -228,23 +395,41 @@
                                 <span class="block text-[10px] font-mono text-slate-400">{{ $acc->account_id }}</span>
                             </td>
                             <td class="py-3 px-4 text-slate-700">
-                                {{ $acc->metaBusiness?->name ?? 'New Bm' }}
+                                {{ $acc->metaBusiness?->name ?? 'Direct Agency Account' }}
                             </td>
                             <td class="py-3 px-4 font-mono font-semibold text-slate-700">
-                                {{ $acc->currency }}
+                                {{ $acc->currency }} ({{ $acc->currency_symbol }})
                             </td>
                             <td class="py-3 px-4">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ strtolower($acc->status) === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200' }}">
                                     {{ $acc->status }}
                                 </span>
                             </td>
-                            <td class="py-3 px-4 text-right text-slate-500">
+                            <td class="py-3 px-4 font-bold text-slate-800">
+                                {{ $acc->currency_symbol }}{{ number_format((float) $acc->lifetime_spend, 2) }}
+                            </td>
+                            <td class="py-3 px-4 text-slate-500">
                                 {{ $acc->last_synced_at ? $acc->last_synced_at->diffForHumans() : 'Just now' }}
+                            </td>
+                            <td class="py-3 px-4 text-right">
+                                <form action="{{ route('meta.ad_accounts.destroy', $acc->id) }}" method="POST" class="inline" onsubmit="return confirm('Remove ad account {{ $acc->name }}?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="text-rose-500 hover:text-rose-700 text-xs font-semibold cursor-pointer">
+                                        Delete
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" class="py-6 text-center text-slate-400">No ad accounts synced. Click "Sync accounts".</td>
+                            <td colspan="7" class="py-8 text-center text-slate-400">
+                                <div class="max-w-sm mx-auto space-y-2">
+                                    <svg class="w-8 h-8 text-slate-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                                    <p class="font-semibold text-slate-600 text-xs">No Meta ad accounts synced yet.</p>
+                                    <p class="text-[11px] text-slate-400">Connect your Access Token above or click "+ Add Ad Account Manually" to register your account ID directly.</p>
+                                </div>
+                            </td>
                         </tr>
                         @endforelse
                     </tbody>
@@ -258,6 +443,74 @@
             </div>
             @endif
         </div>
+
+        <!-- Add Ad Account Modal -->
+        <div x-show="showAddAccountModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div @click.away="showAddAccountModal = false" class="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h3 class="text-sm font-bold text-slate-900">Add Meta Ad Account</h3>
+                    <button type="button" @click="showAddAccountModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer">&times;</button>
+                </div>
+
+                <form action="{{ route('meta.ad_accounts.store') }}" method="POST" class="space-y-4 text-xs">
+                    @csrf
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Ad Account Name <span class="text-rose-500">*</span></label>
+                        <input 
+                            type="text" 
+                            name="name" 
+                            required 
+                            placeholder="e.g. Arabika Kofi Media Account" 
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">
+                            Ad Account ID <span class="text-rose-500">*</span>
+                            <span class="font-normal text-slate-400">(with or without act_ prefix)</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            name="account_id" 
+                            required 
+                            placeholder="e.g. act_123456789012345" 
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Currency</label>
+                            <select name="currency" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400">
+                                <option value="INR">INR (₹)</option>
+                                <option value="USD">USD ($)</option>
+                                <option value="EUR">EUR (€)</option>
+                                <option value="GBP">GBP (£)</option>
+                                <option value="AED">AED (AED)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block font-bold text-slate-700 mb-1">Status</label>
+                            <select name="status" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400">
+                                <option value="Active">Active</option>
+                                <option value="Disabled">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 flex items-center justify-end gap-2">
+                        <button type="button" @click="showAddAccountModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 rounded-lg transition cursor-pointer">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition cursor-pointer">
+                            Save Ad Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
     </div>
 
     <!-- TAB 2: SYSTEM HEALTH -->

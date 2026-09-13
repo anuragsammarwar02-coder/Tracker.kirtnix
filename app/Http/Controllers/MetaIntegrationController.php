@@ -26,8 +26,19 @@ class MetaIntegrationController extends Controller
      */
     public function oauthRedirect(Request $request): RedirectResponse
     {
-        $appId = Setting::get('meta_app_id') ?? env('META_APP_ID', '4520673831531016');
-        $redirectUri = route('meta.oauth.callback');
+        $appId = Setting::get('meta_app_id') ?? env('META_APP_ID');
+
+        // If app ID is the blocked placeholder or missing, guide user
+        if (empty($appId) || $appId === '4520673831531016') {
+            return redirect()->route('settings.index', ['tab' => 'meta'])
+                ->with('error', 'Facebook OAuth App ID is not configured yet. Please enter your Meta App ID & App Secret below, or use the instant "System User Token" method to connect in 30 seconds.');
+        }
+
+        $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
+        if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
+            $redirectUri = 'https://' . request()->getHttpHost() . '/meta/oauth/callback';
+        }
+
         $scopes = [
             'ads_read',
             'ads_management',
@@ -69,9 +80,12 @@ class MetaIntegrationController extends Controller
                 ->with('error', 'No authorization code received from Facebook.');
         }
 
-        $appId = Setting::get('meta_app_id') ?? env('META_APP_ID', '4520673831531016');
-        $appSecret = Setting::get('meta_app_secret') ?? env('META_APP_SECRET', '4400729382f0cf94b61599e165019281');
-        $redirectUri = route('meta.oauth.callback');
+        $appId = Setting::get('meta_app_id') ?? env('META_APP_ID');
+        $appSecret = Setting::get('meta_app_secret') ?? env('META_APP_SECRET');
+        $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
+        if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
+            $redirectUri = 'https://' . request()->getHttpHost() . '/meta/oauth/callback';
+        }
 
         try {
             // Step 1: Exchange code for short-lived access token
@@ -117,7 +131,7 @@ class MetaIntegrationController extends Controller
     }
 
     /**
-     * Connect Meta account with direct token (fallback).
+     * Connect Meta account with direct token (System User / Graph API Token).
      */
     public function connect(Request $request): RedirectResponse
     {
@@ -139,10 +153,13 @@ class MetaIntegrationController extends Controller
             Setting::set('meta_app_secret', trim($appSecret), 'meta');
         }
 
-        $connection = $this->metaSyncService->connectAccessToken($token, auth()->id());
+        $adAccountId = $request->input('ad_account_id');
+        $connection = $this->metaSyncService->connectAccessToken($token, auth()->id(), $adAccountId);
+
+        $syncedCount = AdAccount::where('meta_connection_id', $connection->id)->count();
 
         return redirect()->route('settings.index', ['tab' => 'meta'])
-            ->with('success', 'Meta account connected successfully! Profile: ' . ($connection->facebook_name ?? 'Connected'));
+            ->with('success', "Meta account connected successfully as '{$connection->facebook_name}'! ({$syncedCount} ad accounts synced)");
     }
 
     /**
@@ -160,7 +177,7 @@ class MetaIntegrationController extends Controller
 
         if (!$connection) {
             return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('error', 'No Meta account connected. Please connect with Facebook first.');
+                ->with('error', 'No Meta account connected. Please connect your Meta account first.');
         }
 
         $res = $this->metaSyncService->syncAll($connection);
@@ -202,6 +219,12 @@ class MetaIntegrationController extends Controller
         $accId = str_starts_with($rawId, 'act_') ? $rawId : ('act_' . $rawId);
 
         $connection = MetaConnection::first();
+        if (!$connection) {
+            $token = Setting::get('meta_system_user_token');
+            if ($token) {
+                $connection = $this->metaSyncService->connectAccessToken($token, auth()->id());
+            }
+        }
 
         $adAccount = AdAccount::updateOrCreate(
             ['account_id' => $accId],
@@ -215,7 +238,10 @@ class MetaIntegrationController extends Controller
             ]
         );
 
-        return redirect()->back()->with('success', "Ad Account '{$adAccount->name}' ({$accId}) saved successfully!");
+        // Try syncing live data immediately from Meta
+        $this->metaSyncService->syncSingleAdAccount($adAccount);
+
+        return redirect()->back()->with('success', "Ad Account '{$adAccount->name}' ({$accId}) saved & synced successfully!");
     }
 
     /**

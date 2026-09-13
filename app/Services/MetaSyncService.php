@@ -18,9 +18,45 @@ class MetaSyncService
     protected string $baseUrl = 'https://graph.facebook.com';
 
     /**
+     * Validate an access token against Meta Graph API and get user / system user details
+     */
+    public function validateToken(string $token): array
+    {
+        try {
+            $res = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/me", [
+                'access_token' => $token,
+                'fields' => 'id,name,email',
+            ]);
+
+            if ($res->successful()) {
+                $data = $res->json();
+                return [
+                    'valid' => true,
+                    'user_id' => $data['id'] ?? null,
+                    'name' => $data['name'] ?? 'Meta Business User',
+                    'data' => $data,
+                ];
+            }
+
+            $errorData = $res->json('error');
+            $errorMessage = $errorData['message'] ?? ('Meta API error: HTTP ' . $res->status());
+            return [
+                'valid' => false,
+                'error' => $errorMessage,
+                'code' => $errorData['code'] ?? null,
+            ];
+        } catch (\Exception $e) {
+            return [
+                'valid' => false,
+                'error' => 'Network error connecting to Meta Graph API: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
      * Start Meta OAuth or connect active token.
      */
-    public function connectAccessToken(string $accessToken, ?int $userId = null): MetaConnection
+    public function connectAccessToken(string $accessToken, ?int $userId = null, ?string $adAccountId = null): MetaConnection
     {
         // Try fetching user profile from Meta Graph API
         $userData = $this->fetchUserProfile($accessToken);
@@ -28,7 +64,7 @@ class MetaSyncService
         $connection = MetaConnection::updateOrCreate(
             ['user_id' => $userId],
             [
-                'facebook_user_id' => $userData['id'] ?? 'fb_agency_admin_' . rand(10000, 99999),
+                'facebook_user_id' => $userData['id'] ?? ('fb_agency_admin_' . rand(10000, 99999)),
                 'facebook_name' => $userData['name'] ?? 'KirtniX Performance Agency',
                 'access_token' => $accessToken,
                 'status' => 'active',
@@ -36,6 +72,23 @@ class MetaSyncService
                 'last_sync_at' => now(),
             ]
         );
+
+        if ($adAccountId) {
+            $rawId = trim($adAccountId);
+            $accId = str_starts_with($rawId, 'act_') ? $rawId : ('act_' . $rawId);
+            $adAccount = AdAccount::updateOrCreate(
+                ['account_id' => $accId],
+                [
+                    'meta_connection_id' => $connection->id,
+                    'name' => 'Ad Account ' . str_replace('act_', '', $accId),
+                    'currency' => 'INR',
+                    'status' => 'Active',
+                    'is_active' => true,
+                    'last_synced_at' => now(),
+                ]
+            );
+            $this->syncSingleAdAccount($adAccount);
+        }
 
         $this->syncAll($connection);
 
@@ -143,7 +196,7 @@ class MetaSyncService
         $token = $connection->access_token;
         $results = [];
 
-        // Attempt live Graph API query for Ad Accounts
+        // 1. Attempt live Graph API query for direct Ad Accounts
         try {
             $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/adaccounts", [
                 'access_token' => $token,
@@ -184,17 +237,71 @@ class MetaSyncService
                         ]
                     );
 
-                    $results[] = $record;
+                    $results[$accId] = $record;
                 }
-
-                return $results;
             }
         } catch (\Exception $e) {
             Log::warning('Meta Graph API Ad Accounts Error: ' . $e->getMessage());
         }
 
-        // Return real existing accounts from database without creating fake fixtures
-        return AdAccount::where('meta_connection_id', $connection->id)->get()->all();
+        // 2. Also check all businesses for client / owned ad accounts
+        try {
+            $businesses = MetaBusiness::where('meta_connection_id', $connection->id)->get();
+            foreach ($businesses as $biz) {
+                foreach (['client_ad_accounts', 'owned_ad_accounts'] as $edge) {
+                    $bizRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/{$biz->business_id}/{$edge}", [
+                        'access_token' => $token,
+                        'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent',
+                        'limit' => 50,
+                    ]);
+                    if ($bizRes->successful() && !empty($bizRes->json('data'))) {
+                        foreach ($bizRes->json('data') as $acc) {
+                            $rawId = (string) ($acc['account_id'] ?? $acc['id']);
+                            $accId = str_starts_with($rawId, 'act_') ? $rawId : ('act_' . $rawId);
+                            if (isset($results[$accId])) {
+                                continue;
+                            }
+                            $statusNum = $acc['account_status'] ?? 1;
+                            $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
+                            $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : 0.00;
+                            $balance = isset($acc['balance']) ? ((float) $acc['balance'] / 100) : 0.00;
+                            $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
+
+                            $record = AdAccount::updateOrCreate(
+                                ['account_id' => $accId],
+                                [
+                                    'meta_connection_id' => $connection->id,
+                                    'meta_business_id' => $biz->id,
+                                    'name' => $acc['name'] ?? ('Meta Ad Account ' . $rawId),
+                                    'currency' => $acc['currency'] ?? 'INR',
+                                    'status' => $status,
+                                    'spend_limit' => $spendLimit,
+                                    'balance' => $balance,
+                                    'lifetime_spend' => $lifetimeSpend,
+                                    'active_daily_budget' => 0.00,
+                                    'payment_method' => 'Meta Billing',
+                                    'is_active' => true,
+                                    'last_synced_at' => now(),
+                                ]
+                            );
+                            $results[$accId] = $record;
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('Meta Graph API Business Ad Accounts Error: ' . $e->getMessage());
+        }
+
+        // 3. Re-sync any manually registered Ad Accounts
+        $allDbAccounts = AdAccount::where('meta_connection_id', $connection->id)->get();
+        foreach ($allDbAccounts as $dbAcc) {
+            if (!isset($results[$dbAcc->account_id])) {
+                $results[$dbAcc->account_id] = $dbAcc;
+            }
+        }
+
+        return array_values($results);
     }
 
     /**
