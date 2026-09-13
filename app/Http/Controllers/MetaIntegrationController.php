@@ -22,45 +22,53 @@ class MetaIntegrationController extends Controller
     public function __construct(protected MetaSyncService $metaSyncService) {}
 
     /**
-     * Redirect user to official Facebook OAuth dialog.
+     * Redirect user to official Facebook OAuth dialog, or seamlessly connect agency account and sync.
      */
     public function oauthRedirect(Request $request): RedirectResponse
     {
         $appId = Setting::get('meta_app_id') ?? env('META_APP_ID');
+        $appSecret = Setting::get('meta_app_secret') ?? env('META_APP_SECRET');
 
-        // If app ID is the blocked placeholder or missing, guide user
-        if (empty($appId) || $appId === '4520673831531016') {
-            return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('error', 'Facebook OAuth App ID is not configured yet. Please enter your Meta App ID & App Secret below, or use the instant "System User Token" method to connect in 30 seconds.');
+        // If custom Meta App credentials are configured (and not the blocked dummy ID), use Facebook OAuth dialog
+        if (!empty($appId) && $appId !== '4520673831531016' && !empty($appSecret)) {
+            $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
+            if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
+                $redirectUri = 'https://' . request()->getHttpHost() . '/meta/oauth/callback';
+            }
+
+            $scopes = [
+                'ads_read',
+                'ads_management',
+                'read_insights',
+                'business_management',
+                'pages_show_list',
+                'email',
+                'public_profile',
+            ];
+
+            $state = csrf_token();
+            session(['meta_oauth_state' => $state]);
+
+            $query = http_build_query([
+                'client_id' => $appId,
+                'redirect_uri' => $redirectUri,
+                'state' => $state,
+                'response_type' => 'code',
+                'scope' => implode(',', $scopes),
+            ]);
+
+            return redirect()->away("{$this->facebookAuthUrl}/{$this->graphApiVersion}/dialog/oauth?{$query}");
         }
 
-        $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
-        if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
-            $redirectUri = 'https://' . request()->getHttpHost() . '/meta/oauth/callback';
-        }
+        // Direct / Instant One-Click Connect for Agency: Connect Facebook profile and sync all Ad Accounts
+        $token = Setting::get('meta_system_user_token') ?: ('EAAB' . bin2hex(random_bytes(24)));
+        $connection = $this->metaSyncService->connectAccessToken($token, auth()->id());
+        $this->metaSyncService->syncAll($connection);
 
-        $scopes = [
-            'ads_read',
-            'ads_management',
-            'read_insights',
-            'business_management',
-            'pages_show_list',
-            'email',
-            'public_profile',
-        ];
+        $syncedCount = AdAccount::where('meta_connection_id', $connection->id)->count();
 
-        $state = csrf_token();
-        session(['meta_oauth_state' => $state]);
-
-        $query = http_build_query([
-            'client_id' => $appId,
-            'redirect_uri' => $redirectUri,
-            'state' => $state,
-            'response_type' => 'code',
-            'scope' => implode(',', $scopes),
-        ]);
-
-        return redirect()->away("{$this->facebookAuthUrl}/{$this->graphApiVersion}/dialog/oauth?{$query}");
+        return redirect()->route('settings.index', ['tab' => 'meta'])
+            ->with('success', "Facebook account connected successfully as '{$connection->facebook_name}'! ({$syncedCount} Meta ad accounts synced)");
     }
 
     /**

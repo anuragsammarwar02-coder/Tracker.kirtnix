@@ -45,7 +45,7 @@
     </div>
 
     <!-- TAB 1: META INTEGRATION -->
-    <div x-show="currentTab === 'meta'" x-data="{ showAddAccountModal: false, showTokenHelp: false, showOAuthSettings: false }" class="space-y-6">
+    <div x-show="currentTab === 'meta'" x-data="{ showAddAccountModal: false, showTokenHelp: false, showOAuthSettings: false, showManual: false }" class="space-y-6">
         
         <!-- Flash messages / Notifications -->
         @if(session('success'))
@@ -200,9 +200,7 @@
         @else
         <!-- Connect Meta Container (When Disconnected) -->
         <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
-            
-            <!-- Connection Header -->
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-5 border-b border-slate-100">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div class="flex items-start gap-3.5">
                     <div class="w-12 h-12 rounded-xl bg-[#1877F2] text-white flex items-center justify-center flex-shrink-0 shadow-sm" style="width: 48px; height: 48px; min-width: 48px; min-height: 48px;">
                         <svg class="w-6 h-6 fill-current" style="width: 24px; height: 24px;" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
@@ -214,147 +212,71 @@
                                 Disconnected
                             </span>
                         </div>
-                        <p class="text-xs text-slate-500 mt-1 max-w-2xl">
+                        <p class="text-xs text-slate-500 mt-1 max-w-xl">
                             Connect your Meta Ad Account to automatically track real-time ad spends, campaign budgets, and sync Conversions API (CAPI) events.
                         </p>
                     </div>
                 </div>
+
+                <div class="flex items-center gap-3">
+                    <a href="{{ route('meta.oauth.redirect') }}" class="inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-xs shadow-md hover:shadow-lg transition cursor-pointer">
+                        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        <span>Continue with Facebook</span>
+                    </a>
+                </div>
             </div>
 
-            <!-- Two Connection Options Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
-                <!-- OPTION 1: Instant Permanent System User Token (Recommended) -->
-                <div class="lg:col-span-7 bg-gradient-to-b from-yellow-50/40 via-white to-white p-5 rounded-xl border-2 border-yellow-400/80 shadow-sm space-y-4">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-full bg-yellow-400 text-slate-950 font-black text-xs flex items-center justify-center">1</span>
-                            <h3 class="text-sm font-bold text-slate-900">Instant Access Token Connect</h3>
-                        </div>
-                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase tracking-wider">
-                            ⚡ Recommended (30 Secs)
-                        </span>
-                    </div>
+            <!-- Optional Collapsible Manual Token / App Config (Hidden by default) -->
+            <div class="mt-4 pt-4 border-t border-slate-100">
+                <button type="button" @click="showManual = !showManual" class="text-xs text-slate-400 hover:text-slate-600 font-medium flex items-center gap-1.5 cursor-pointer">
+                    <svg class="w-3.5 h-3.5 transition-transform" :class="showManual ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    <span>Or connect with custom System User Token / App ID</span>
+                </button>
 
-                    <p class="text-xs text-slate-600 leading-relaxed">
-                        The fastest and most stable method for agencies and media buyers. Paste your Meta System User Access Token or Graph API Explorer Token below.
-                    </p>
-
-                    <form action="{{ route('meta.connect') }}" method="POST" class="space-y-3.5">
+                <div x-show="showManual" x-cloak class="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <form action="{{ route('meta.connect') }}" method="POST" class="space-y-4 max-w-2xl">
                         @csrf
                         <div>
-                            <label class="block text-xs font-bold text-slate-800 mb-1">
-                                Meta Access Token <span class="text-rose-500">*</span>
-                                <span class="font-normal text-slate-500 text-[11px]">(Starts with EAAB... or EAAG...)</span>
-                            </label>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta System User Access Token (EAAB...)</label>
                             <textarea 
                                 name="access_token" 
-                                rows="3" 
-                                required
-                                placeholder="Paste your EAAB... or EAAG... token here"
-                                class="w-full bg-white border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 shadow-sm"
+                                rows="2" 
+                                placeholder="Paste your EAAB... permanent access token here"
+                                class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
                             >{{ \App\Models\Setting::get('meta_system_user_token') }}</textarea>
                         </div>
 
-                        <div>
-                            <label class="block text-xs font-bold text-slate-800 mb-1">
-                                Primary Ad Account ID (Optional)
-                                <span class="font-normal text-slate-500 text-[11px]">(e.g. act_1234567890)</span>
-                            </label>
-                            <input 
-                                type="text" 
-                                name="ad_account_id" 
-                                placeholder="e.g. act_1234567890 or 1234567890" 
-                                class="w-full bg-white border border-slate-300 rounded-lg px-3.5 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400 shadow-sm"
-                            />
-                        </div>
-
-                        <div class="pt-1 flex items-center justify-between">
-                            <button type="button" @click="showTokenHelp = !showTokenHelp" class="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                <span x-text="showTokenHelp ? 'Hide guide' : 'Where to get Meta token?'"></span>
-                            </button>
-
-                            <button type="submit" class="px-5 py-2.5 text-xs font-extrabold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-xl shadow-sm hover:shadow transition flex items-center gap-2 cursor-pointer">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                                <span>Connect & Sync Now</span>
-                            </button>
-                        </div>
-                    </form>
-
-                    <!-- Token Helper Accordion -->
-                    <div x-show="showTokenHelp" x-cloak class="mt-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-2">
-                        <p class="font-bold text-slate-900">How to get a Meta Access Token in 30 seconds:</p>
-                        <ol class="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 leading-relaxed">
-                            <li>Go to <strong>business.facebook.com</strong> &rarr; <strong>Business Settings</strong> &rarr; <strong>System Users</strong>.</li>
-                            <li>Click <strong>Generate New Token</strong> and select your Meta App.</li>
-                            <li>Select permissions: <code class="bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-800">ads_read</code>, <code class="bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-800">ads_management</code>, <code class="bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-800">read_insights</code>, <code class="bg-slate-200 px-1 py-0.5 rounded text-[10px] text-slate-800">business_management</code>.</li>
-                            <li>Copy the generated token and paste it in the box above!</li>
-                        </ol>
-                    </div>
-                </div>
-
-                <!-- OPTION 2: OAuth 2.0 (Continue with Facebook) -->
-                <div class="lg:col-span-5 bg-slate-50/70 p-5 rounded-xl border border-slate-200 space-y-4">
-                    <div class="flex items-center gap-2">
-                        <span class="w-6 h-6 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center">2</span>
-                        <h3 class="text-sm font-bold text-slate-900">Facebook OAuth Login</h3>
-                    </div>
-
-                    <p class="text-xs text-slate-500 leading-relaxed">
-                        To use the blue <strong>"Continue with Facebook"</strong> button, enter your custom Meta App credentials registered on <strong>developers.facebook.com</strong>.
-                    </p>
-
-                    <form action="{{ route('meta.connect') }}" method="POST" class="space-y-3">
-                        @csrf
-                        <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App ID</label>
-                            <input 
-                                type="text" 
-                                name="app_id" 
-                                value="{{ \App\Models\Setting::get('meta_app_id', '') }}" 
-                                placeholder="Enter Meta App ID"
-                                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                            />
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App Secret</label>
-                            <input 
-                                type="password" 
-                                name="app_secret" 
-                                value="{{ \App\Models\Setting::get('meta_app_secret', '') }}" 
-                                placeholder="Enter Meta App Secret"
-                                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                            />
-                        </div>
-
-                        <!-- OAuth Callback Redirect URL Helper -->
-                        <div class="p-2.5 bg-white rounded-lg border border-slate-200 text-[11px]">
-                            <span class="text-slate-500 block font-semibold mb-1">Valid OAuth Redirect URI:</span>
-                            <div class="flex items-center justify-between gap-2 font-mono text-[10px] text-slate-700 bg-slate-100 px-2 py-1 rounded">
-                                <span class="truncate" id="redirectUriText">{{ route('meta.oauth.callback') }}</span>
-                                <button type="button" onclick="navigator.clipboard.writeText('{{ route('meta.oauth.callback') }}'); alert('Redirect URI copied to clipboard!');" class="text-blue-600 hover:text-blue-800 font-bold flex-shrink-0 cursor-pointer">
-                                    Copy
-                                </button>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Meta App ID (Optional)</label>
+                                <input 
+                                    type="text" 
+                                    name="app_id" 
+                                    value="{{ \App\Models\Setting::get('meta_app_id', '') }}" 
+                                    placeholder="e.g. 123456789012345"
+                                    class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Meta App Secret (Optional)</label>
+                                <input 
+                                    type="password" 
+                                    name="app_secret" 
+                                    value="{{ \App\Models\Setting::get('meta_app_secret', '') }}" 
+                                    placeholder="••••••••••••••••"
+                                    class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                                />
                             </div>
                         </div>
 
-                        <div class="pt-1 flex flex-col sm:flex-row items-center gap-2">
-                            <button type="submit" class="w-full sm:w-auto px-3.5 py-2 text-xs font-bold text-slate-800 bg-slate-200 hover:bg-slate-300 rounded-lg transition cursor-pointer">
-                                Save App ID
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-4 py-2 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
+                                <span>Save & Connect Token</span>
                             </button>
-
-                            <a href="{{ route('meta.oauth.redirect') }}" class="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-xs shadow-sm transition cursor-pointer">
-                                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                                <span>Continue with Facebook</span>
-                            </a>
                         </div>
                     </form>
                 </div>
-
             </div>
-
         </div>
         @endif
 
