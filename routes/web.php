@@ -564,7 +564,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/meta/oauth/callback', [MetaIntegrationController::class, 'oauthCallback'])->name('meta.oauth.callback');
     Route::post('/meta/connect', [MetaIntegrationController::class, 'connect'])->name('meta.connect');
     Route::post('/meta/sync', [MetaIntegrationController::class, 'sync'])->name('meta.sync');
+    Route::post('/meta/sync/{metaConnection}', [MetaIntegrationController::class, 'syncConnection'])->name('meta.sync_connection');
     Route::post('/meta/disconnect', [MetaIntegrationController::class, 'disconnect'])->name('meta.disconnect');
+    Route::delete('/meta/connections/{metaConnection}', [MetaIntegrationController::class, 'disconnectConnection'])->name('meta.connections.destroy');
     Route::post('/meta/ad-accounts', [MetaIntegrationController::class, 'storeAdAccount'])->name('meta.ad_accounts.store');
     Route::delete('/meta/ad-accounts/{adAccount}', [MetaIntegrationController::class, 'destroyAdAccount'])->name('meta.ad_accounts.destroy');
 

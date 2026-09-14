@@ -78,14 +78,16 @@ class MetaIntegrationController extends Controller
     {
         if ($request->has('error')) {
             $err = $request->input('error_description', $request->input('error', 'Authentication cancelled.'));
+            Log::warning("Facebook OAuth Callback Error: {$err}");
             return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('error', 'Facebook login failed: ' . $err);
+                ->with('error', 'Facebook connection failed: ' . $err);
         }
 
         $code = $request->input('code');
         if (empty($code)) {
+            Log::warning('Facebook OAuth Error: No authorization code received.');
             return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('error', 'No authorization code received from Facebook.');
+                ->with('error', 'Facebook connection failed. No authorization code received.');
         }
 
         $appId = Setting::get('meta_app_id') ?? env('META_APP_ID');
@@ -106,8 +108,9 @@ class MetaIntegrationController extends Controller
 
             if (!$res->successful() || empty($res->json('access_token'))) {
                 $err = $res->json('error.message') ?? 'Failed to exchange authorization code.';
+                Log::error('Meta OAuth exchange error: ' . $err, ['response' => $res->json()]);
                 return redirect()->route('settings.index', ['tab' => 'meta'])
-                    ->with('error', 'Meta OAuth error: ' . $err);
+                    ->with('error', 'Facebook connection failed: ' . $err);
             }
 
             $shortLivedToken = $res->json('access_token');
@@ -124,17 +127,23 @@ class MetaIntegrationController extends Controller
                 ? $exchangeRes->json('access_token')
                 : $shortLivedToken;
 
-            // Step 3: Save and Sync Profile & Ad Accounts
-            Setting::set('meta_system_user_token', $finalToken, 'meta');
+            // Step 3: Save Connection & Sync Accessible Business Managers and Ad Accounts
             $connection = $this->metaSyncService->connectAccessToken($finalToken, auth()->id());
             $syncResult = $this->metaSyncService->syncAll($connection);
 
+            $accountsCount = $syncResult['accounts_count'] ?? AdAccount::where('meta_connection_id', $connection->id)->count();
+
+            if ($accountsCount === 0) {
+                return redirect()->route('settings.index', ['tab' => 'meta'])
+                    ->with('info', "Connected with Facebook as {$connection->facebook_name}. Note: No accessible Meta Ad Accounts were found for this Facebook account.");
+            }
+
             return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('success', "Connected with Facebook as {$connection->facebook_name}! " . ($syncResult['message'] ?? 'Ad accounts synced.'));
+                ->with('success', "Connected with Facebook as {$connection->facebook_name}! ({$accountsCount} accessible Meta Ad Accounts synced).");
         } catch (\Exception $e) {
-            Log::error('Meta OAuth Callback Exception: ' . $e->getMessage());
+            Log::error('Meta OAuth Callback Exception: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('error', 'OAuth Error: ' . $e->getMessage());
+                ->with('error', 'Facebook connection failed. Please try again.');
         }
     }
 
@@ -163,6 +172,7 @@ class MetaIntegrationController extends Controller
 
         $adAccountId = $request->input('ad_account_id');
         $connection = $this->metaSyncService->connectAccessToken($token, auth()->id(), $adAccountId);
+        $syncResult = $this->metaSyncService->syncAll($connection);
 
         $syncedCount = AdAccount::where('meta_connection_id', $connection->id)->count();
 
@@ -171,34 +181,52 @@ class MetaIntegrationController extends Controller
     }
 
     /**
-     * Sync Meta ad accounts, campaigns, and insights.
+     * Sync ALL connected Meta connections and their ad accounts.
      */
     public function sync(): JsonResponse|RedirectResponse
     {
-        $connection = MetaConnection::first();
-        if (!$connection) {
+        $connections = MetaConnection::all();
+        if ($connections->isEmpty()) {
             $token = Setting::get('meta_system_user_token');
             if ($token) {
                 $connection = $this->metaSyncService->connectAccessToken($token, auth()->id());
+                $connections = collect([$connection]);
             }
         }
 
-        if (!$connection) {
+        if ($connections->isEmpty()) {
             return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('error', 'No Meta account connected. Please connect your Meta account first.');
+                ->with('error', 'No Meta accounts connected. Please connect your Facebook account first.');
         }
 
-        $res = $this->metaSyncService->syncAll($connection);
+        $totalSynced = 0;
+        foreach ($connections as $conn) {
+            $res = $this->metaSyncService->syncAll($conn);
+            $totalSynced += ($res['accounts_count'] ?? 0);
+        }
 
         if (request()->wantsJson()) {
-            return response()->json($res);
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully synced {$totalSynced} ad accounts across " . $connections->count() . ' connected Facebook account(s).',
+                'accounts_count' => $totalSynced,
+            ]);
         }
 
-        return redirect()->back()->with('success', $res['message']);
+        return redirect()->back()->with('success', "Successfully synced {$totalSynced} ad accounts across " . $connections->count() . ' connected Facebook account(s).');
     }
 
     /**
-     * Disconnect Meta agency connection completely.
+     * Sync single MetaConnection.
+     */
+    public function syncConnection(MetaConnection $metaConnection): RedirectResponse
+    {
+        $res = $this->metaSyncService->syncAll($metaConnection);
+        return redirect()->back()->with('success', "Synced accounts for '{$metaConnection->facebook_name}': " . ($res['message'] ?? 'Done'));
+    }
+
+    /**
+     * Disconnect ALL Meta connections.
      */
     public function disconnect(): RedirectResponse
     {
@@ -208,7 +236,25 @@ class MetaIntegrationController extends Controller
         Setting::where('key', 'meta_system_user_token')->delete();
 
         return redirect()->route('settings.index', ['tab' => 'meta'])
-            ->with('info', 'Meta connection disconnected successfully. You can now connect your Facebook account.');
+            ->with('info', 'All Meta connections disconnected successfully. You can now connect your Facebook account.');
+    }
+
+    /**
+     * Disconnect a single MetaConnection without affecting other connected Facebook accounts.
+     */
+    public function disconnectConnection(MetaConnection $metaConnection): RedirectResponse
+    {
+        $name = $metaConnection->facebook_name ?? 'Facebook User';
+
+        // Unlink or delete ad accounts belonging exclusively to this connection
+        AdAccount::where('meta_connection_id', $metaConnection->id)->delete();
+        MetaBusiness::where('meta_connection_id', $metaConnection->id)->delete();
+        $metaConnection->delete();
+
+        $remainingCount = MetaConnection::count();
+
+        return redirect()->route('settings.index', ['tab' => 'meta'])
+            ->with('info', "Facebook account '{$name}' disconnected successfully. ({$remainingCount} connected account(s) remaining)");
     }
 
     /**
@@ -221,12 +267,16 @@ class MetaIntegrationController extends Controller
             'account_id' => ['required', 'string', 'max:255'],
             'currency' => ['nullable', 'string', 'max:10'],
             'status' => ['nullable', 'string', 'max:50'],
+            'meta_connection_id' => ['nullable', 'exists:meta_connections,id'],
         ]);
 
         $rawId = trim($validated['account_id']);
         $accId = str_starts_with($rawId, 'act_') ? $rawId : ('act_' . $rawId);
 
-        $connection = MetaConnection::first();
+        $connection = isset($validated['meta_connection_id']) 
+            ? MetaConnection::find($validated['meta_connection_id'])
+            : MetaConnection::first();
+
         if (!$connection) {
             $token = Setting::get('meta_system_user_token');
             if ($token) {
@@ -264,4 +314,3 @@ class MetaIntegrationController extends Controller
         return redirect()->back()->with('success', "Ad Account '{$name}' removed successfully.");
     }
 }
-

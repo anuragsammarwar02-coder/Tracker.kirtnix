@@ -26,19 +26,21 @@ class SettingController extends Controller
             $dbStatus = 'Error: ' . $e->getMessage();
         }
 
-        // Meta connection & accounts
-        $metaConnection = MetaConnection::with(['businesses', 'adAccounts'])->first();
-        if (!$metaConnection) {
+        // Meta connections & accounts (Supporting Multiple Facebook Connections)
+        $metaConnections = MetaConnection::with(['businesses', 'adAccounts'])->latest('id')->get();
+        $metaConnection = $metaConnections->first();
+        if ($metaConnections->isEmpty()) {
             $token = Setting::get('meta_system_user_token');
             if (!empty($token)) {
                 try {
                     $metaConnection = app(\App\Services\MetaSyncService::class)->connectAccessToken($token, auth()->id());
+                    $metaConnections = MetaConnection::with(['businesses', 'adAccounts'])->latest('id')->get();
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::warning('SettingController Meta auto-connect: ' . $e->getMessage());
                 }
             }
         }
-        $adAccounts = AdAccount::with(['metaBusiness', 'client'])->latest('id')->paginate(15);
+        $adAccounts = AdAccount::with(['metaBusiness', 'metaConnection', 'client'])->latest('id')->paginate(15);
         $totalSyncedAccounts = AdAccount::count();
 
         // Telegram webhook health
@@ -50,7 +52,7 @@ class SettingController extends Controller
             'api_health' => '100% Operational',
             'database_status' => $dbStatus,
             'telegram_webhook_status' => "{$activeWebhooks}/{$totalBots} Webhooks Active",
-            'meta_sync_status' => $metaConnection ? ($metaConnection->sync_status === 'completed' ? 'Synced (100%)' : ucfirst($metaConnection->sync_status)) : 'Disconnected',
+            'meta_sync_status' => $metaConnections->isNotEmpty() ? ($metaConnections->count() . ' Connected (' . $totalSyncedAccounts . ' Ad Accounts)') : 'Disconnected',
             'last_sync_timestamp' => $metaConnection?->last_sync_at ? $metaConnection->last_sync_at->diffForHumans() : 'Never',
             'failed_sync_count' => 0,
             'php_version' => PHP_VERSION,
@@ -74,6 +76,7 @@ class SettingController extends Controller
             'settings',
             'diagnostics',
             'metaConnection',
+            'metaConnections',
             'adAccounts',
             'totalSyncedAccounts',
             'systemHealth',

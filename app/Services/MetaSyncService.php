@@ -61,17 +61,42 @@ class MetaSyncService
         // Try fetching user profile from Meta Graph API
         $userData = $this->fetchUserProfile($accessToken);
 
-        $connection = MetaConnection::updateOrCreate(
-            ['user_id' => $userId],
-            [
-                'facebook_user_id' => $userData['id'] ?? ('fb_agency_admin_' . rand(10000, 99999)),
-                'facebook_name' => $userData['name'] ?? 'KirtniX Performance Agency',
-                'access_token' => $accessToken,
-                'status' => 'active',
-                'sync_status' => 'idle',
-                'last_sync_at' => now(),
-            ]
-        );
+        $fbUserId = $userData['id'] ?? null;
+        $fbName = $userData['name'] ?? null;
+
+        if ($fbUserId) {
+            $connection = MetaConnection::updateOrCreate(
+                ['facebook_user_id' => $fbUserId],
+                [
+                    'user_id' => $userId ?? auth()->id(),
+                    'facebook_name' => $fbName ?? ('Meta User ' . $fbUserId),
+                    'access_token' => $accessToken,
+                    'status' => 'active',
+                    'sync_status' => 'idle',
+                    'last_sync_at' => now(),
+                ]
+            );
+        } else {
+            $existing = MetaConnection::where('access_token', $accessToken)->first();
+            if ($existing) {
+                $connection = $existing;
+                $connection->update([
+                    'status' => 'active',
+                    'sync_status' => 'idle',
+                    'last_sync_at' => now(),
+                ]);
+            } else {
+                $connection = MetaConnection::create([
+                    'user_id' => $userId ?? auth()->id(),
+                    'facebook_user_id' => 'fb_' . bin2hex(random_bytes(6)),
+                    'facebook_name' => $fbName ?? 'KirtniX Performance Agency',
+                    'access_token' => $accessToken,
+                    'status' => 'active',
+                    'sync_status' => 'idle',
+                    'last_sync_at' => now(),
+                ]);
+            }
+        }
 
         if ($adAccountId) {
             $rawId = trim($adAccountId);

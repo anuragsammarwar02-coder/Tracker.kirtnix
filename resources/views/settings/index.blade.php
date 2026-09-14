@@ -74,72 +74,118 @@
         </div>
         @endif
 
-        <!-- Main Meta Connection Card -->
-        @if($metaConnection)
-        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <!-- Main Meta Connection Section (Supporting Multiple Facebook Connections) -->
+        @if(isset($metaConnections) && $metaConnections->isNotEmpty())
+        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
+            <!-- Header with Multi-Account Actions -->
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-5 border-b border-slate-100">
                 <div class="flex items-start gap-3.5">
-                    <div class="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm" style="width: 48px; height: 48px; min-width: 48px; min-height: 48px;">
-                        <svg class="w-6 h-6 fill-current" style="width: 24px; height: 24px; min-width: 24px; min-height: 24px;" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                    <div class="w-12 h-12 rounded-xl bg-[#1877F2] text-white flex items-center justify-center flex-shrink-0 shadow-sm" style="width: 48px; height: 48px; min-width: 48px; min-height: 48px;">
+                        <svg class="w-6 h-6 fill-current" style="width: 24px; height: 24px;" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                     </div>
                     <div>
-                        <div class="flex items-center gap-2">
-                            <h2 class="text-base font-bold text-slate-900">Meta Integration Active</h2>
-                            @if($metaConnection->sync_status === 'failed' || $metaConnection->status === 'expired' || $metaConnection->status === 'reauth_required')
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
-                                Re-authentication Required
-                            </span>
-                            @else
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h2 class="text-base font-bold text-slate-900">Connected Facebook Accounts</h2>
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
-                                Connected & Active
+                                {{ $metaConnections->count() }} {{ Str::plural('Profile', $metaConnections->count()) }} Active
                             </span>
-                            @endif
                         </div>
-                        <p class="text-xs text-slate-500 mt-1 max-w-xl">
-                            One agency Facebook connection powers live spend, campaign objectives, pixel tracking, and Conversions API (CAPI) across every client.
+                        <p class="text-xs text-slate-500 mt-1 max-w-2xl">
+                            Each connected Facebook account automatically syncs its accessible Business Portfolios, client ad accounts, and real-time campaign spends.
                         </p>
-                        @if($metaConnection->sync_status === 'failed' && $metaConnection->error_message)
-                        <div class="mt-2 text-xs text-amber-700 font-medium">
-                            <span>Notice: {{ Str::limit($metaConnection->error_message, 120) }}</span>
-                        </div>
-                        @endif
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2.5 flex-wrap">
+                    <a href="{{ route('meta.oauth.redirect') }}" class="px-4 py-2 text-xs font-bold text-white bg-[#1877F2] hover:bg-[#166FE5] rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
+                        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        <span>+ Connect Another Facebook</span>
+                    </a>
+
                     <form action="{{ route('meta.sync') }}" method="POST">
                         @csrf
                         <button type="submit" class="px-3.5 py-2 text-xs font-bold text-slate-900 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
-                            <svg class="w-4 h-4" style="width: 16px; height: 16px; min-width: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                            Sync Accounts
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span>Sync All</span>
                         </button>
                     </form>
 
-                    <button type="button" @click="showOAuthSettings = !showOAuthSettings" class="px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer flex items-center gap-1">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                        <span>Update Token</span>
-                    </button>
-
-                    <form action="{{ route('meta.disconnect') }}" method="POST" onsubmit="return confirm('Are you sure you want to disconnect your Meta account? All synced ad accounts will be removed.');">
+                    <form action="{{ route('meta.disconnect') }}" method="POST" onsubmit="return confirm('Are you sure you want to disconnect all Meta accounts?');">
                         @csrf
                         <button type="submit" class="px-3 py-2 text-xs font-semibold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg transition cursor-pointer">
-                            Disconnect
+                            Disconnect All
                         </button>
                     </form>
                 </div>
             </div>
 
-            <!-- Meta Quick Specs -->
-            <div class="mt-6 pt-4 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+            <!-- Connected Facebook Accounts List -->
+            <div class="space-y-3">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Active Facebook Connections</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    @foreach($metaConnections as $conn)
+                    <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-slate-50 transition flex flex-col justify-between gap-3 shadow-xs">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                                </div>
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                        {{ $conn->facebook_name ?? 'Connected Facebook Profile' }}
+                                    </h4>
+                                    <span class="text-[10px] font-mono text-slate-400 block">FB ID: {{ $conn->facebook_user_id }}</span>
+                                </div>
+                            </div>
+
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold {{ $conn->status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
+                                {{ ucfirst($conn->status) }}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-200/60">
+                            <div>
+                                <span class="text-slate-400 block text-[10px]">Accessible Accounts:</span>
+                                <span class="font-bold text-slate-800">{{ $conn->adAccounts->count() }} Ad {{ Str::plural('Account', $conn->adAccounts->count()) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px]">Last Synced:</span>
+                                <span class="font-semibold text-slate-700">{{ $conn->last_sync_at ? $conn->last_sync_at->diffForHumans() : 'Just now' }}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/60">
+                            <form action="{{ route('meta.sync_connection', $conn->id) }}" method="POST">
+                                @csrf
+                                <button type="submit" class="px-2.5 py-1 text-[11px] font-bold text-slate-800 bg-white border border-slate-200 hover:bg-slate-100 rounded-md transition flex items-center gap-1 cursor-pointer">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    <span>Sync</span>
+                                </button>
+                            </form>
+
+                            <form action="{{ route('meta.connections.destroy', $conn->id) }}" method="POST" onsubmit="return confirm('Disconnect Facebook account \'{{ $conn->facebook_name }}\'? Accounts exclusive to this profile will be unlinked.');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="px-2.5 py-1 text-[11px] font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 rounded-md transition cursor-pointer">
+                                    Disconnect
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+
+            <!-- Quick Specs -->
+            <div class="pt-4 border-t border-slate-100 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                 <div>
-                    <span class="text-slate-400 font-medium block">Connected Facebook Profile</span>
-                    <span class="text-slate-900 font-bold text-sm">{{ $metaConnection->facebook_name ?? 'Connected User' }}</span>
+                    <span class="text-slate-400 font-medium block">Connected Profiles</span>
+                    <span class="text-slate-900 font-bold text-sm">{{ $metaConnections->count() }} Facebook {{ Str::plural('Account', $metaConnections->count()) }}</span>
                 </div>
                 <div>
-                    <span class="text-slate-400 font-medium block">Synced Status</span>
-                    <span class="text-emerald-700 font-bold text-sm">{{ $totalSyncedAccounts }} ad accounts synced</span>
+                    <span class="text-slate-400 font-medium block">Total Synced Accounts</span>
+                    <span class="text-emerald-700 font-bold text-sm">{{ $totalSyncedAccounts }} ad accounts</span>
                 </div>
                 <div>
                     <span class="text-slate-400 font-medium block">Last Synced</span>
@@ -151,50 +197,67 @@
                 </div>
             </div>
 
-            <!-- Collapsible Update Form when connected -->
-            <div x-show="showOAuthSettings" x-cloak class="mt-6 pt-4 border-t border-slate-100">
-                <h4 class="text-xs font-bold text-slate-800 mb-2">Update Meta Credentials & Access Token</h4>
-                <form action="{{ route('meta.connect') }}" method="POST" class="space-y-4 max-w-2xl bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    @csrf
-                    <div>
-                        <label class="block text-xs font-bold text-slate-700 mb-1">Meta System User Access Token (EAAB...)</label>
-                        <textarea 
-                            name="access_token" 
-                            rows="2" 
-                            placeholder="Paste your EAAB... permanent access token here"
-                            class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        >{{ \App\Models\Setting::get('meta_system_user_token') }}</textarea>
-                    </div>
+            <!-- Collapsible Token & Advanced Settings -->
+            <div class="pt-4 border-t border-slate-100">
+                <button type="button" @click="showManual = !showManual" class="text-xs text-slate-400 hover:text-slate-600 font-medium flex items-center gap-1.5 cursor-pointer">
+                    <svg class="w-3.5 h-3.5 transition-transform" :class="showManual ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    <span>⚙ Advanced / System User Token & Custom Meta App Credentials</span>
+                </button>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div x-show="showManual" x-cloak class="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <form action="{{ route('meta.connect') }}" method="POST" class="space-y-4 max-w-2xl">
+                        @csrf
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App ID (Optional)</label>
-                            <input 
-                                type="text" 
-                                name="app_id" 
-                                value="{{ \App\Models\Setting::get('meta_app_id', '') }}" 
-                                placeholder="e.g. 123456789012345"
-                                class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                            />
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta System User Access Token (EAAB...)</label>
+                            <textarea 
+                                name="access_token" 
+                                rows="2" 
+                                placeholder="Paste your EAAB... permanent access token here"
+                                class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                            >{{ \App\Models\Setting::get('meta_system_user_token') }}</textarea>
                         </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">Meta App Secret (Optional)</label>
-                            <input 
-                                type="password" 
-                                name="app_secret" 
-                                value="{{ \App\Models\Setting::get('meta_app_secret', '') }}" 
-                                placeholder="••••••••••••••••"
-                                class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                            />
-                        </div>
-                    </div>
 
-                    <div class="flex justify-end">
-                        <button type="submit" class="px-4 py-2 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
-                            <span>Update & Verify Connection</span>
-                        </button>
-                    </div>
-                </form>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Meta App ID</label>
+                                <input 
+                                    type="text" 
+                                    name="app_id" 
+                                    value="{{ \App\Models\Setting::get('meta_app_id', '') }}" 
+                                    placeholder="Enter Meta App ID"
+                                    class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Meta App Secret</label>
+                                <input 
+                                    type="password" 
+                                    name="app_secret" 
+                                    value="{{ \App\Models\Setting::get('meta_app_secret', '') }}" 
+                                    placeholder="••••••••••••••••"
+                                    class="w-full bg-white border border-slate-200 rounded-lg px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                                />
+                            </div>
+                        </div>
+
+                        <!-- OAuth Callback Redirect URI Helper -->
+                        <div class="p-2.5 bg-white rounded-lg border border-slate-200 text-[11px]">
+                            <span class="text-slate-500 block font-semibold mb-1">Valid OAuth Redirect URI:</span>
+                            <div class="flex items-center justify-between gap-2 font-mono text-[10px] text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                <span class="truncate" id="redirectUriText">{{ route('meta.oauth.callback') }}</span>
+                                <button type="button" onclick="navigator.clipboard.writeText('{{ route('meta.oauth.callback') }}'); alert('Redirect URI copied to clipboard!');" class="text-blue-600 hover:text-blue-800 font-bold flex-shrink-0 cursor-pointer">
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button type="submit" class="px-4 py-2 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
+                                <span>Save & Verify Credentials</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
         @else
@@ -213,7 +276,7 @@
                             </span>
                         </div>
                         <p class="text-xs text-slate-500 mt-1 max-w-xl">
-                            Connect your Meta Ad Account to automatically track real-time ad spends, campaign budgets, and sync Conversions API (CAPI) events.
+                            Connect your Facebook account to automatically sync your Business Managers, accessible Meta Ad Accounts, and track real-time campaign performance.
                         </p>
                     </div>
                 </div>
@@ -269,6 +332,17 @@
                             </div>
                         </div>
 
+                        <!-- OAuth Callback Redirect URI Helper -->
+                        <div class="p-2.5 bg-white rounded-lg border border-slate-200 text-[11px]">
+                            <span class="text-slate-500 block font-semibold mb-1">Valid OAuth Redirect URI:</span>
+                            <div class="flex items-center justify-between gap-2 font-mono text-[10px] text-slate-700 bg-slate-100 px-2 py-1 rounded">
+                                <span class="truncate" id="redirectUriText">{{ route('meta.oauth.callback') }}</span>
+                                <button type="button" onclick="navigator.clipboard.writeText('{{ route('meta.oauth.callback') }}'); alert('Redirect URI copied to clipboard!');" class="text-blue-600 hover:text-blue-800 font-bold flex-shrink-0 cursor-pointer">
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="flex justify-end">
                             <button type="submit" class="px-4 py-2 text-xs font-bold text-slate-950 bg-yellow-400 hover:bg-yellow-500 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
                                 <span>Save & Connect Token</span>
@@ -302,6 +376,7 @@
                         <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                             <th class="py-3 px-4">Account Name & ID</th>
                             <th class="py-3 px-4">Business / Portfolio</th>
+                            <th class="py-3 px-4">Connected Profile</th>
                             <th class="py-3 px-4">Currency</th>
                             <th class="py-3 px-4">Status</th>
                             <th class="py-3 px-4">Lifetime Spend</th>
@@ -318,6 +393,16 @@
                             </td>
                             <td class="py-3 px-4 text-slate-700">
                                 {{ $acc->metaBusiness?->name ?? 'Direct Agency Account' }}
+                            </td>
+                            <td class="py-3 px-4">
+                                @if($acc->metaConnection)
+                                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200/60 text-blue-800 text-[11px] font-medium">
+                                    <svg class="w-3 h-3 fill-[#1877F2] flex-shrink-0" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                                    <span class="truncate max-w-[130px]">{{ $acc->metaConnection->facebook_name }}</span>
+                                </div>
+                                @else
+                                <span class="text-slate-400 text-[11px] font-normal">Primary Agency</span>
+                                @endif
                             </td>
                             <td class="py-3 px-4 font-mono font-semibold text-slate-700">
                                 {{ $acc->currency }} ({{ $acc->currency_symbol }})
@@ -345,7 +430,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="7" class="py-8 text-center text-slate-400">
+                            <td colspan="8" class="py-8 text-center text-slate-400">
                                 <div class="max-w-sm mx-auto space-y-2">
                                     <svg class="w-8 h-8 text-slate-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
                                     <p class="font-semibold text-slate-600 text-xs">No Meta ad accounts synced yet.</p>
@@ -400,6 +485,17 @@
                             class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-mono text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
                         />
                     </div>
+
+                    @if($metaConnections->count() > 0)
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Associated Facebook Account</label>
+                        <select name="meta_connection_id" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-400">
+                            @foreach($metaConnections as $conn)
+                                <option value="{{ $conn->id }}">{{ $conn->facebook_name }} (ID: {{ $conn->facebook_user_id }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
 
                     <div class="grid grid-cols-2 gap-3">
                         <div>
