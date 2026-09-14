@@ -507,4 +507,48 @@ class LandingPageController extends Controller
         return redirect()->route('landing-pages.index')
             ->with('success', "Landing page '{$title}' and its tracking data deleted successfully.");
     }
+
+    /**
+     * AI-Powered Landing Page Block Structure Generator
+     */
+    public function generateAi(Request $request, \App\Services\LandingPageAiService $aiService)
+    {
+        $validated = $request->validate([
+            'prompt' => ['required', 'string', 'min:3', 'max:1000'],
+            'brand_name' => ['nullable', 'string', 'max:100'],
+            'industry' => ['nullable', 'string', 'max:100'],
+            'target_audience' => ['nullable', 'string', 'max:150'],
+            'primary_goal' => ['nullable', 'string', 'max:150'],
+            'telegram_destination' => ['nullable', 'string', 'max:255'],
+            'tone' => ['nullable', 'string', 'max:100'],
+            'language' => ['nullable', 'string', 'max:50'],
+            'current_blocks' => ['nullable', 'array'],
+        ]);
+
+        try {
+            $result = $aiService->generate($validated['prompt'], [
+                'brand_name' => $validated['brand_name'] ?? null,
+                'industry' => $validated['industry'] ?? null,
+                'target_audience' => $validated['target_audience'] ?? null,
+                'primary_goal' => $validated['primary_goal'] ?? null,
+                'telegram_destination' => $validated['telegram_destination'] ?? null,
+                'tone' => $validated['tone'] ?? null,
+                'language' => $validated['language'] ?? null,
+                'current_blocks' => $validated['current_blocks'] ?? null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Landing page generated successfully with AI.',
+                'data' => $result,
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('AI Generation Failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate landing page: ' . $e->getMessage(),
+            ], 422);
+        }
+    }
 }
+

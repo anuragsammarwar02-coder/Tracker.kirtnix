@@ -4,26 +4,7 @@
 @section('page_title', 'Landing Pages')
 
 @section('content')
-<div x-data="{
-  modalOpen: false,
-  modalToken: '',
-  modalTitle: '',
-  modalUrl: '',
-  copied: false,
-  openSnippet(token, title, url) {
-    this.modalToken = token;
-    this.modalTitle = title;
-    this.modalUrl = url;
-    this.modalOpen = true;
-    this.copied = false;
-  },
-  copyScript() {
-    let script = '<' + 'script src="{{ url('/api/public/kx.js') }}?lp=' + this.modalToken + '" data-kx-lp="' + this.modalToken + '"><' + '/script>';
-    navigator.clipboard.writeText(script);
-    this.copied = true;
-    setTimeout(() => this.copied = false, 2500);
-  }
-}" class="space-y-6">
+<div x-data="landingPagesIndex()" class="space-y-6">
 
   <!-- Header Area (Matches Screenshot 1) -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -241,7 +222,7 @@
             <span x-text="copied ? '✓ Copied!' : '📋 Copy Script'"></span>
           </button>
         </div>
-        <pre class="font-mono text-xs text-yellow-300 overflow-x-auto whitespace-pre-wrap select-all"><code x-text="'<' + 'script src=\"{{ url('/api/public/kx.js') }}?lp=' + modalToken + '\" data-kx-lp=\"' + modalToken + '\"><' + '/script>'"></code></pre>
+        <pre class="font-mono text-xs text-yellow-300 overflow-x-auto whitespace-pre-wrap select-all"><code x-text="getScriptTag()"></code></pre>
       </div>
 
       <div class="text-[11px] text-slate-500 mb-4">
@@ -255,4 +236,44 @@
   </div>
 
 </div>
+
+<script>
+function landingPagesIndex() {
+  return {
+    modalOpen: false,
+    modalToken: '',
+    modalTitle: '',
+    modalUrl: '',
+    copied: false,
+    baseUrl: '{{ url('/api/public/kx.js') }}',
+    openSnippet(token, title, url) {
+      this.modalToken = token;
+      this.modalTitle = title;
+      this.modalUrl = url;
+      this.modalOpen = true;
+      this.copied = false;
+    },
+    getScriptTag() {
+      if (!this.modalToken) return '';
+      return '<script src="' + this.baseUrl + '?lp=' + encodeURIComponent(this.modalToken) + '" data-kx-lp="' + encodeURIComponent(this.modalToken) + '"><' + '/script>';
+    },
+    copyScript() {
+      const script = this.getScriptTag();
+      if (!script) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(script);
+      } else {
+        const tempInput = document.createElement('textarea');
+        tempInput.value = script;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+      }
+      this.copied = true;
+      setTimeout(() => this.copied = false, 2500);
+    }
+  };
+}
+</script>
 @endsection

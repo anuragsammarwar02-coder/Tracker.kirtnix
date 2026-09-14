@@ -80,8 +80,18 @@
       </button>
     </div>
 
-    <!-- Actions: Preview & Save -->
+    <!-- Actions: Preview, AI Generator & Save -->
     <div class="flex items-center gap-2">
+      <button 
+        type="button" 
+        @click="openAiModal('new')" 
+        class="px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-lg shadow-md shadow-indigo-500/20 border border-indigo-400/30 transition flex items-center gap-1.5"
+        title="Generate or Refine Page with AI"
+      >
+        <span>✨</span>
+        <span class="font-extrabold tracking-wide">Create with AI</span>
+      </button>
+
       @if($isEdit)
         <a 
           :href="'/lp/' + slug" 
@@ -305,15 +315,24 @@
 
         </div>
 
-        <!-- Add Section Button at bottom of Canvas -->
-        <div class="p-4 border-t border-slate-800/80 bg-slate-900/30 flex justify-center">
+        <!-- Add Section & AI Buttons at bottom of Canvas -->
+        <div class="p-4 border-t border-slate-800/80 bg-slate-900/30 flex flex-wrap items-center justify-center gap-2.5">
           <button 
             type="button" 
             @click="libraryOpen = true" 
             class="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-yellow-400 font-bold text-xs border border-slate-700/80 shadow-md transition flex items-center gap-2 group"
           >
             <span class="text-base leading-none group-hover:scale-125 transition-transform">+</span>
-            <span>Add Section / Block</span>
+            <span>Add Section</span>
+          </button>
+
+          <button 
+            type="button" 
+            @click="openAiModal(blocks.length > 0 ? 'refine' : 'new')" 
+            class="px-4 py-2 rounded-xl bg-purple-950/60 hover:bg-purple-900/70 text-purple-200 font-bold text-xs border border-purple-700/60 shadow-md transition flex items-center gap-2 group"
+          >
+            <span class="text-sm">✨</span>
+            <span x-text="blocks.length > 0 ? 'Refine with AI' : 'Generate with AI'"></span>
           </button>
         </div>
       </div>
@@ -758,6 +777,228 @@
     </div>
   </div>
 
+  <!-- AI Landing Page Generator & Refinement Modal -->
+  <div 
+    x-show="aiModalOpen" 
+    x-transition:enter="transition ease-out duration-200" 
+    x-transition:enter-start="opacity-0 transform scale-95" 
+    x-transition:enter-end="opacity-100 transform scale-100" 
+    x-transition:leave="transition ease-in duration-150" 
+    x-transition:leave-start="opacity-100 transform scale-100" 
+    x-transition:leave-end="opacity-0 transform scale-95" 
+    style="display: none;" 
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto" 
+    @click.self="if(!aiLoading) aiModalOpen = false"
+  >
+    <div class="w-full max-w-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-indigo-500/30 rounded-2xl shadow-2xl p-6 sm:p-7 text-slate-100 relative max-h-[90vh] flex flex-col">
+      
+      <!-- Top Title & Close -->
+      <div class="flex items-start justify-between pb-4 border-b border-slate-800/80 mb-4 shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/25 border border-indigo-400/30">
+            ✨
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+              <span>AI Landing Page Generator</span>
+              <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Software Pro</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Generates structured conversion blocks, high-converting copy & Telegram CTAs.
+            </p>
+          </div>
+        </div>
+        <button 
+          type="button" 
+          @click="aiModalOpen = false" 
+          :disabled="aiLoading"
+          class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 text-sm transition"
+        >✕</button>
+      </div>
+
+      <!-- Mode Switcher (New vs Refine) -->
+      <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800 mb-4 shrink-0">
+        <button 
+          type="button" 
+          @click="aiMode = 'new'" 
+          :class="aiMode === 'new' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+          class="flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5"
+        >
+          <span>⚡ Generate New Page</span>
+        </button>
+        <button 
+          type="button" 
+          @click="aiMode = 'refine'" 
+          :class="aiMode === 'refine' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+          class="flex-1 py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5"
+        >
+          <span>✏️ Refine / Edit Current Blocks</span>
+        </button>
+      </div>
+
+      <!-- Scrollable Form Area -->
+      <div class="flex-1 overflow-y-auto space-y-4 pr-1">
+
+        <!-- Error Notification -->
+        <template x-if="aiError">
+          <div class="p-3 rounded-xl bg-red-950/50 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+            <span>⚠️</span>
+            <span x-text="aiError"></span>
+          </div>
+        </template>
+
+        <!-- Main Prompt -->
+        <div>
+          <label class="block text-xs font-bold text-slate-200 mb-1.5 flex items-center justify-between">
+            <span x-text="aiMode === 'new' ? 'Describe your landing page objective & offer *' : 'What would you like AI to modify or improve? *'"></span>
+            <span class="text-[11px] font-normal text-slate-400">English, Hindi or Hinglish</span>
+          </label>
+          <textarea 
+            x-model="aiPrompt" 
+            rows="3" 
+            :placeholder="aiMode === 'new' ? 'e.g. Create a high-converting landing page for a digital marketing agency. Target small business owners. Goal is Telegram VIP leads. Use premium modern design with testimonials, FAQ and bold CTA.' : 'e.g. Make the hero headline more premium, change the button text to \'Claim VIP Access\', and add member testimonials.'"
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition"
+            :disabled="aiLoading"
+          ></textarea>
+        </div>
+
+        <!-- Quick Prompt Ideas Chips -->
+        <div>
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">⚡ Quick Inspirations:</span>
+          <div class="flex flex-wrap gap-1.5">
+            <button 
+              type="button" 
+              @click="setAiQuickPrompt('Create a high-converting landing page for a digital marketing agency targeting business owners. Goal is Telegram VIP leads. Include hero, benefits, case studies and FAQ.', 'Apex Agency', 'Marketing')"
+              class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-yellow-400 transition"
+            >
+              🚀 Digital Agency
+            </button>
+            <button 
+              type="button" 
+              @click="setAiQuickPrompt('Create a VIP forex & stock scalping signals community landing page with daily high-accuracy setups and strict risk management.', 'STOXK Pro', 'Trading')"
+              class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-yellow-400 transition"
+            >
+              📈 Forex & Scalping VIP
+            </button>
+            <button 
+              type="button" 
+              @click="setAiQuickPrompt('Create a Web3 crypto alpha channel page sharing early airdrop guides, on-chain whale alerts and futures setups.', 'Crypto Alpha', 'Crypto')"
+              class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-yellow-400 transition"
+            >
+              🐋 Crypto Alpha
+            </button>
+            <button 
+              type="button" 
+              @click="setAiQuickPrompt('Create an online coaching & skill masterclass page with study guides, live weekly sessions and student community.', 'Mastery Academy', 'Education')"
+              class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-yellow-400 transition"
+            >
+              🎓 Online Course
+            </button>
+            <button 
+              type="button" 
+              @click="setAiQuickPrompt('Daily verified trading setups aur live scalping signals ke liye official Telegram channel join karein. High-converting Hinglish copy.', 'VIP Trading', 'Trading', 'Hinglish')"
+              class="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] text-slate-300 hover:text-yellow-400 transition"
+            >
+              🇮🇳 Hinglish VIP Channel
+            </button>
+          </div>
+        </div>
+
+        <!-- Optional Collapsible Parameters -->
+        <div class="border border-slate-800/80 rounded-xl bg-slate-950/40 overflow-hidden">
+          <button 
+            type="button" 
+            @click="showAiAdvanced = !showAiAdvanced" 
+            class="w-full px-3.5 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 flex items-center justify-between transition"
+          >
+            <span class="flex items-center gap-1.5">
+              <span>⚙️</span>
+              <span>Advanced Parameters (Optional Brand, Tone, Language)</span>
+            </span>
+            <span x-text="showAiAdvanced ? '▲' : '▼'" class="text-[10px]"></span>
+          </button>
+
+          <div x-show="showAiAdvanced" class="p-3.5 border-t border-slate-800/80 space-y-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Brand / Business Name</label>
+                <input type="text" x-model="aiBrandName" placeholder="e.g. Apex Marketing" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 text-xs outline-none focus:border-indigo-500">
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Industry / Niche</label>
+                <input type="text" x-model="aiIndustry" placeholder="e.g. Trading, Agency, SaaS" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 text-xs outline-none focus:border-indigo-500">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Target Audience</label>
+                <input type="text" x-model="aiTargetAudience" placeholder="e.g. Small business owners, Day traders" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 text-xs outline-none focus:border-indigo-500">
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Language</label>
+                <select x-model="aiLanguage" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 text-xs outline-none focus:border-indigo-500">
+                  <option value="English">English</option>
+                  <option value="Hinglish">Hinglish (Hindi + English)</option>
+                  <option value="Hindi">Hindi</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Copy Tone & Style</label>
+              <select x-model="aiTone" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-200 text-xs outline-none focus:border-indigo-500">
+                <option value="Premium & Authoritative">Premium & Authoritative</option>
+                <option value="High-Urgency & Direct Response">High-Urgency & Direct Response</option>
+                <option value="Educational & Friendly">Educational & Friendly</option>
+                <option value="Minimalist SaaS">Minimalist SaaS</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress / Loading Banner -->
+        <div x-show="aiLoading" class="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-xs space-y-2">
+          <div class="flex items-center gap-2.5 text-indigo-300 font-bold">
+            <svg class="animate-spin h-4 w-4 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span>Generating structured landing page blocks & Telegram CTAs...</span>
+          </div>
+          <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+            <div class="bg-gradient-to-r from-purple-500 via-indigo-400 to-blue-500 h-full w-2/3 animate-pulse"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action Footer -->
+      <div class="flex items-center justify-between pt-4 border-t border-slate-800/80 mt-4 shrink-0">
+        <div class="text-[11px] text-slate-400">
+          <span>🔒 Safe JSON schema • Software manages all tracking</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button 
+            type="button" 
+            @click="aiModalOpen = false" 
+            :disabled="aiLoading"
+            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+          >
+            Cancel
+          </button>
+          <button 
+            type="button" 
+            @click="generateWithAi()" 
+            :disabled="aiLoading || !aiPrompt.trim()"
+            class="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 text-white font-extrabold text-xs shadow-lg shadow-indigo-500/25 transition flex items-center gap-2"
+          >
+            <span x-show="!aiLoading">⚡</span>
+            <span x-text="aiLoading ? 'Generating...' : (aiMode === 'new' ? 'Generate Landing Page' : 'Apply AI Refinements')"></span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- Hidden Form for submission -->
   <form id="builder-form" method="POST" action="{{ $formAction }}" class="hidden">
     @csrf
@@ -803,6 +1044,19 @@ function visualBuilder(config) {
     clientId: config.clientId || '',
     campaignId: config.campaignId || '',
     isActive: config.isActive,
+
+    // AI Landing Page Generator State
+    aiModalOpen: false,
+    aiLoading: false,
+    aiError: '',
+    aiMode: 'new',
+    aiPrompt: '',
+    aiBrandName: config.brandName || '',
+    aiIndustry: '',
+    aiTargetAudience: '',
+    aiTone: 'Premium & Authoritative',
+    aiLanguage: 'English',
+    showAiAdvanced: false,
 
     get currentBlock() {
       if (this.selectedBlockIndex !== null && this.blocks[this.selectedBlockIndex]) {
@@ -960,6 +1214,92 @@ function visualBuilder(config) {
     addFaqItem(block) {
       if (!block.faqs) block.faqs = [];
       block.faqs.push({ q: 'New Question?', a: 'Answer to the question goes here.' });
+    },
+
+    openAiModal(mode = 'new') {
+      this.aiMode = mode;
+      this.aiError = '';
+      if (!this.aiBrandName && this.brandName) {
+        this.aiBrandName = this.brandName;
+      }
+      if (mode === 'refine' && !this.aiPrompt) {
+        this.aiPrompt = 'Make the hero headline more premium and improve the CTA copy.';
+      }
+      this.aiModalOpen = true;
+    },
+
+    setAiQuickPrompt(prompt, brand = '', industry = '', lang = 'English') {
+      this.aiPrompt = prompt;
+      if (brand && !this.aiBrandName) this.aiBrandName = brand;
+      if (industry && !this.aiIndustry) this.aiIndustry = industry;
+      if (lang) this.aiLanguage = lang;
+    },
+
+    async generateWithAi() {
+      if (!this.aiPrompt.trim()) {
+        this.aiError = 'Please enter a prompt describing your landing page.';
+        return;
+      }
+
+      this.aiLoading = true;
+      this.aiError = '';
+
+      const payload = {
+        prompt: this.aiPrompt.trim(),
+        brand_name: this.aiBrandName.trim() || this.brandName || null,
+        industry: this.aiIndustry.trim() || null,
+        target_audience: this.aiTargetAudience.trim() || null,
+        tone: this.aiTone || null,
+        language: this.aiLanguage || 'English',
+        telegram_destination: this.telegramDestination || null,
+        current_blocks: this.aiMode === 'refine' ? this.blocks : null
+      };
+
+      try {
+        const response = await fetch('{{ route('landing-pages.generate_ai') }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const res = await response.json();
+
+        if (!response.ok || !res.success) {
+          throw new Error(res.message || 'AI generation failed. Please try again.');
+        }
+
+        const data = res.data;
+        if (data && Array.isArray(data.blocks) && data.blocks.length > 0) {
+          this.blocks = data.blocks;
+          if (data.title && (this.aiMode === 'new' || !this.title)) {
+            this.title = data.title;
+          }
+          if (data.brand_name && (this.aiMode === 'new' || !this.brandName)) {
+            this.brandName = data.brand_name;
+          }
+          if (data.slug && this.aiMode === 'new') {
+            this.slug = data.slug;
+          }
+          if (data.telegram_destination && (!this.telegramDestination || this.telegramDestination.includes('kirtnix'))) {
+            this.telegramDestination = data.telegram_destination;
+          }
+
+          this.aiModalOpen = false;
+          this.selectedBlockIndex = 0;
+          this.activeTab = 'block';
+        } else {
+          throw new Error('AI returned an empty block list. Please try a more specific prompt.');
+        }
+      } catch (err) {
+        console.error('AI Generation Error:', err);
+        this.aiError = err.message || 'An unexpected error occurred while contacting AI.';
+      } finally {
+        this.aiLoading = false;
+      }
     },
 
     submitForm(publish) {

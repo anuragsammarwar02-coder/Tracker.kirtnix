@@ -518,6 +518,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('campaigns', CampaignController::class);
 
     // 5. Landing Pages Management & External Vercel Import
+    Route::post('/landing-pages/generate-ai', [LandingPageController::class, 'generateAi'])->name('landing-pages.generate_ai');
     Route::get('/landing-pages/import', [LandingPageController::class, 'import'])->name('landing-pages.import');
     Route::post('/landing-pages/import', [LandingPageController::class, 'storeImport'])->name('landing-pages.store_import');
     Route::post('/landing-pages/vercel-token', [LandingPageController::class, 'saveVercelToken'])->name('landing-pages.vercel_token');
