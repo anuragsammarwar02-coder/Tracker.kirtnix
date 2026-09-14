@@ -51,18 +51,18 @@ class MetaIntegrationController extends Controller
         ];
 
         $state = csrf_token();
-        session(['meta_oauth_state' => $state]);
+        $nonce = bin2hex(random_bytes(16));
+        session(['meta_oauth_state' => $state, 'meta_oauth_nonce' => $nonce]);
 
-        // Support explicit account switching / reauthentication
-        $authType = $request->has('reauth') || $request->has('switch') ? 'reauthenticate' : 'rerequest';
-
+        // Official Meta OAuth parameter for re-authentication and re-requesting permissions
         $query = http_build_query([
             'client_id' => $appId,
             'redirect_uri' => $redirectUri,
             'state' => $state,
             'response_type' => 'code',
             'scope' => implode(',', $scopes),
-            'auth_type' => $authType,
+            'auth_type' => 'reauthenticate,rerequest',
+            'auth_nonce' => $nonce,
         ]);
 
         return redirect()->away("{$this->facebookAuthUrl}/{$this->graphApiVersion}/dialog/oauth?{$query}");
@@ -124,7 +124,15 @@ class MetaIntegrationController extends Controller
                 ? $exchangeRes->json('access_token')
                 : $shortLivedToken;
 
-            // Step 3: Save Connection & Sync Accessible Business Managers and Ad Accounts
+            // Step 3: Check whether this Facebook User is already connected
+            $profileRes = Http::withoutVerifying()->timeout(8)->get("{$this->graphApiBase}/{$this->graphApiVersion}/me", [
+                'access_token' => $finalToken,
+                'fields' => 'id,name,email',
+            ]);
+            $fbUserId = $profileRes->successful() ? $profileRes->json('id') : null;
+            $isAlreadyConnected = $fbUserId && MetaConnection::where('facebook_user_id', $fbUserId)->exists();
+
+            // Step 4: Save Connection & Sync Accessible Business Managers and Ad Accounts
             $connection = $this->metaSyncService->connectAccessToken($finalToken, auth()->id(), null, 'oauth');
             $syncResult = $this->metaSyncService->syncAll($connection);
 
@@ -133,13 +141,13 @@ class MetaIntegrationController extends Controller
             // Set this connection as the active connection
             Setting::set('active_meta_connection_id', (string) $connection->id, 'meta');
 
-            if ($accountsCount === 0) {
+            if ($isAlreadyConnected) {
                 return redirect()->route('settings.index', ['tab' => 'meta'])
-                    ->with('info', "Connected with Facebook as {$connection->facebook_name} (ID: {$connection->facebook_user_id}). Note: No accessible Meta Ad Accounts were found for this Facebook account.");
+                    ->with('info', "Facebook account '{$connection->facebook_name}' (ID: {$connection->facebook_user_id}) was already connected. Access token and {$accountsCount} ad account(s) have been refreshed without creating a duplicate profile.");
             }
 
             return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('success', "Connected with Facebook as {$connection->facebook_name} (ID: {$connection->facebook_user_id})! ({$accountsCount} accessible Meta Ad Accounts synced).");
+                ->with('success', "New Facebook account '{$connection->facebook_name}' (ID: {$connection->facebook_user_id}) connected successfully! ({$accountsCount} accessible Meta Ad Accounts synced).");
         } catch (\Exception $e) {
             Log::error('Meta OAuth Callback Exception: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return redirect()->route('settings.index', ['tab' => 'meta'])
