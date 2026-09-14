@@ -57,7 +57,7 @@ class MetaMultiAccountIntegrationTest extends TestCase
                 ]], 200);
             }
 
-            if (str_contains($url, '/v19.0/me')) {
+            if (str_ends_with($url, '/me') || str_contains($url, '/me?')) {
                 if ($token === 'EAAB_TOKEN_B') {
                     return Http::response([
                         'id' => '200000000000002',
@@ -214,17 +214,17 @@ class MetaMultiAccountIntegrationTest extends TestCase
     public function test_live_test_connection_endpoint_validates_token(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v19.0/me/businesses*' => Http::response([
+            'https://graph.facebook.com/*/me/businesses*' => Http::response([
                 'data' => [
                     ['id' => 'biz_001', 'name' => 'Main Agency BM', 'verification_status' => 'verified'],
                 ],
             ], 200),
-            'https://graph.facebook.com/v19.0/me/adaccounts*' => Http::response([
+            'https://graph.facebook.com/*/me/adaccounts*' => Http::response([
                 'data' => [
                     ['id' => 'act_101', 'account_id' => '101', 'name' => 'Agency Live Ads', 'currency' => 'INR', 'account_status' => 1, 'amount_spent' => 50000],
                 ],
             ], 200),
-            'https://graph.facebook.com/v19.0/me*' => Http::response([
+            'https://graph.facebook.com/*/me*' => Http::response([
                 'id' => '100099887766',
                 'name' => 'Kirtnix Verified Agency',
                 'email' => 'agency@kirtnix.in',

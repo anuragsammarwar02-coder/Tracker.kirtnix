@@ -8,14 +8,19 @@ use App\Models\CampaignInsight;
 use App\Models\Client;
 use App\Models\MetaBusiness;
 use App\Models\MetaConnection;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 
 class MetaSyncService
 {
-    protected string $graphApiVersion = 'v19.0';
     protected string $baseUrl = 'https://graph.facebook.com';
+
+    public function getGraphApiVersion(): string
+    {
+        return Setting::get('meta_api_version') ?: env('META_API_VERSION', 'v20.0');
+    }
 
     /**
      * Validate an access token against Meta Graph API and get user / business / ad account details
@@ -23,7 +28,8 @@ class MetaSyncService
     public function validateToken(string $token): array
     {
         try {
-            $profileRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/me", [
+            $version = $this->getGraphApiVersion();
+            $profileRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/me", [
                 'access_token' => $token,
                 'fields' => 'id,name,email',
             ]);
@@ -45,7 +51,7 @@ class MetaSyncService
             // Fetch Businesses
             $businesses = [];
             try {
-                $bizRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/businesses", [
+                $bizRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/me/businesses", [
                     'access_token' => $token,
                     'fields' => 'id,name,verification_status',
                     'limit' => 50,
@@ -60,7 +66,7 @@ class MetaSyncService
             // Fetch Ad Accounts
             $adAccounts = [];
             try {
-                $accRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/adaccounts", [
+                $accRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/me/adaccounts", [
                     'access_token' => $token,
                     'fields' => 'id,account_id,name,currency,account_status,amount_spent',
                     'limit' => 100,
@@ -189,7 +195,8 @@ class MetaSyncService
     protected function fetchUserProfile(string $token): ?array
     {
         try {
-            $res = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$this->graphApiVersion}/me", [
+            $version = $this->getGraphApiVersion();
+            $res = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/me", [
                 'access_token' => $token,
                 'fields' => 'id,name,email',
             ]);
@@ -250,7 +257,8 @@ class MetaSyncService
 
         // Attempt live Graph API query
         try {
-            $res = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/businesses", [
+            $version = $this->getGraphApiVersion();
+            $res = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/me/businesses", [
                 'access_token' => $token,
                 'fields' => 'id,name,verification_status',
                 'limit' => 50,
@@ -301,7 +309,8 @@ class MetaSyncService
 
         // 1. Attempt live Graph API query for direct Ad Accounts
         try {
-            $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/adaccounts", [
+            $version = $this->getGraphApiVersion();
+            $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$version}/me/adaccounts", [
                 'access_token' => $token,
                 'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
                 'limit' => 100,
@@ -349,10 +358,11 @@ class MetaSyncService
 
         // 2. Also check all businesses for client / owned ad accounts
         try {
+            $version = $this->getGraphApiVersion();
             $businesses = MetaBusiness::where('meta_connection_id', $connection->id)->get();
             foreach ($businesses as $biz) {
                 foreach (['client_ad_accounts', 'owned_ad_accounts'] as $edge) {
-                    $bizRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/{$biz->business_id}/{$edge}", [
+                    $bizRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/{$biz->business_id}/{$edge}", [
                         'access_token' => $token,
                         'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent',
                         'limit' => 50,
@@ -480,10 +490,11 @@ class MetaSyncService
         $syncedCampaigns = [];
 
         try {
+            $version = $this->getGraphApiVersion();
             $rawAccId = str_replace('act_', '', $adAccount->account_id);
 
             // 1. Sync live ad account metadata from Meta
-            $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}", [
+            $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}", [
                 'access_token' => $token,
                 'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
             ]);
@@ -508,7 +519,7 @@ class MetaSyncService
 
             // 2. Sync campaigns and insights from Meta with pagination
             $allCampaignData = [];
-            $nextUrl = "{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/campaigns";
+            $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
             $params = [
                 'access_token' => $token,
                 'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
@@ -633,10 +644,11 @@ class MetaSyncService
         // Attempt Live Meta Graph API query
         if (!empty($token)) {
             try {
+                $version = $this->getGraphApiVersion();
                 $rawAccId = str_replace('act_', '', $adAccount->account_id);
 
                 // 1. Account Metadata & Lifetime Spend
-                $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}", [
+                $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}", [
                     'access_token' => $token,
                     'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
                 ]);
@@ -678,7 +690,7 @@ class MetaSyncService
                 ];
                 $metaPreset = $presetMap[$dateRange] ?? 'last_30d';
 
-                $scopedRes = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/insights", [
+                $scopedRes = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
                     'access_token' => $token,
                     'date_preset' => $metaPreset,
                     'fields' => 'spend,impressions,reach,clicks,cpc,cpm,ctr,actions',
@@ -713,7 +725,7 @@ class MetaSyncService
                 if ($dateRange === 'today') {
                     $spendToday = $scopedSpend;
                 } else {
-                    $todayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/insights", [
+                    $todayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
                         'access_token' => $token,
                         'date_preset' => 'today',
                         'fields' => 'spend,impressions,reach,clicks,actions',
@@ -729,7 +741,7 @@ class MetaSyncService
 
                 // 4. Dynamic Campaigns with Pagination
                 $allCampaigns = [];
-                $nextUrl = "{$this->baseUrl}/{$this->graphApiVersion}/act_{$rawAccId}/campaigns";
+                $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
                 $params = [
                     'access_token' => $token,
                     'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',

@@ -15,11 +15,15 @@ use Illuminate\Support\Facades\Log;
 
 class MetaIntegrationController extends Controller
 {
-    protected string $graphApiVersion = 'v19.0';
     protected string $facebookAuthUrl = 'https://www.facebook.com';
     protected string $graphApiBase = 'https://graph.facebook.com';
 
     public function __construct(protected MetaSyncService $metaSyncService) {}
+
+    protected function getGraphApiVersion(): string
+    {
+        return Setting::get('meta_api_version') ?: env('META_API_VERSION', 'v20.0');
+    }
 
     /**
      * Redirect user to official Facebook OAuth dialog with re-authentication / account switch support.
@@ -39,7 +43,6 @@ class MetaIntegrationController extends Controller
             'ads_management',
             'read_insights',
             'business_management',
-            'pages_show_list',
             'email',
             'public_profile',
         ];
@@ -59,7 +62,8 @@ class MetaIntegrationController extends Controller
             'auth_nonce' => $nonce,
         ]);
 
-        return redirect()->away("{$this->facebookAuthUrl}/{$this->graphApiVersion}/dialog/oauth?{$query}");
+        $version = $this->getGraphApiVersion();
+        return redirect()->away("{$this->facebookAuthUrl}/{$version}/dialog/oauth?{$query}");
     }
 
     /**
@@ -89,8 +93,10 @@ class MetaIntegrationController extends Controller
         }
 
         try {
+            $version = $this->getGraphApiVersion();
+
             // Step 1: Exchange code for short-lived access token
-            $res = Http::withoutVerifying()->timeout(15)->get("{$this->graphApiBase}/{$this->graphApiVersion}/oauth/access_token", [
+            $res = Http::withoutVerifying()->timeout(15)->get("{$this->graphApiBase}/{$version}/oauth/access_token", [
                 'client_id' => $appId,
                 'client_secret' => $appSecret,
                 'redirect_uri' => $redirectUri,
@@ -107,7 +113,7 @@ class MetaIntegrationController extends Controller
             $shortLivedToken = $res->json('access_token');
 
             // Step 2: Upgrade to Long-Lived Token (60 Days)
-            $exchangeRes = Http::withoutVerifying()->timeout(15)->get("{$this->graphApiBase}/{$this->graphApiVersion}/oauth/access_token", [
+            $exchangeRes = Http::withoutVerifying()->timeout(15)->get("{$this->graphApiBase}/{$version}/oauth/access_token", [
                 'grant_type' => 'fb_exchange_token',
                 'client_id' => $appId,
                 'client_secret' => $appSecret,
@@ -119,7 +125,7 @@ class MetaIntegrationController extends Controller
                 : $shortLivedToken;
 
             // Step 3: Check whether this Facebook User is already connected
-            $profileRes = Http::withoutVerifying()->timeout(8)->get("{$this->graphApiBase}/{$this->graphApiVersion}/me", [
+            $profileRes = Http::withoutVerifying()->timeout(8)->get("{$this->graphApiBase}/{$version}/me", [
                 'access_token' => $finalToken,
                 'fields' => 'id,name,email',
             ]);
