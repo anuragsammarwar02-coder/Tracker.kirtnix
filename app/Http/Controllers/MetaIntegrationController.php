@@ -26,14 +26,8 @@ class MetaIntegrationController extends Controller
      */
     public function oauthRedirect(Request $request): RedirectResponse
     {
-        $appId = Setting::get('meta_app_id') ?? env('META_APP_ID');
-        $appSecret = Setting::get('meta_app_secret') ?? env('META_APP_SECRET');
-
-        // Check if real custom Meta App credentials exist
-        if (empty($appId) || empty($appSecret) || $appId === '4520673831531016') {
-            return redirect()->route('settings.index', ['tab' => 'meta', 'open_manual' => '1'])
-                ->with('info', 'To connect via Facebook Login Dialog, please save your verified Meta App ID & Secret below, or connect directly using your Meta System User Access Token.');
-        }
+        $appId = Setting::get('meta_app_id') ?: env('META_APP_ID', '4520673831531016');
+        $appSecret = Setting::get('meta_app_secret') ?: env('META_APP_SECRET', 'd8d08c028a3952f4ebdf428d0ee5df27');
 
         $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
         if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
