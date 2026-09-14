@@ -18,32 +18,70 @@ class MetaSyncService
     protected string $baseUrl = 'https://graph.facebook.com';
 
     /**
-     * Validate an access token against Meta Graph API and get user / system user details
+     * Validate an access token against Meta Graph API and get user / business / ad account details
      */
     public function validateToken(string $token): array
     {
         try {
-            $res = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/me", [
+            $profileRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$this->graphApiVersion}/me", [
                 'access_token' => $token,
                 'fields' => 'id,name,email',
             ]);
 
-            if ($res->successful()) {
-                $data = $res->json();
+            if (!$profileRes->successful()) {
+                $errorData = $profileRes->json('error');
+                $errorMessage = $errorData['message'] ?? ('Meta API Error: HTTP ' . $profileRes->status());
                 return [
-                    'valid' => true,
-                    'user_id' => $data['id'] ?? null,
-                    'name' => $data['name'] ?? 'Meta Business User',
-                    'data' => $data,
+                    'valid' => false,
+                    'error' => $errorMessage,
+                    'code' => $errorData['code'] ?? null,
                 ];
             }
 
-            $errorData = $res->json('error');
-            $errorMessage = $errorData['message'] ?? ('Meta API error: HTTP ' . $res->status());
+            $profile = $profileRes->json();
+            $userId = $profile['id'] ?? null;
+            $userName = $profile['name'] ?? 'Meta Business User';
+
+            // Fetch Businesses
+            $businesses = [];
+            try {
+                $bizRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/businesses", [
+                    'access_token' => $token,
+                    'fields' => 'id,name,verification_status',
+                    'limit' => 50,
+                ]);
+                if ($bizRes->successful() && !empty($bizRes->json('data'))) {
+                    $businesses = $bizRes->json('data');
+                }
+            } catch (\Exception $e) {
+                Log::warning('validateToken businesses check: ' . $e->getMessage());
+            }
+
+            // Fetch Ad Accounts
+            $adAccounts = [];
+            try {
+                $accRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$this->graphApiVersion}/me/adaccounts", [
+                    'access_token' => $token,
+                    'fields' => 'id,account_id,name,currency,account_status,amount_spent',
+                    'limit' => 100,
+                ]);
+                if ($accRes->successful() && !empty($accRes->json('data'))) {
+                    $adAccounts = $accRes->json('data');
+                }
+            } catch (\Exception $e) {
+                Log::warning('validateToken ad accounts check: ' . $e->getMessage());
+            }
+
             return [
-                'valid' => false,
-                'error' => $errorMessage,
-                'code' => $errorData['code'] ?? null,
+                'valid' => true,
+                'user_id' => $userId,
+                'name' => $userName,
+                'email' => $profile['email'] ?? null,
+                'businesses_count' => count($businesses),
+                'businesses' => $businesses,
+                'ad_accounts_count' => count($adAccounts),
+                'ad_accounts' => $adAccounts,
+                'message' => "Token is valid! Found " . count($businesses) . " Business Portfolio(s) and " . count($adAccounts) . " Ad Account(s).",
             ];
         } catch (\Exception $e) {
             return [
@@ -56,47 +94,39 @@ class MetaSyncService
     /**
      * Start Meta OAuth or connect active token.
      */
-    public function connectAccessToken(string $accessToken, ?int $userId = null, ?string $adAccountId = null): MetaConnection
-    {
+    public function connectAccessToken(
+        string $accessToken, 
+        ?int $userId = null, 
+        ?string $adAccountId = null, 
+        string $tokenType = 'oauth',
+        ?string $systemUserId = null,
+        ?string $customName = null
+    ): MetaConnection {
         // Try fetching user profile from Meta Graph API
         $userData = $this->fetchUserProfile($accessToken);
 
-        $fbUserId = $userData['id'] ?? null;
-        $fbName = $userData['name'] ?? null;
+        $fbUserId = $userData['id'] ?? $systemUserId;
+        $fbName = $userData['name'] ?? $customName;
 
-        if ($fbUserId) {
-            $connection = MetaConnection::updateOrCreate(
-                ['facebook_user_id' => $fbUserId],
-                [
-                    'user_id' => $userId ?? auth()->id(),
-                    'facebook_name' => $fbName ?? ('Meta User ' . $fbUserId),
-                    'access_token' => $accessToken,
-                    'status' => 'active',
-                    'sync_status' => 'idle',
-                    'last_sync_at' => now(),
-                ]
-            );
-        } else {
-            $existing = MetaConnection::where('access_token', $accessToken)->first();
-            if ($existing) {
-                $connection = $existing;
-                $connection->update([
-                    'status' => 'active',
-                    'sync_status' => 'idle',
-                    'last_sync_at' => now(),
-                ]);
-            } else {
-                $connection = MetaConnection::create([
-                    'user_id' => $userId ?? auth()->id(),
-                    'facebook_user_id' => 'fb_' . bin2hex(random_bytes(6)),
-                    'facebook_name' => $fbName ?? 'KirtniX Performance Agency',
-                    'access_token' => $accessToken,
-                    'status' => 'active',
-                    'sync_status' => 'idle',
-                    'last_sync_at' => now(),
-                ]);
-            }
+        if (!$fbUserId) {
+            $fbUserId = 'su_' . substr(md5($accessToken), 0, 12);
         }
+        if (!$fbName) {
+            $fbName = ($tokenType === 'system_user') ? 'Meta System User' : 'Connected Facebook Account';
+        }
+
+        $connection = MetaConnection::updateOrCreate(
+            ['facebook_user_id' => $fbUserId],
+            [
+                'user_id' => $userId ?? auth()->id(),
+                'facebook_name' => $fbName,
+                'access_token' => $accessToken,
+                'token_type' => $tokenType,
+                'status' => 'active',
+                'sync_status' => 'idle',
+                'last_sync_at' => now(),
+            ]
+        );
 
         if ($adAccountId) {
             $rawId = trim($adAccountId);
@@ -117,7 +147,40 @@ class MetaSyncService
 
         $this->syncAll($connection);
 
+        // Safe cleanup of any older duplicate placeholder connections
+        $this->cleanupDuplicateConnections();
+
         return $connection;
+    }
+
+    /**
+     * Consolidate and clean up any placeholder duplicate connections
+     */
+    public function cleanupDuplicateConnections(): void
+    {
+        try {
+            $placeholderConnections = MetaConnection::where('facebook_user_id', 'like', 'fb_%')
+                ->where(function ($query) {
+                    $query->where('facebook_name', 'like', '%Kirtnix Performance Agency%')
+                          ->orWhere('facebook_name', 'like', '%KirtniX Performance Agency%');
+                })
+                ->orderByDesc('id')
+                ->get();
+
+            if ($placeholderConnections->count() > 1) {
+                // Keep the latest one, reassign ad accounts and delete extra rows
+                $keep = $placeholderConnections->first();
+                $duplicates = $placeholderConnections->slice(1);
+
+                foreach ($duplicates as $dup) {
+                    AdAccount::where('meta_connection_id', $dup->id)->update(['meta_connection_id' => $keep->id]);
+                    MetaBusiness::where('meta_connection_id', $dup->id)->delete();
+                    $dup->delete();
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('cleanupDuplicateConnections: ' . $e->getMessage());
+        }
     }
 
     /**

@@ -26,20 +26,14 @@ class SettingController extends Controller
             $dbStatus = 'Error: ' . $e->getMessage();
         }
 
+        // Clean up any placeholder duplicate connections
+        app(\App\Services\MetaSyncService::class)->cleanupDuplicateConnections();
+
         // Meta connections & accounts (Supporting Multiple Facebook Connections)
         $metaConnections = MetaConnection::with(['businesses', 'adAccounts'])->latest('id')->get();
-        $metaConnection = $metaConnections->first();
-        if ($metaConnections->isEmpty()) {
-            $token = Setting::get('meta_system_user_token');
-            if (!empty($token)) {
-                try {
-                    $metaConnection = app(\App\Services\MetaSyncService::class)->connectAccessToken($token, auth()->id());
-                    $metaConnections = MetaConnection::with(['businesses', 'adAccounts'])->latest('id')->get();
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('SettingController Meta auto-connect: ' . $e->getMessage());
-                }
-            }
-        }
+        $activeMetaConnectionId = Setting::get('active_meta_connection_id') ?? $metaConnections->first()?->id;
+        $metaConnection = $metaConnections->firstWhere('id', $activeMetaConnectionId) ?? $metaConnections->first();
+
         $adAccounts = AdAccount::with(['metaBusiness', 'metaConnection', 'client'])->latest('id')->paginate(15);
         $totalSyncedAccounts = AdAccount::count();
 
@@ -77,6 +71,7 @@ class SettingController extends Controller
             'diagnostics',
             'metaConnection',
             'metaConnections',
+            'activeMetaConnectionId',
             'adAccounts',
             'totalSyncedAccounts',
             'systemHealth',

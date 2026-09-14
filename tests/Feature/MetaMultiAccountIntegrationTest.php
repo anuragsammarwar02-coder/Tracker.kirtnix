@@ -210,4 +210,61 @@ class MetaMultiAccountIntegrationTest extends TestCase
         $this->assertEquals('Shared Brand Ad Account (Updated)', $account->name);
         $this->assertEquals(1200.00, $account->lifetime_spend);
     }
+
+    public function test_live_test_connection_endpoint_validates_token(): void
+    {
+        Http::fake([
+            'https://graph.facebook.com/v19.0/me/businesses*' => Http::response([
+                'data' => [
+                    ['id' => 'biz_001', 'name' => 'Main Agency BM', 'verification_status' => 'verified'],
+                ],
+            ], 200),
+            'https://graph.facebook.com/v19.0/me/adaccounts*' => Http::response([
+                'data' => [
+                    ['id' => 'act_101', 'account_id' => '101', 'name' => 'Agency Live Ads', 'currency' => 'INR', 'account_status' => 1, 'amount_spent' => 50000],
+                ],
+            ], 200),
+            'https://graph.facebook.com/v19.0/me*' => Http::response([
+                'id' => '100099887766',
+                'name' => 'Kirtnix Verified Agency',
+                'email' => 'agency@kirtnix.in',
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->user)->postJson(route('meta.test_connection'), [
+            'access_token' => 'EAAB_VALID_LIVE_TOKEN',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'valid' => true,
+            'user_id' => '100099887766',
+            'name' => 'Kirtnix Verified Agency',
+            'businesses_count' => 1,
+            'ad_accounts_count' => 1,
+        ]);
+    }
+
+    public function test_select_connection_sets_active_connection(): void
+    {
+        $connA = MetaConnection::create([
+            'user_id' => $this->user->id,
+            'facebook_user_id' => 'fb_select_1',
+            'facebook_name' => 'Profile 1',
+            'access_token' => 'TOKEN_1',
+            'status' => 'active',
+        ]);
+        $connB = MetaConnection::create([
+            'user_id' => $this->user->id,
+            'facebook_user_id' => 'fb_select_2',
+            'facebook_name' => 'Profile 2',
+            'access_token' => 'TOKEN_2',
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($this->user)->post(route('meta.select_connection', $connB->id));
+        $response->assertRedirect();
+
+        $this->assertEquals((string) $connB->id, Setting::get('active_meta_connection_id'));
+    }
 }

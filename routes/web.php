@@ -563,6 +563,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/meta/oauth/redirect', [MetaIntegrationController::class, 'oauthRedirect'])->name('meta.oauth.redirect');
     Route::get('/meta/oauth/callback', [MetaIntegrationController::class, 'oauthCallback'])->name('meta.oauth.callback');
     Route::post('/meta/connect', [MetaIntegrationController::class, 'connect'])->name('meta.connect');
+    Route::post('/meta/test-connection', [MetaIntegrationController::class, 'testConnection'])->name('meta.test_connection');
+    Route::post('/meta/select-connection/{metaConnection}', [MetaIntegrationController::class, 'selectConnection'])->name('meta.select_connection');
     Route::post('/meta/sync', [MetaIntegrationController::class, 'sync'])->name('meta.sync');
     Route::post('/meta/sync/{metaConnection}', [MetaIntegrationController::class, 'syncConnection'])->name('meta.sync_connection');
     Route::post('/meta/disconnect', [MetaIntegrationController::class, 'disconnect'])->name('meta.disconnect');
