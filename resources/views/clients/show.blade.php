@@ -208,7 +208,7 @@
           <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 14px;">
             <div style="display: flex; justify-content: space-between;">
               <span style="color: var(--text-muted);">Business</span>
-              <strong style="color: var(--text-main);">{{ $metaMetrics['business_name'] }}</strong>
+              <strong style="color: var(--text-main);">{{ $metaMetrics['business_name'] ?: 'Not available from Meta' }}</strong>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span style="color: var(--text-muted);">Ad account</span>

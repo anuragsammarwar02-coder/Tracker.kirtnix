@@ -68,7 +68,7 @@ class MetaSyncService
             try {
                 $accRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/me/adaccounts", [
                     'access_token' => $token,
-                    'fields' => 'id,account_id,name,currency,account_status,amount_spent',
+                    'fields' => 'id,account_id,name,currency,account_status,amount_spent,business{id,name,verification_status}',
                     'limit' => 100,
                 ]);
                 if ($accRes->successful() && !empty($accRes->json('data'))) {
@@ -144,6 +144,10 @@ class MetaSyncService
                     'name' => 'Ad Account ' . str_replace('act_', '', $accId),
                     'currency' => 'INR',
                     'status' => 'Active',
+                    'spend_limit' => 0.00,
+                    'balance' => 0.00,
+                    'lifetime_spend' => 0.00,
+                    'active_daily_budget' => 0.00,
                     'is_active' => true,
                     'last_synced_at' => now(),
                 ]
@@ -312,13 +316,12 @@ class MetaSyncService
             $version = $this->getGraphApiVersion();
             $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$version}/me/adaccounts", [
                 'access_token' => $token,
-                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
+                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
                 'limit' => 100,
             ]);
 
             if ($res->successful() && !empty($res->json('data'))) {
                 $accountsData = $res->json('data');
-                $business = MetaBusiness::where('meta_connection_id', $connection->id)->first();
 
                 foreach ($accountsData as $acc) {
                     $rawId = (string) ($acc['account_id'] ?? $acc['id']);
@@ -331,11 +334,26 @@ class MetaSyncService
                     $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
                     $dailyBudget = 0.00;
 
+                    // Authoritative Meta Business resolution:
+                    // Ad Account -> business -> business.id / business.name
+                    $metaBusinessId = null;
+                    if (!empty($acc['business']['id']) && !empty($acc['business']['name'])) {
+                        $metaBusiness = MetaBusiness::updateOrCreate(
+                            ['business_id' => $acc['business']['id']],
+                            [
+                                'meta_connection_id' => $connection->id,
+                                'name' => $acc['business']['name'],
+                                'verification_status' => $acc['business']['verification_status'] ?? 'verified',
+                            ]
+                        );
+                        $metaBusinessId = $metaBusiness->id;
+                    }
+
                     $record = AdAccount::updateOrCreate(
                         ['account_id' => $accId],
                         [
                             'meta_connection_id' => $connection->id,
-                            'meta_business_id' => $business?->id,
+                            'meta_business_id' => $metaBusinessId,
                             'name' => $acc['name'] ?? ('Meta Ad Account ' . $rawId),
                             'currency' => $acc['currency'] ?? 'INR',
                             'status' => $status,
@@ -421,7 +439,7 @@ class MetaSyncService
             }
         }
 
-        // 4. If no accounts exist yet, auto-populate primary agency account and link client accounts
+        // 4. If no accounts exist yet, auto-populate primary agency account and link client accounts with 0.00 defaults
         if (empty($results)) {
             $business = MetaBusiness::where('meta_connection_id', $connection->id)->first();
 
@@ -433,10 +451,10 @@ class MetaSyncService
                     'name' => 'KirtniX Agency Primary Ad Account',
                     'currency' => 'INR',
                     'status' => 'Active',
-                    'spend_limit' => 150000.00,
+                    'spend_limit' => 0.00,
                     'balance' => 0.00,
-                    'lifetime_spend' => 45200.00,
-                    'active_daily_budget' => 5000.00,
+                    'lifetime_spend' => 0.00,
+                    'active_daily_budget' => 0.00,
                     'payment_method' => 'Meta Billing',
                     'is_active' => true,
                     'last_synced_at' => now(),
@@ -455,10 +473,10 @@ class MetaSyncService
                         'name' => $c->company_name . ' Ads Account',
                         'currency' => 'INR',
                         'status' => 'Active',
-                        'spend_limit' => 80000.00,
+                        'spend_limit' => 0.00,
                         'balance' => 0.00,
-                        'lifetime_spend' => 28400.00,
-                        'active_daily_budget' => 3000.00,
+                        'lifetime_spend' => 0.00,
+                        'active_daily_budget' => 0.00,
                         'payment_method' => 'Meta Billing',
                         'is_active' => true,
                         'last_synced_at' => now(),
@@ -496,22 +514,37 @@ class MetaSyncService
             // 1. Sync live ad account metadata from Meta
             $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}", [
                 'access_token' => $token,
-                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
+                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
             ]);
 
             if ($accRes->successful() && !empty($accRes->json())) {
                 $accData = $accRes->json();
                 $spendLimit = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : 0.00);
                 $balance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : 0.00;
-                $lifetimeSpend = isset($accData['amount_spent']) ? ((float) $accData['amount_spent'] / 100) : (float)$adAccount->lifetime_spend;
+                $lifetimeSpend = isset($accData['amount_spent']) ? ((float) $accData['amount_spent'] / 100) : (float) ($adAccount->lifetime_spend ?? 0.00);
+
+                $metaBusinessId = $adAccount->meta_business_id;
+                if (!empty($accData['business']['id']) && !empty($accData['business']['name'])) {
+                    $metaBiz = MetaBusiness::updateOrCreate(
+                        ['business_id' => $accData['business']['id']],
+                        [
+                            'meta_connection_id' => $adAccount->meta_connection_id,
+                            'name' => $accData['business']['name'],
+                            'verification_status' => $accData['business']['verification_status'] ?? 'verified',
+                        ]
+                    );
+                    $metaBusinessId = $metaBiz->id;
+                }
 
                 $adAccount->update([
+                    'meta_business_id' => $metaBusinessId,
                     'spend_limit' => $spendLimit,
                     'balance' => $balance,
                     'lifetime_spend' => $lifetimeSpend,
                     'currency' => $accData['currency'] ?? $adAccount->currency,
                     'last_synced_at' => now(),
                 ]);
+                $adAccount->meta_business_id = $metaBusinessId;
                 $adAccount->spend_limit = $spendLimit;
                 $adAccount->balance = $balance;
                 $adAccount->lifetime_spend = $lifetimeSpend;
@@ -650,7 +683,7 @@ class MetaSyncService
                 // 1. Account Metadata & Lifetime Spend
                 $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}", [
                     'access_token' => $token,
-                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc',
+                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
                 ]);
 
                 if ($accRes->successful() && !empty($accRes->json())) {
@@ -667,13 +700,28 @@ class MetaSyncService
                     $spendCap = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : (float) ($adAccount->spend_limit ?? 0));
                     $balance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : (float) ($adAccount->balance ?? 0);
 
+                    $metaBusinessId = $adAccount->meta_business_id;
+                    if (!empty($accData['business']['id']) && !empty($accData['business']['name'])) {
+                        $metaBiz = MetaBusiness::updateOrCreate(
+                            ['business_id' => $accData['business']['id']],
+                            [
+                                'meta_connection_id' => $adAccount->meta_connection_id,
+                                'name' => $accData['business']['name'],
+                                'verification_status' => $accData['business']['verification_status'] ?? 'verified',
+                            ]
+                        );
+                        $metaBusinessId = $metaBiz->id;
+                    }
+
                     $adAccount->update([
+                        'meta_business_id' => $metaBusinessId,
                         'spend_limit' => $spendCap,
                         'balance' => $balance,
                         'lifetime_spend' => $spendTotal,
                         'currency' => $currency,
                         'last_synced_at' => now(),
                     ]);
+                    $adAccount->meta_business_id = $metaBusinessId;
                     $adAccount->spend_limit = $spendCap;
                     $adAccount->balance = $balance;
                     $adAccount->lifetime_spend = $spendTotal;
@@ -825,7 +873,7 @@ class MetaSyncService
             'connected' => true,
             'account_name' => $adAccount->name,
             'account_id' => $adAccount->account_id,
-            'business_name' => $adAccount->metaBusiness?->name ?? 'Arabika Kofi',
+            'business_name' => $adAccount->metaBusiness?->name ?? null,
             'currency' => $currency,
             'currency_symbol' => $currencySymbol,
             'status' => $adAccount->status ?? 'Active',

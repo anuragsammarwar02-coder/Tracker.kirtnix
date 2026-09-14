@@ -45,10 +45,10 @@ return new class extends Migration
             $table->string('name'); // e.g. KX001 - GJ, 01-HK-Focus-2026
             $table->string('currency')->default('INR'); // INR, USD
             $table->string('status')->default('Active'); // Active, Disabled, Unsettled
-            $table->decimal('spend_limit', 14, 2)->default(23838.00);
-            $table->decimal('balance', 14, 2)->default(828.00);
-            $table->decimal('lifetime_spend', 14, 2)->default(23491.00);
-            $table->decimal('active_daily_budget', 14, 2)->default(2314.00);
+            $table->decimal('spend_limit', 14, 2)->default(0.00);
+            $table->decimal('balance', 14, 2)->default(0.00);
+            $table->decimal('lifetime_spend', 14, 2)->default(0.00);
+            $table->decimal('active_daily_budget', 14, 2)->default(0.00);
             $table->string('payment_method')->default('Available balance');
             $table->boolean('is_active')->default(true);
             $table->timestamp('last_synced_at')->nullable();

@@ -352,6 +352,10 @@ class MetaIntegrationController extends Controller
                 'name' => $validated['name'],
                 'currency' => strtoupper($validated['currency'] ?? 'INR'),
                 'status' => ucfirst($validated['status'] ?? 'Active'),
+                'spend_limit' => 0.00,
+                'balance' => 0.00,
+                'lifetime_spend' => 0.00,
+                'active_daily_budget' => 0.00,
                 'is_active' => true,
                 'last_synced_at' => now(),
             ]

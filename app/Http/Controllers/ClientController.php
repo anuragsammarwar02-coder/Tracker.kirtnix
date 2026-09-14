@@ -130,7 +130,7 @@ class ClientController extends Controller
             'connected' => false,
             'account_name' => 'Not Assigned',
             'account_id' => 'None',
-            'business_name' => 'Personal / Agency',
+            'business_name' => 'Not available from Meta',
             'currency' => 'INR',
             'currency_symbol' => '₹',
             'status' => 'Inactive',

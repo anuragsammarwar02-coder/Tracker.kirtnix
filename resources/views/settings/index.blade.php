@@ -239,7 +239,7 @@
                                 <span class="block text-[10px] font-mono text-slate-400">{{ $acc->account_id }}</span>
                             </td>
                             <td class="py-3 px-4 text-slate-700">
-                                {{ $acc->metaBusiness?->name ?? 'Direct Agency Account' }}
+                                {{ $acc->metaBusiness?->name ?? 'Not available from Meta' }}
                             </td>
                             <td class="py-3 px-4">
                                 @if($acc->metaConnection)

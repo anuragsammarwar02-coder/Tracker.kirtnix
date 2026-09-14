@@ -382,4 +382,201 @@ class ClientMetaAdAccountScopingAndCurrencyTest extends TestCase
             ],
         ]);
     }
+
+    public function test_business_name_comes_authoritatively_from_meta_business_relation_and_not_arbitrary_fallback(): void
+    {
+        $realBusiness = MetaBusiness::create([
+            'meta_connection_id' => $this->connection->id,
+            'business_id' => 'biz_kirtnix_official_bm',
+            'name' => 'Kirtnix Performance Media BM',
+        ]);
+
+        $adAccount = AdAccount::create([
+            'meta_connection_id' => $this->connection->id,
+            'meta_business_id' => $realBusiness->id,
+            'account_id' => 'act_kirtnix_official_01',
+            'name' => 'Kirtnix Official',
+            'currency' => 'INR',
+            'lifetime_spend' => 0.00,
+            'is_active' => true,
+        ]);
+
+        $client = Client::create([
+            'company_name' => 'Kirtnix Enterprise',
+            'client_name' => 'Anurag',
+            'kx_code' => 'KX-KIRTNIX',
+            'status' => 'active',
+            'ad_account_id' => $adAccount->id,
+        ]);
+        $adAccount->update(['client_id' => $client->id]);
+
+        $metrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, true);
+
+        $this->assertEquals('Kirtnix Performance Media BM', $metrics['business_name']);
+        $this->assertNotEquals('Arabika Kofi', $metrics['business_name']);
+
+        $response = $this->actingAs($this->user)->get(route('clients.show', $client->id));
+        $response->assertOk();
+        $response->assertSee('Kirtnix Performance Media BM');
+        $response->assertDontSee('Arabika Kofi');
+    }
+
+    public function test_ad_account_without_business_displays_not_available_from_meta_and_never_arabika_kofi(): void
+    {
+        $adAccount = AdAccount::create([
+            'meta_connection_id' => $this->connection->id,
+            'meta_business_id' => null, // Explicitly no business assigned
+            'account_id' => 'act_personal_solo_02',
+            'name' => 'Solo Direct Ad Account',
+            'currency' => 'INR',
+            'lifetime_spend' => 0.00,
+            'is_active' => true,
+        ]);
+
+        $client = Client::create([
+            'company_name' => 'Personal Client',
+            'client_name' => 'Rahul',
+            'kx_code' => 'KX-PERSONAL',
+            'status' => 'active',
+            'ad_account_id' => $adAccount->id,
+        ]);
+        $adAccount->update(['client_id' => $client->id]);
+
+        $metrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, true);
+
+        $this->assertNull($metrics['business_name']);
+        $this->assertNotEquals('Arabika Kofi', $metrics['business_name']);
+
+        $response = $this->actingAs($this->user)->get(route('clients.show', $client->id));
+        $response->assertOk();
+        $response->assertSee('Not available from Meta');
+        $response->assertDontSee('Arabika Kofi');
+    }
+
+    public function test_newly_connected_ad_account_defaults_to_zero_lifetime_spend_and_never_dummy_23491(): void
+    {
+        $newAccount = AdAccount::create([
+            'meta_connection_id' => $this->connection->id,
+            'account_id' => 'act_1152299379439717',
+            'name' => 'Kirtnix Official',
+            'currency' => 'INR',
+            'is_active' => true,
+        ]);
+
+        // Verify database default is 0.00 and NEVER 23491.00
+        $this->assertEquals(0.00, (float) $newAccount->fresh()->lifetime_spend);
+        $this->assertEquals(0.00, (float) $newAccount->fresh()->spend_limit);
+        $this->assertEquals(0.00, (float) $newAccount->fresh()->balance);
+
+        $client = Client::create([
+            'company_name' => 'Kirtnix Fresh',
+            'client_name' => 'Anurag',
+            'kx_code' => 'KX-FRESH',
+            'status' => 'active',
+            'ad_account_id' => $newAccount->id,
+        ]);
+        $newAccount->update(['client_id' => $client->id]);
+
+        $metrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($newAccount, true);
+
+        $this->assertEquals(0.00, $metrics['spend_total']);
+        $this->assertEquals(0.00, $metrics['lifetime_spend']);
+        $this->assertEquals(0.00, $metrics['spend_today']);
+
+        $response = $this->actingAs($this->user)->get(route('clients.show', $client->id));
+        $response->assertOk();
+        // Lifetime spend must render ₹0, not ₹23,491
+        $response->assertSee('₹0');
+        $response->assertDontSee('23,491');
+        $response->assertDontSee('23491');
+    }
+
+    public function test_meta_sync_resolves_and_persists_business_object_from_graph_api_response(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'https://graph.facebook.com/*/me/adaccounts*' => \Illuminate\Support\Facades\Http::response([
+                'data' => [
+                    [
+                        'id' => 'act_1152299379439717',
+                        'account_id' => '1152299379439717',
+                        'name' => 'Kirtnix Official',
+                        'currency' => 'INR',
+                        'account_status' => 1,
+                        'amount_spent' => '0',
+                        'business' => [
+                            'id' => '998877665544',
+                            'name' => 'Kirtnix Tech Holding BM',
+                            'verification_status' => 'verified',
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $syncService = app(\App\Services\MetaSyncService::class);
+        $syncedAccounts = $syncService->syncAdAccounts($this->connection);
+
+        $this->assertCount(1, $syncedAccounts);
+        $account = $syncedAccounts[0];
+
+        $this->assertNotNull($account->meta_business_id);
+        $business = MetaBusiness::find($account->meta_business_id);
+        $this->assertNotNull($business);
+        $this->assertEquals('998877665544', $business->business_id);
+        $this->assertEquals('Kirtnix Tech Holding BM', $business->name);
+        $this->assertEquals(0.00, (float) $account->lifetime_spend);
+    }
+
+    public function test_ad_account_lifetime_spend_isolation_between_different_accounts(): void
+    {
+        $accountA = AdAccount::create([
+            'meta_connection_id' => $this->connection->id,
+            'account_id' => 'act_spending_aaa',
+            'name' => 'Account A Spending',
+            'currency' => 'INR',
+            'lifetime_spend' => 45000.00,
+            'is_active' => true,
+        ]);
+
+        $accountB = AdAccount::create([
+            'meta_connection_id' => $this->connection->id,
+            'account_id' => 'act_fresh_bbb',
+            'name' => 'Account B Fresh',
+            'currency' => 'INR',
+            'lifetime_spend' => 0.00,
+            'is_active' => true,
+        ]);
+
+        $clientA = Client::create([
+            'company_name' => 'Client A',
+            'client_name' => 'Client A',
+            'kx_code' => 'KX-AAA',
+            'status' => 'active',
+            'ad_account_id' => $accountA->id,
+        ]);
+        $accountA->update(['client_id' => $clientA->id]);
+
+        $clientB = Client::create([
+            'company_name' => 'Client B',
+            'client_name' => 'Client B',
+            'kx_code' => 'KX-BBB',
+            'status' => 'active',
+            'ad_account_id' => $accountB->id,
+        ]);
+        $accountB->update(['client_id' => $clientB->id]);
+
+        $metricsA = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($accountA, true);
+        $metricsB = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($accountB, true);
+
+        $this->assertEquals(45000.00, $metricsA['spend_total']);
+        $this->assertEquals(0.00, $metricsB['spend_total']);
+
+        $resA = $this->actingAs($this->user)->get(route('clients.show', $clientA->id));
+        $resA->assertSee('₹45,000');
+
+        $resB = $this->actingAs($this->user)->get(route('clients.show', $clientB->id));
+        $resB->assertSee('₹0');
+        $resB->assertDontSee('45,000');
+    }
 }
+
