@@ -98,6 +98,8 @@
     {!! strip_tags($landingPage->custom_css) !!}
   </style>
   @endif
+
+  @include('templates.partials.anti_inspection')
 </head>
 <body class="{{ $isLight ? 'bg-[#F4F6F9] text-slate-900' : 'bg-[#0A0B0D] text-slate-100' }} min-h-screen flex flex-col justify-between">
 

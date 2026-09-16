@@ -320,6 +320,8 @@
   @if(!empty($landingPage->custom_head_code))
     {!! $landingPage->custom_head_code !!}
   @endif
+
+  @include('templates.partials.anti_inspection')
 </head>
 <body>
   @if(!empty($landingPage->gtm_id))

@@ -535,4 +535,146 @@ class SoftwareBuilderVisualEditorTest extends TestCase
         // Confirmed Telegram membership created the verified conversion
         $this->assertEquals(1, \App\Models\Conversion::where('client_id', $this->client->id)->where('telegram_user_id', '888777666')->where('status', 'verified')->count());
     }
+
+    public function test_public_landing_pages_contain_anti_inspection_protection_layer(): void
+    {
+        // 1. Visual Builder Template
+        $vbPage = LandingPage::create([
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Visual Builder Test Page',
+            'slug' => 'test-vb-anti-inspect',
+            'template_type' => 'visual_builder',
+            'brand_name' => 'Kirtnix Visual',
+            'primary_cta_text' => 'Join VIP',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'blocks_json' => [
+                ['id' => '1', 'type' => 'hero', 'heading' => 'Visual Builder Hero', 'button_text' => 'Join VIP']
+            ],
+            'is_active' => true,
+        ]);
+
+        $responseVb = $this->get(route('public.landing_page', $vbPage->slug));
+        $responseVb->assertStatus(200);
+        $responseVb->assertSee('kx-public-protected');
+        $responseVb->assertSee('contextmenu');
+        $responseVb->assertSee('keydown');
+        $responseVb->assertSee('user-select: none');
+
+        // 2. Forex Focus Template
+        $ffPage = LandingPage::create([
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Forex Focus Test Page',
+            'slug' => 'test-ff-anti-inspect',
+            'template_type' => 'forex_focus',
+            'brand_name' => 'Kirtnix Forex',
+            'primary_cta_text' => 'Join Forex',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'blocks_json' => null,
+            'is_active' => true,
+        ]);
+
+        $responseFf = $this->get(route('public.landing_page', $ffPage->slug));
+        $responseFf->assertStatus(200);
+        $responseFf->assertSee('kx-public-protected');
+        $responseFf->assertSee('contextmenu');
+        $responseFf->assertSee('keydown');
+
+        // 3. Gujarati Trader Template
+        $gtPage = LandingPage::create([
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Gujarati Trader Test Page',
+            'slug' => 'test-gt-anti-inspect',
+            'template_type' => 'gujarati_trader',
+            'brand_name' => 'Kirtnix Gujarati',
+            'primary_cta_text' => 'Join Gujarati',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'blocks_json' => null,
+            'is_active' => true,
+        ]);
+
+        $responseGt = $this->get(route('public.landing_page', $gtPage->slug));
+        $responseGt->assertStatus(200);
+        $responseGt->assertSee('kx-public-protected');
+        $responseGt->assertSee('contextmenu');
+        $responseGt->assertSee('keydown');
+    }
+
+    public function test_builder_and_admin_pages_do_not_contain_anti_inspection_protection_layer(): void
+    {
+        $page = LandingPage::create([
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Admin Test Page',
+            'slug' => 'admin-test-page',
+            'template_type' => 'visual_builder',
+            'brand_name' => 'Kirtnix Admin',
+            'primary_cta_text' => 'Join VIP',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'page_source' => 'native',
+            'is_active' => true,
+        ]);
+
+        // Landing Page Builder Create page
+        $resCreate = $this->actingAs($this->user)->get(route('landing-pages.create'));
+        $resCreate->assertStatus(200);
+        $resCreate->assertDontSee('kx-public-protected');
+
+        // Landing Page Builder Edit page
+        $resEdit = $this->actingAs($this->user)->get(route('landing-pages.edit', $page));
+        $resEdit->assertStatus(200);
+        $resEdit->assertDontSee('kx-public-protected');
+
+        // Dashboard
+        $resDash = $this->actingAs($this->user)->get(route('dashboard'));
+        $resDash->assertStatus(200);
+        $resDash->assertDontSee('kx-public-protected');
+
+        // Login page (guest)
+        auth()->logout();
+        $resLogin = $this->get(route('login'));
+        $resLogin->assertStatus(200);
+        $resLogin->assertDontSee('kx-public-protected');
+
+        // Settings page
+        $resSettings = $this->actingAs($this->user)->get(route('settings.index'));
+        $resSettings->assertStatus(200);
+        $resSettings->assertDontSee('kx-public-protected');
+    }
+
+    public function test_public_landing_page_does_not_leak_secret_credentials(): void
+    {
+        $secretCapiToken = 'EAAG_SUPER_SECRET_CAPI_ACCESS_TOKEN_987654321';
+        $secretAppSecret = 'fb_app_secret_super_private_xyz';
+
+        $page = LandingPage::create([
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Secure Public Landing Page',
+            'slug' => 'secure-public-landing-page',
+            'template_type' => 'visual_builder',
+            'brand_name' => 'Secure Brand',
+            'primary_cta_text' => 'Join Community',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'meta_pixel_id' => '123456789012345',
+            'meta_access_token' => $secretCapiToken,
+            'blocks_json' => [
+                ['id' => '1', 'type' => 'hero', 'heading' => 'Secure Public Page', 'button_text' => 'Join Community']
+            ],
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(route('public.landing_page', $page->slug));
+        $response->assertStatus(200);
+
+        // Pixel ID is public for browser tracking
+        $response->assertSee('123456789012345');
+
+        // Secrets must NEVER be present in the public HTML response
+        $response->assertDontSee($secretCapiToken);
+        $response->assertDontSee($secretAppSecret);
+        $response->assertDontSee('meta_access_token');
+    }
 }
