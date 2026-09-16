@@ -124,16 +124,19 @@ class MetaIntegrationController extends Controller
                 ? $exchangeRes->json('access_token')
                 : $shortLivedToken;
 
-            // Step 3: Check whether this Facebook User is already connected
+            // Step 3: Check whether this Facebook User is already connected for this user
             $profileRes = Http::withoutVerifying()->timeout(8)->get("{$this->graphApiBase}/{$version}/me", [
                 'access_token' => $finalToken,
                 'fields' => 'id,name,email',
             ]);
             $fbUserId = $profileRes->successful() ? $profileRes->json('id') : null;
-            $isAlreadyConnected = $fbUserId && MetaConnection::where('facebook_user_id', $fbUserId)->exists();
+            $currentUserId = auth()->id();
+            $isAlreadyConnected = $fbUserId && MetaConnection::where('facebook_user_id', $fbUserId)
+                ->when($currentUserId, fn($q) => $q->where('user_id', $currentUserId))
+                ->exists();
 
             // Step 4: Save Connection & Sync Accessible Business Managers and Ad Accounts
-            $connection = $this->metaSyncService->connectAccessToken($finalToken, auth()->id(), null, 'oauth');
+            $connection = $this->metaSyncService->connectAccessToken($finalToken, $currentUserId, null, 'oauth');
             $syncResult = $this->metaSyncService->syncAll($connection);
 
             $accountsCount = $syncResult['accounts_count'] ?? AdAccount::where('meta_connection_id', $connection->id)->count();

@@ -121,10 +121,16 @@ class MetaSyncService
             $fbName = ($tokenType === 'system_user') ? 'Meta System User' : 'Connected Facebook Account';
         }
 
+        $targetUserId = $userId ?? auth()->id();
+        $attributes = ['facebook_user_id' => $fbUserId];
+        if ($targetUserId) {
+            $attributes['user_id'] = $targetUserId;
+        }
+
         $connection = MetaConnection::updateOrCreate(
-            ['facebook_user_id' => $fbUserId],
+            $attributes,
             [
-                'user_id' => $userId ?? auth()->id(),
+                'user_id' => $targetUserId,
                 'facebook_name' => $fbName,
                 'access_token' => $accessToken,
                 'token_type' => $tokenType,
@@ -290,17 +296,7 @@ class MetaSyncService
             return $existing;
         }
 
-        // Default Agency Business Manager
-        $defaultBiz = MetaBusiness::updateOrCreate(
-            ['business_id' => 'biz_kirtnix_bm_01'],
-            [
-                'meta_connection_id' => $connection->id,
-                'name' => 'KirtniX Performance Business Manager',
-                'verification_status' => 'verified',
-            ]
-        );
-
-        return [$defaultBiz];
+        return [];
     }
 
     /**
