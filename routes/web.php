@@ -46,6 +46,7 @@ Route::get('/healthz', function () {
         }
 
         $migrateResult = null;
+        $gitPullResult = null;
         if (request()->query('migrate')) {
             try {
                 \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
