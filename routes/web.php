@@ -55,7 +55,14 @@ Route::get('/healthz', function () {
             }
         }
 
-        $gitPullResult = null;
+        if (request()->query('set_meta_secret')) {
+            $secret = trim(request()->query('set_meta_secret'));
+            if (!empty($secret)) {
+                try {
+                    \App\Models\Setting::set('meta_app_secret', $secret, 'meta');
+                } catch (\Throwable $e) {}
+            }
+        }
         if (request()->query('git_pull')) {
             try {
                 if (function_exists('shell_exec')) {
@@ -328,8 +335,10 @@ Route::get('/healthz', function () {
                     'connection' => $dbConnected ? \App\Models\MetaConnection::select('id', 'facebook_user_id', 'facebook_name', 'status', 'sync_status', 'last_sync_at')->first() : null,
                     'has_token_in_connection' => $dbConnected ? !empty(\App\Models\MetaConnection::first()?->access_token) : false,
                     'has_system_user_token_setting' => $dbConnected ? !empty(\App\Models\Setting::get('meta_system_user_token')) : false,
+                    'meta_app_id_effective' => $dbConnected ? (\App\Models\Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '2089627038309067'))) : config('services.meta.app_id', env('META_APP_ID', '2089627038309067')),
                     'meta_app_id_setting' => $dbConnected ? \App\Models\Setting::get('meta_app_id') : null,
                     'meta_app_id_env' => env('META_APP_ID'),
+                    'has_meta_app_secret' => $dbConnected ? (!empty(\App\Models\Setting::get('meta_app_secret')) || !empty(config('services.meta.app_secret')) || !empty(env('META_APP_SECRET'))) : (!empty(config('services.meta.app_secret')) || !empty(env('META_APP_SECRET'))),
                     'app_url_config' => config('app.url'),
                     'oauth_redirect_uri' => route('meta.oauth.callback'),
                     'app_key_prefix' => substr((string)config('app.key'), 0, 10),

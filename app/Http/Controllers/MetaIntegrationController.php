@@ -22,7 +22,7 @@ class MetaIntegrationController extends Controller
 
     protected function getGraphApiVersion(): string
     {
-        return Setting::get('meta_api_version') ?: env('META_API_VERSION', 'v20.0');
+        return Setting::get('meta_api_version') ?: config('services.meta.api_version', env('META_API_VERSION', 'v20.0'));
     }
 
     /**
@@ -30,8 +30,8 @@ class MetaIntegrationController extends Controller
      */
     public function oauthRedirect(Request $request): RedirectResponse
     {
-        $appId = Setting::get('meta_app_id') ?: env('META_APP_ID', '4520673831531016');
-        $appSecret = Setting::get('meta_app_secret') ?: env('META_APP_SECRET', 'd8d08c028a3952f4ebdf428d0ee5df27');
+        $appId = Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '2089627038309067'));
+        $appSecret = Setting::get('meta_app_secret') ?: config('services.meta.app_secret', env('META_APP_SECRET'));
 
         $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
         if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
@@ -85,8 +85,8 @@ class MetaIntegrationController extends Controller
                 ->with('error', 'Facebook connection failed. No authorization code received.');
         }
 
-        $appId = Setting::get('meta_app_id') ?? env('META_APP_ID');
-        $appSecret = Setting::get('meta_app_secret') ?? env('META_APP_SECRET');
+        $appId = Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '2089627038309067'));
+        $appSecret = Setting::get('meta_app_secret') ?: config('services.meta.app_secret', env('META_APP_SECRET'));
         $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
         if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
             $redirectUri = 'https://' . request()->getHttpHost() . '/meta/oauth/callback';

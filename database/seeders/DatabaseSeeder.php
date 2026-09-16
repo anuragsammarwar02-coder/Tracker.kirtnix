@@ -41,9 +41,9 @@ class DatabaseSeeder extends Seeder
             'brand_logo_url' => ['/assets/branding/kirtnix-logo-dark-horizontal.png', 'branding'],
             'brand_favicon_url' => ['/assets/branding/favicon.png', 'branding'],
             'hostinger_domain' => ['tracker.kirtnix.in', 'general'],
-            'meta_app_id' => ['4520673831531016', 'meta'],
-            'meta_app_secret' => ['4400729382f0cf94b61599e165019281', 'meta'],
-            'meta_api_version' => ['v19.0', 'meta'],
+            'meta_app_id' => ['2089627038309067', 'meta'],
+            'meta_app_secret' => [env('META_APP_SECRET', ''), 'meta'],
+            'meta_api_version' => ['v20.0', 'meta'],
             'support_telegram' => ['@kirtnixsupport', 'support'],
             'working_hours' => ['10:00 AM - 7:00 PM IST', 'support'],
         ];
