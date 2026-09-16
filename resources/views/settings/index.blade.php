@@ -97,7 +97,7 @@
                 </div>
 
                 <div class="flex items-center gap-2.5 flex-wrap">
-                    <a href="{{ route('meta.oauth.redirect') }}" class="px-4 py-2.5 text-xs font-bold text-white bg-[#1877F2] hover:bg-[#166FE5] rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer">
+                    <a href="{{ route('meta.oauth.redirect') }}" onclick="return openMetaOAuthPopup(event, '{{ route('meta.oauth.redirect') }}')" class="px-4 py-2.5 text-xs font-bold text-white bg-[#1877F2] hover:bg-[#166FE5] rounded-xl shadow-sm transition flex items-center gap-2 cursor-pointer">
                         <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                         <span>+ Connect Another Facebook</span>
                     </a>
@@ -193,7 +193,7 @@
                 </p>
             </div>
             <div class="pt-2">
-                <a href="{{ route('meta.oauth.redirect') }}" class="inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-sm shadow-md hover:shadow-lg transition cursor-pointer">
+                <a href="{{ route('meta.oauth.redirect') }}" onclick="return openMetaOAuthPopup(event, '{{ route('meta.oauth.redirect') }}')" class="inline-flex items-center justify-center gap-2.5 px-6 py-3 rounded-xl bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-sm shadow-md hover:shadow-lg transition cursor-pointer">
                     <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                     <span>Connect with Facebook</span>
                 </a>
@@ -495,4 +495,27 @@
     </div>
 
 </div>
+
+<script>
+function openMetaOAuthPopup(e, url) {
+    if (e) e.preventDefault();
+    const w = 620;
+    const h = 780;
+    const left = Math.max(0, (window.screen.width - w) / 2);
+    const top = Math.max(0, (window.screen.height - h) / 2);
+    const popup = window.open(url, 'meta_oauth_popup', `width=${w},height=${h},top=${top},left=${left},scrollbars=yes,resizable=yes,status=no,toolbar=no,menubar=no`);
+    if (popup) {
+        popup.focus();
+        const timer = setInterval(function() {
+            if (popup.closed) {
+                clearInterval(timer);
+                window.location.href = "{{ route('settings.index', ['tab' => 'meta']) }}";
+            }
+        }, 1000);
+    } else {
+        window.location.href = url;
+    }
+    return false;
+}
+</script>
 @endsection

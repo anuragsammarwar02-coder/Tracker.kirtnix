@@ -105,6 +105,16 @@ class MetaIntegrationController extends Controller
 
             if (!$res->successful() || empty($res->json('access_token'))) {
                 $err = $res->json('error.message') ?? 'Failed to exchange authorization code.';
+
+                // If authorization code was already consumed (e.g. browser reload / duplicate hit)
+                if (str_contains(strtolower($err), 'code has been used') || str_contains(strtolower($err), 'already been used')) {
+                    $activeConn = MetaConnection::where('status', 'active')->latest('id')->first();
+                    if ($activeConn) {
+                        return response("<script>if(window.opener&&!window.opener.closed){window.opener.location.href='" . route('settings.index', ['tab' => 'meta']) . "';window.close();}else{window.location.href='" . route('settings.index', ['tab' => 'meta']) . "';}</script>")
+                            ->header('Content-Type', 'text/html');
+                    }
+                }
+
                 Log::error('Meta OAuth exchange error: ' . $err, ['response' => $res->json()]);
                 return redirect()->route('settings.index', ['tab' => 'meta'])
                     ->with('error', 'Facebook connection failed: ' . $err);
@@ -144,13 +154,14 @@ class MetaIntegrationController extends Controller
             // Set this connection as the active connection
             Setting::set('active_meta_connection_id', (string) $connection->id, 'meta');
 
-            if ($isAlreadyConnected) {
-                return redirect()->route('settings.index', ['tab' => 'meta'])
-                    ->with('info', "Facebook account '{$connection->facebook_name}' (ID: {$connection->facebook_user_id}) was already connected. Access token and {$accountsCount} ad account(s) have been refreshed without creating a duplicate profile.");
-            }
+            $flashMessage = $isAlreadyConnected
+                ? "Facebook account '{$connection->facebook_name}' (ID: {$connection->facebook_user_id}) was already connected. Access token and {$accountsCount} ad account(s) have been refreshed."
+                : "New Facebook account '{$connection->facebook_name}' (ID: {$connection->facebook_user_id}) connected successfully! ({$accountsCount} accessible Meta Ad Accounts synced).";
 
-            return redirect()->route('settings.index', ['tab' => 'meta'])
-                ->with('success', "New Facebook account '{$connection->facebook_name}' (ID: {$connection->facebook_user_id}) connected successfully! ({$accountsCount} accessible Meta Ad Accounts synced).");
+            session()->flash('success', $flashMessage);
+
+            return response("<!DOCTYPE html><html><head><meta charset='utf-8'><title>Connected</title></head><body style='font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#fff;'><div style='text-align:center;'><h3 style='margin:0 0 8px;color:#22c55e;font-size:16px;'>Connected Successfully!</h3><p style='margin:0;color:#94a3b8;font-size:12px;'>Syncing accounts and closing popup...</p></div><script>if(window.opener&&!window.opener.closed){window.opener.location.href='" . route('settings.index', ['tab' => 'meta']) . "';window.close();}else{window.location.href='" . route('settings.index', ['tab' => 'meta']) . "';}</script></body></html>")
+                ->header('Content-Type', 'text/html');
         } catch (\Exception $e) {
             Log::error('Meta OAuth Callback Exception: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return redirect()->route('settings.index', ['tab' => 'meta'])
