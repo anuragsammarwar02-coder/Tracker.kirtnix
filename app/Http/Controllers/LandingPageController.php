@@ -109,6 +109,7 @@ class LandingPageController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255'],
             'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom,visual_builder'],
+            'theme' => ['nullable', 'string', 'in:premium_dark,minimal_light'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
             'brand_logo_url' => ['nullable', 'string'],
@@ -137,6 +138,7 @@ class LandingPageController extends Controller
         ]);
 
         $validated['slug'] = $uniqueSlug;
+        $validated['theme'] = $request->input('theme', 'premium_dark');
         $validated['blocks_json'] = $blocksJson;
         $validated['is_active'] = $request->boolean('is_active', true);
         $validated['page_source'] = 'native';
@@ -426,6 +428,7 @@ class LandingPageController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255'],
             'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom,visual_builder'],
+            'theme' => ['nullable', 'string', 'in:premium_dark,minimal_light'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
             'brand_logo_url' => ['nullable', 'string'],
@@ -454,6 +457,9 @@ class LandingPageController extends Controller
         ]);
 
         $validated['slug'] = $uniqueSlug;
+        if ($request->filled('theme')) {
+            $validated['theme'] = $request->input('theme');
+        }
         if ($blocksJson !== null) {
             $validated['blocks_json'] = $blocksJson;
         }

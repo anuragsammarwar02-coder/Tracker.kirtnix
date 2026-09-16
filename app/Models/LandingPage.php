@@ -18,6 +18,7 @@ class LandingPage extends Model
         'title',
         'slug',
         'template_type',
+        'theme',
         'brand_name',
         'brand_tagline',
         'brand_logo_url',
@@ -71,15 +72,27 @@ class LandingPage extends Model
             [
                 'id' => 'block_' . substr(md5(uniqid()), 0, 8),
                 'type' => 'hero',
-                'badge' => '⚡ 100% FREE VIP COMMUNITY',
+                'live_traders_badge' => '🟢 6,547 Traders Online Now',
+                'rating_text' => '4.9/5 (2,340 Reviews)',
+                'badge' => '⚡ 100% FREE VIP ACCESS',
                 'heading' => 'Join ' . $brand . ' On Telegram',
                 'subheading' => 'Get daily high-accuracy trading signals, educational market setups, and real-time community updates.',
-                'button_text' => 'Join Free Telegram Channel',
+                'button_text' => 'Join Free Telegram Channel →',
                 'button_subtitle' => 'Free instant access • No payment required',
                 'telegram_url' => $tg,
                 'bg_style' => 'dark_gradient',
-                'padding' => 'py-12 sm:py-16',
+                'padding' => 'py-10 sm:py-14',
                 'alignment' => 'center',
+            ],
+            [
+                'id' => 'block_' . substr(md5(uniqid()), 0, 8),
+                'type' => 'stats',
+                'stats' => [
+                    ['value' => '50K+', 'label' => 'Members', 'icon' => '👥'],
+                    ['value' => '5+ Years', 'label' => 'Experience', 'icon' => '🏆'],
+                    ['value' => '95%', 'label' => 'Accuracy', 'icon' => '🎯'],
+                ],
+                'padding' => 'py-4',
             ],
             [
                 'id' => 'block_' . substr(md5(uniqid()), 0, 8),
@@ -88,7 +101,7 @@ class LandingPage extends Model
                 'subtitle' => 'Everything you need to trade smarter with professional guidance.',
                 'cards' => [
                     [
-                        'icon' => '📈',
+                        'icon' => '📊',
                         'title' => 'Daily Market Setups',
                         'desc' => 'High-probability setups analyzed with strict risk management.',
                     ],
@@ -103,17 +116,17 @@ class LandingPage extends Model
                         'desc' => 'Instant push notifications directly to your phone so you never miss a move.',
                     ],
                 ],
-                'padding' => 'py-10',
+                'padding' => 'py-6',
             ],
             [
                 'id' => 'block_' . substr(md5(uniqid()), 0, 8),
                 'type' => 'cta_button',
                 'heading' => 'Ready to Level Up Your Trading?',
                 'subheading' => 'Tap below to gain instant access to our official Telegram channel.',
-                'button_text' => 'Enter Telegram Channel Now',
+                'button_text' => 'Join Free Telegram Channel →',
                 'button_subtitle' => 'Available on Telegram App & Web',
                 'telegram_url' => $tg,
-                'padding' => 'py-10',
+                'padding' => 'py-6',
                 'alignment' => 'center',
             ],
             [
@@ -134,22 +147,53 @@ class LandingPage extends Model
                         'a' => 'Not at all. We provide comprehensive breakdowns suitable for both beginners and experienced traders.',
                     ],
                 ],
-                'padding' => 'py-10',
+                'padding' => 'py-6',
             ],
             [
                 'id' => 'block_' . substr(md5(uniqid()), 0, 8),
                 'type' => 'disclaimer',
                 'title' => 'Important Risk Disclaimer',
                 'text' => 'Trading financial markets involves substantial risk of loss and is not suitable for all investors. All setups, analysis, and information shared are for educational purposes only and do not constitute financial advice.',
-                'padding' => 'py-6',
+                'padding' => 'py-4',
             ],
             [
                 'id' => 'block_' . substr(md5(uniqid()), 0, 8),
                 'type' => 'footer',
                 'brand_name' => $brand,
                 'copyright' => '© ' . date('Y') . ' ' . $brand . '. All rights reserved.',
-                'padding' => 'py-8',
+                'managed_by' => '⚡ Ads Managed by Kirtnix Media',
+                'padding' => 'py-6',
             ]
+        ];
+    }
+
+    public static function getThemeConfig(?string $themeId = 'premium_dark'): array
+    {
+        $themeId = $themeId ?: 'premium_dark';
+        if ($themeId === 'minimal_light') {
+            return [
+                'id' => 'minimal_light',
+                'name' => 'Minimal Light (Trading Community)',
+                'bg_body' => '#F8FAFC',
+                'bg_card' => '#FFFFFF',
+                'border_color' => '#E2E8F0',
+                'text_main' => '#0F172A',
+                'text_muted' => '#64748B',
+                'cta_bg' => 'from-blue-600 to-blue-700',
+                'cta_text' => '#FFFFFF',
+            ];
+        }
+
+        return [
+            'id' => 'premium_dark',
+            'name' => 'Premium Dark',
+            'bg_body' => '#0A0B0D',
+            'bg_card' => '#12141A',
+            'border_color' => '#2A2E3A',
+            'text_main' => '#FFFFFF',
+            'text_muted' => '#94A3B8',
+            'cta_bg' => 'from-blue-500 to-blue-600',
+            'cta_text' => '#FFFFFF',
         ];
     }
 

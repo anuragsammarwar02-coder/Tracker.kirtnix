@@ -50,10 +50,177 @@ class SoftwareBuilderVisualEditorTest extends TestCase
         $response->assertStatus(200);
         $response->assertViewIs('landing_pages.builder');
         $response->assertSee('Software Landing Page Builder');
-        $response->assertSee('Hero Section');
+        $response->assertSee('Hero Header');
         $response->assertSee('Feature Cards');
-        $response->assertSee('Call to Action');
+        $response->assertSee('Stats Counters');
+        $response->assertSee('CTA Button');
         $response->assertSee('Meta Pixel ID');
+        $response->assertSee('Premium Dark');
+        $response->assertSee('Clean Light');
+    }
+
+    public function test_can_store_and_render_minimal_light_theme_landing_page(): void
+    {
+        $blocks = [
+            [
+                'id' => 'hero_1',
+                'type' => 'hero',
+                'live_traders_badge' => '🟢 6,547 Traders Online Now',
+                'rating_text' => '4.9/5 (2,340 Reviews)',
+                'badge' => '⚡ 100% FREE VIP ACCESS',
+                'heading' => 'Gujarati Trader VIP Community',
+                'subheading' => 'Get daily high-accuracy trading signals on Telegram.',
+                'button_text' => 'Join Free Telegram Channel →',
+                'button_subtitle' => 'Free instant access • No payment required',
+            ],
+            [
+                'id' => 'stats_1',
+                'type' => 'stats',
+                'stats' => [
+                    ['value' => '50K+', 'label' => 'Members'],
+                    ['value' => '5+ Years', 'label' => 'Experience'],
+                    ['value' => '95%', 'label' => 'Accuracy'],
+                ]
+            ],
+            [
+                'id' => 'features_1',
+                'type' => 'features_grid',
+                'title' => 'Community Highlights',
+                'cards' => [
+                    ['icon' => '📊', 'title' => 'Daily Nifty Levels', 'desc' => 'Key market breakdown'],
+                    ['icon' => '🎯', 'title' => 'Educational Analysis', 'desc' => 'Strict risk management']
+                ]
+            ],
+            [
+                'id' => 'cta_1',
+                'type' => 'cta_button',
+                'heading' => 'Join 50,000+ Active Traders',
+                'button_text' => 'Join Free Telegram Channel →'
+            ],
+            [
+                'id' => 'disclaimer_1',
+                'type' => 'disclaimer',
+                'title' => 'Risk Disclaimer',
+                'text' => 'Trading involves risk of loss. For educational purposes only.'
+            ],
+            [
+                'id' => 'footer_1',
+                'type' => 'footer',
+                'managed_by' => '⚡ Ads Managed by Kirtnix Media'
+            ]
+        ];
+
+        $response = $this->actingAs($this->user)->post(route('landing-pages.store'), [
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Gujarati Trader Light',
+            'slug' => 'gujarati-trader-light',
+            'brand_name' => 'Gujarati Trader',
+            'template_type' => 'visual_builder',
+            'theme' => 'minimal_light',
+            'telegram_destination' => 'https://t.me/gujaratitrader',
+            'blocks_json' => json_encode($blocks),
+            'is_active' => '1',
+        ]);
+
+        $response->assertRedirect();
+
+        $page = LandingPage::where('slug', 'gujarati-trader-light')->first();
+        $this->assertNotNull($page);
+        $this->assertEquals('minimal_light', $page->theme);
+
+        // Render public page
+        $publicRes = $this->get(route('public.landing_page', $page->slug));
+        $publicRes->assertStatus(200);
+        $publicRes->assertViewIs('templates.visual_builder');
+        
+        $html = $publicRes->getContent();
+        $publicRes->assertSee('Gujarati Trader VIP Community');
+        $publicRes->assertSee('6,547 Traders Online Now');
+        $publicRes->assertSee('4.9/5 (2,340 Reviews)');
+        $publicRes->assertSee('50K+');
+        $publicRes->assertSee('Daily Nifty Levels');
+        $publicRes->assertSee('⚡ Ads Managed by Kirtnix Media');
+        $this->assertStringContainsString('bg-[#F4F6F9]', $html);
+        $this->assertStringContainsString('overflow-y: auto', $html);
+    }
+
+    public function test_can_render_extremely_long_landing_page_without_clipping(): void
+    {
+        $longBlocks = [];
+        $longBlocks[] = [
+            'id' => 'hero_0',
+            'type' => 'hero',
+            'heading' => 'Section 1: Hero Announcement',
+            'button_text' => 'Join Channel'
+        ];
+        $longBlocks[] = [
+            'id' => 'stats_1',
+            'type' => 'stats',
+            'stats' => [['value' => '100K', 'label' => 'Subscribers']]
+        ];
+
+        for ($i = 2; $i <= 10; $i++) {
+            $longBlocks[] = [
+                'id' => "block_{$i}",
+                'type' => 'heading_text',
+                'heading' => "Section {$i}: Feature Breakdown",
+                'text' => "Detailed explanation of feature {$i} with long descriptive text for test."
+            ];
+        }
+
+        $longBlocks[] = [
+            'id' => 'faq_11',
+            'type' => 'faq',
+            'title' => 'Section 11: FAQ',
+            'faqs' => [['q' => 'Question 11?', 'a' => 'Answer 11']]
+        ];
+        $longBlocks[] = [
+            'id' => 'cta_12',
+            'type' => 'cta_button',
+            'heading' => 'Section 12: Final CTA',
+            'button_text' => 'Join Now'
+        ];
+        $longBlocks[] = [
+            'id' => 'footer_13',
+            'type' => 'footer',
+            'copyright' => 'Section 13: Footer Copyright'
+        ];
+
+        $page = LandingPage::create([
+            'client_id' => $this->client->id,
+            'title' => 'Long Test Page 13 Sections',
+            'slug' => 'long-test-page-13',
+            'brand_name' => 'Long Page Brand',
+            'page_source' => 'native',
+            'template_type' => 'visual_builder',
+            'theme' => 'premium_dark',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'blocks_json' => $longBlocks,
+            'is_active' => true,
+        ]);
+
+        Cta::create([
+            'landing_page_id' => $page->id,
+            'client_id' => $this->client->id,
+            'name' => 'Primary Hero CTA',
+            'button_text' => 'Join Channel',
+            'button_type' => 'primary',
+            'tracking_token' => 'kx_long_cta',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'direct_protocol' => 'auto',
+            'is_active' => true,
+        ]);
+
+        $res = $this->get(route('public.landing_page', $page->slug));
+        $res->assertStatus(200);
+
+        // Verify top hero and bottom footer both rendered in HTML
+        $res->assertSee('Section 1: Hero Announcement');
+        $res->assertSee('Section 6: Feature Breakdown');
+        $res->assertSee('Section 11: FAQ');
+        $res->assertSee('Section 12: Final CTA');
+        $res->assertSee('Section 13: Footer Copyright');
     }
 
     public function test_can_store_visual_builder_page_with_blocks_json(): void
