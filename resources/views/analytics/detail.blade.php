@@ -483,7 +483,7 @@
         <div class="space-y-2.5">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">COMPLETE JOIN HISTORY <span class="sr-only">Complete Join History</span></h2>
-                <span class="text-[11px] text-slate-400 font-mono">{{ $joinHistory->total() }} events</span>
+                <span id="joinHistoryCount" class="text-[11px] text-slate-400 font-mono">{{ $joinHistory->total() }} events</span>
             </div>
 
             <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
@@ -506,7 +506,16 @@
                             @forelse($joinHistory as $event)
                             <tr class="hover:bg-slate-50/60 transition">
                                 <td class="py-3.5 px-5 font-bold text-slate-900">
-                                    {{ $event->first_name ? trim($event->first_name . ' ' . ($event->last_name ?? '')) : ($event->telegram_username ? '@' . $event->telegram_username : 'User #' . substr($event->telegram_user_id, -4)) }}
+                                    @if($event->telegram_username)
+                                        <span class="font-bold text-slate-900 block">@<span>{{ $event->telegram_username }}</span></span>
+                                        @if($event->first_name)
+                                            <span class="text-[11px] text-slate-400 block font-normal">{{ trim($event->first_name . ' ' . ($event->last_name ?? '')) }}</span>
+                                        @endif
+                                    @elseif($event->first_name)
+                                        <span class="font-bold text-slate-900 block">{{ trim($event->first_name . ' ' . ($event->last_name ?? '')) }}</span>
+                                    @else
+                                        <span class="font-bold text-slate-900 block">User #{{ substr($event->telegram_user_id, -4) }}</span>
+                                    @endif
                                 </td>
                                 <td class="py-3.5 px-5">
                                     @if($event->event_type === 'leave')
@@ -528,8 +537,21 @@
                                     @endif
                                 </td>
                                 <td class="py-3.5 px-5">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ $event->event_type === 'leave' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-600' }}">
-                                        {{ $event->status_after ?? ($event->event_type === 'leave' ? 'left' : 'member') }}
+                                    @php
+                                        $rawStatus = strtolower($event->status_after ?? $event->event_type ?? 'approved');
+                                        if (in_array($rawStatus, ['join_request', 'pending', 'restricted'])) {
+                                            $statusLabel = 'pending';
+                                            $statusBadgeClass = 'bg-amber-50 text-amber-700 border border-amber-200/80';
+                                        } elseif (in_array($rawStatus, ['left', 'kicked', 'banned'])) {
+                                            $statusLabel = 'left';
+                                            $statusBadgeClass = 'bg-rose-50 text-rose-700 border border-rose-200';
+                                        } else {
+                                            $statusLabel = 'approved';
+                                            $statusBadgeClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200/80';
+                                        }
+                                    @endphp
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ $statusBadgeClass }}">
+                                        {{ $statusLabel }}
                                     </span>
                                 </td>
                                 <td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>
@@ -656,6 +678,10 @@
                         updateKpi('kpi-cost-per-sub', data.kpis.cost_per_subscriber);
                         updateKpi('kpi-pending-requests', data.kpis.pending_requests);
                         updateKpi('kpi-backouts', data.kpis.backouts);
+
+                        if (data.events && Array.isArray(data.events)) {
+                            updateJoinHistoryTable(data.events, data.total_events);
+                        }
                     }
                 })
                 .catch(() => {});
@@ -673,6 +699,58 @@
                         el.classList.remove('text-amber-500', 'scale-110');
                     }, 800);
                 }
+            }
+
+            function updateJoinHistoryTable(events, totalCount) {
+                const tbody = document.getElementById('joinHistoryTbody');
+                const countEl = document.getElementById('joinHistoryCount');
+                if (countEl && totalCount !== undefined) {
+                    countEl.textContent = totalCount + ' events';
+                }
+                if (!tbody || !events || events.length === 0) return;
+
+                // Don't overwrite if user is searching
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('search') || urlParams.get('page')) return;
+
+                let html = '';
+                events.forEach(function(ev) {
+                    let subHtml = '';
+                    if (ev.username) {
+                        subHtml = '<span class="font-bold text-slate-900 block">@' + escapeHtml(ev.username) + '</span>' +
+                                  (ev.first_name ? '<span class="text-[11px] text-slate-400 block font-normal">' + escapeHtml((ev.first_name + ' ' + (ev.last_name || '')).trim()) + '</span>' : '');
+                    } else if (ev.first_name) {
+                        subHtml = '<span class="font-bold text-slate-900 block">' + escapeHtml((ev.first_name + ' ' + (ev.last_name || '')).trim()) + '</span>';
+                    } else {
+                        subHtml = '<span class="font-bold text-slate-900 block">User #' + escapeHtml(String(ev.user_id).slice(-4)) + '</span>';
+                    }
+
+                    let campHtml = ev.campaign 
+                        ? '<span class="font-medium text-slate-800">' + escapeHtml(ev.campaign) + '</span>'
+                        : '<span class="text-slate-400">—</span>';
+
+                    let srcHtml = ev.is_ads 
+                        ? '<span class="font-semibold text-amber-600">Paid Ads</span>'
+                        : '<span class="text-slate-500">Direct / Organic</span>';
+
+                    html += '<tr class="hover:bg-slate-50/60 transition">' +
+                        '<td class="py-3.5 px-5 font-bold text-slate-900">' + subHtml + '</td>' +
+                        '<td class="py-3.5 px-5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ' + ev.event_badge + '">' + escapeHtml(ev.event_label) + '</span></td>' +
+                        '<td class="py-3.5 px-5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ' + ev.status_badge + '">' + escapeHtml(ev.status_label) + '</span></td>' +
+                        '<td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>' +
+                        '<td class="py-3.5 px-5">' + srcHtml + '</td>' +
+                        '<td class="py-3.5 px-5">' + campHtml + '</td>' +
+                        '<td class="py-3.5 px-5 text-slate-400">' + escapeHtml(ev.country) + '</td>' +
+                        '<td class="py-3.5 px-5 text-slate-400">' + escapeHtml(ev.device) + '</td>' +
+                        '<td class="py-3.5 px-5 text-right text-slate-500 whitespace-nowrap font-mono text-[11px]">' + escapeHtml(ev.time) + '</td>' +
+                        '</tr>';
+                });
+                tbody.innerHTML = html;
+            }
+
+            function escapeHtml(text) {
+                if (!text) return '';
+                return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
             }
 
             // Start auto polling every 3.5s

@@ -256,11 +256,16 @@ class MetaCapiService
         $conversion->update(['meta_event_id' => $eventId]);
 
         $session = $conversion->session;
+        $fbc = $conversion->fbc ?: ($session?->fbc ?: ($conversion->fbclid ? "fb.1." . time() . ".{$conversion->fbclid}" : ($session?->fbclid ? "fb.1." . time() . ".{$session->fbclid}" : null)));
+        $fbp = $conversion->fbp ?: $session?->fbp;
+        $clientUa = $session?->user_agent ?: request()->userAgent();
+        $clientIp = request()->ip() ?: ($session?->ip_address ?? null);
+
         $userData = array_filter([
-            'client_ip_address' => $session?->ip_address,
-            'client_user_agent' => $session?->user_agent,
-            'fbc' => $conversion->fbc ?: $session?->fbc,
-            'fbp' => $conversion->fbp ?: $session?->fbp,
+            'client_ip_address' => $clientIp,
+            'client_user_agent' => $clientUa,
+            'fbc' => $fbc,
+            'fbp' => $fbp,
             'external_id' => $this->hashField($conversion->visitor_id ?: $conversion->telegram_user_id),
             'country' => $this->hashField($conversion->country ?? 'IN'),
         ]);

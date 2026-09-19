@@ -690,17 +690,15 @@ class TelegramService
         if ($updateType === 'chat_join_request') {
             $eventType = 'join_request';
             $isVerified = true;
-            if ($oldStatus === 'unknown') {
-                $oldStatus = 'none';
-            }
-            if ($newStatus === 'member' && !isset($chatMemberUpdate['new_chat_member'])) {
-                $newStatus = 'join_request';
-            }
-        } elseif (in_array($newStatus, ['member', 'administrator', 'creator']) && in_array($oldStatus, ['left', 'kicked', 'restricted', 'unknown', 'none'])) {
+            $oldStatus = ($oldStatus === 'unknown' || empty($oldStatus)) ? 'none' : $oldStatus;
+            $newStatus = 'pending';
+        } elseif (in_array($newStatus, ['member', 'administrator', 'creator', 'approved']) && in_array($oldStatus, ['left', 'kicked', 'restricted', 'unknown', 'none', 'pending', 'join_request'])) {
             $eventType = 'join';
+            $newStatus = 'approved';
             $isVerified = true;
-        } elseif (in_array($newStatus, ['left', 'kicked', 'banned']) && in_array($oldStatus, ['member', 'administrator', 'restricted', 'unknown'])) {
+        } elseif (in_array($newStatus, ['left', 'kicked', 'banned']) && in_array($oldStatus, ['member', 'administrator', 'restricted', 'unknown', 'approved'])) {
             $eventType = 'leave';
+            $newStatus = 'left';
             $isVerified = false;
         }
 

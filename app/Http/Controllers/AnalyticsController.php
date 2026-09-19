@@ -445,7 +445,7 @@ class AnalyticsController extends Controller
         if ($approvedMembers === 0 && $subscribers > 0) {
             $approvedMembers = $subscribers;
         }
-        $pendingRequests = (clone $eventsQuery)->where('event_type', 'pending')->count();
+        $pendingRequests = (clone $eventsQuery)->whereIn('event_type', ['pending', 'join_request'])->count();
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
         // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account and date range
@@ -678,7 +678,7 @@ class AnalyticsController extends Controller
         if ($approvedMembers === 0 && $subscribers > 0) {
             $approvedMembers = $subscribers;
         }
-        $pendingRequests = (clone $eventsQuery)->where('event_type', 'pending')->count();
+        $pendingRequests = (clone $eventsQuery)->whereIn('event_type', ['pending', 'join_request'])->count();
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
         // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account and date range
@@ -725,6 +725,61 @@ class AnalyticsController extends Controller
             ? round(($tgClicks / $totalLpViews) * 100, 1) . '%' 
             : ($uniqueVisitors > 0 ? round(($tgClicks / $uniqueVisitors) * 100, 1) . '%' : '0.0%');
 
+        // Recent Real-Time Events for Dynamic Table Update
+        $latestEvents = TelegramEvent::with(['channel', 'campaign', 'click.session'])
+            ->whereIn('event_type', ['join', 'join_request', 'leave'])
+            ->when($client, fn($q) => $q->where('client_id', $client->id))
+            ->latest('event_time')
+            ->limit(15)
+            ->get()
+            ->map(function ($event) {
+                $rawStatus = strtolower($event->status_after ?? $event->event_type ?? 'approved');
+                if (in_array($rawStatus, ['join_request', 'pending', 'restricted'])) {
+                    $statusLabel = 'pending';
+                    $statusBadgeClass = 'bg-amber-50 text-amber-700 border border-amber-200/80';
+                } elseif (in_array($rawStatus, ['left', 'kicked', 'banned'])) {
+                    $statusLabel = 'left';
+                    $statusBadgeClass = 'bg-rose-50 text-rose-700 border border-rose-200';
+                } else {
+                    $statusLabel = 'approved';
+                    $statusBadgeClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200/80';
+                }
+
+                if ($event->event_type === 'leave') {
+                    $eventLabel = 'Channel Leave';
+                    $eventBadgeClass = 'bg-rose-50 text-rose-700 border border-rose-200';
+                } elseif ($event->source === 'ads') {
+                    $eventLabel = 'Ad Join';
+                    $eventBadgeClass = 'bg-amber-50 text-amber-700 border border-amber-200';
+                } elseif ($event->event_type === 'join_request') {
+                    $eventLabel = 'Join Request';
+                    $eventBadgeClass = 'bg-blue-50 text-blue-700 border border-blue-200';
+                } else {
+                    $eventLabel = 'Direct Join';
+                    $eventBadgeClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                }
+
+                $campDisplay = $event->campaign?->name ?? $event->campaign?->meta_campaign_id ?? $event->click?->session?->utm_campaign ?? null;
+
+                return [
+                    'id' => $event->id,
+                    'username' => $event->telegram_username,
+                    'first_name' => $event->first_name,
+                    'last_name' => $event->last_name,
+                    'user_id' => $event->telegram_user_id,
+                    'event_label' => $eventLabel,
+                    'event_badge' => $eventBadgeClass,
+                    'status_label' => $statusLabel,
+                    'status_badge' => $statusBadgeClass,
+                    'source_label' => $event->source === 'ads' ? 'Paid Ads' : 'Direct / Organic',
+                    'is_ads' => $event->source === 'ads',
+                    'campaign' => $campDisplay,
+                    'country' => $event->country ?? '—',
+                    'device' => $event->device ?? '—',
+                    'time' => $event->event_time ? $event->event_time->format('n/j/Y, g:i:s A') : now()->format('n/j/Y, g:i:s A'),
+                ];
+            });
+
         return response()->json([
             'ok' => true,
             'kpis' => [
@@ -743,6 +798,8 @@ class AnalyticsController extends Controller
                 'pending_requests' => number_format($pendingRequests),
                 'backouts' => number_format($backouts),
             ],
+            'events' => $latestEvents,
+            'total_events' => TelegramEvent::whereIn('event_type', ['join', 'join_request', 'leave'])->when($client, fn($q) => $q->where('client_id', $client->id))->count(),
             'timestamp' => now()->format('n/j/Y, g:i:s A'),
         ]);
     }
