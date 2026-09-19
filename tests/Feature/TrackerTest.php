@@ -143,4 +143,21 @@ class TrackerTest extends TestCase
             'client_name' => 'Sarah Connor',
         ]);
     }
+
+    public function test_authenticated_user_can_view_client_overview_page_with_landing_pages(): void
+    {
+        $admin = User::where('email', 'admin@kirtnix.agency')->first();
+        $client = Client::first();
+        $this->assertNotNull($client);
+
+        // Ensure client has a landing page
+        $lp = LandingPage::where('client_id', $client->id)->first();
+        $this->assertNotNull($lp);
+
+        $response = $this->actingAs($admin)->get(route('clients.show', $client));
+        $response->assertStatus(200);
+        $response->assertSee($client->company_name);
+        $response->assertSee($lp->title);
+        $response->assertSee(route('analytics.detail', $lp->slug));
+    }
 }

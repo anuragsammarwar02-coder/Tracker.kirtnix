@@ -144,7 +144,7 @@
 
             <div style="display: flex; align-items: center; gap: 6px;">
               <a href="{{ route('landing-pages.edit', $lp) }}" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px;">Edit</a>
-              <a href="{{ route('public.analytics.detail', $lp->slug) }}" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px;">Analytics</a>
+              <a href="{{ route('analytics.detail', $lp->slug) }}" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px;">Analytics</a>
               <a href="{{ route('public.landing_page', $lp->slug) }}" target="_blank" class="btn btn-secondary" style="padding: 3px 8px; font-size: 11px;">View</a>
             </div>
           </div>
