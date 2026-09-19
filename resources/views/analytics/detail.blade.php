@@ -188,7 +188,7 @@
                         @else
                             <span id="budget-remaining" class="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">No limit set</span>
                         @endif
-                        <p id="budget-remaining-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['remaining_source'] ?? 'No spend limit set in Meta billing' }}</p>
+                        <p id="budget-remaining-source" class="text-[11px] text-slate-400 mt-1">{{ $budget['remaining_source'] ?? 'No spend limit configured in Meta billing' }}</p>
                     </div>
                 </div>
             </div>
@@ -199,7 +199,7 @@
             <div class="flex items-center gap-2.5">
                 <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">AD ACCOUNT (LIVE FROM META) <span class="sr-only">Ad Account (Live from Meta)</span></h2>
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                    Budget from: {{ $adAccount?->spend_limit > 0 ? 'Account spend limit' : ($client?->monthly_budget > 0 ? 'Client monthly budget' : (($activeDailyBudgetSum ?? 0) > 0 ? 'Active daily run rate' : 'No spend limit set in Meta')) }}
+                    Budget from: {{ ($adAccount?->spend_limit ?? 0) > 0 ? 'Account spend limit' : 'No spend limit set in Meta' }}
                 </span>
             </div>
 
@@ -224,11 +224,11 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 border-b border-slate-100 p-5 gap-4">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">LIFETIME SPEND</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($metaMetrics['spend_total'] ?? ($adAccount->lifetime_spend ?? 0), 2) }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($budget['total_budget_spend'], 2) }}</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACCOUNT SPEND LIMIT</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($adAccount->spend_limit ?? 0, 2) }}</span>
+                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ ($adAccount?->spend_limit ?? 0) > 0 ? ($adAccount?->currency_symbol ?? '₹') . number_format($adAccount->spend_limit, 2) : 'No limit set' }}</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACCOUNT BALANCE</span>

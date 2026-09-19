@@ -414,6 +414,256 @@ class PublicClientAnalyticsSecurityTest extends TestCase
 
         // Must display "No limit set" and NOT a fake calculated number
         $res->assertSee('No limit set');
-        $res->assertSee('No spend limit set in Meta billing');
+        $res->assertSee('No spend limit configured in Meta billing');
+    }
+
+    /**
+     * Required User Scenario 1:
+     * Account Spend Limit = ₹1,000
+     * Lifetime Actual Spend = ₹500
+     * Today's Spend = ₹100
+     *
+     * Expected Analytics:
+     * Today's Spending: ₹100.00
+     * Total Budget Spend: ₹500.00
+     * Remaining Budget: ₹500.00
+     */
+    public function test_budget_cards_scenario_1_spend_limit_1000_lifetime_500_today_100(): void
+    {
+        $this->adAccount->update([
+            'client_id' => $this->clientChannel->id,
+            'currency' => 'INR',
+            'spend_limit' => 1000.00,
+            'lifetime_spend' => 500.00,
+        ]);
+
+        $cacheKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}:range_today";
+        $fallbackKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}";
+        $mockMetrics = [
+            'connected' => true,
+            'account_name' => 'Kirtnix Official',
+            'account_id' => $this->adAccount->account_id,
+            'business_name' => 'Kirtnix Agency',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'status' => 'Active',
+            'timezone' => 'Asia/Kolkata',
+            'last_sync' => 'Just now',
+            'date_range' => 'today',
+            'spend_scoped' => 100.00,
+            'spend_total' => 500.00,
+            'lifetime_spend' => 500.00,
+            'spend_today' => 100.00,
+            'clicks' => 10,
+            'impressions' => 200,
+            'reach' => 150,
+            'leads' => 2,
+            'spend_limit' => 1000.00,
+            'balance' => 0.00,
+            'campaigns_count' => 1,
+        ];
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put($fallbackKey, $mockMetrics, 60);
+
+        $res = $this->get('/analytics/detail/clientchannel?date_range=today');
+        $res->assertStatus(200);
+
+        // Card 1: Today's Spending = ₹100.00
+        $res->assertSee("Today's Spending", false);
+        $res->assertSee('₹100.00');
+
+        // Card 2: Total Budget Spend = ₹500.00
+        $res->assertSee('Total Budget Spend');
+        $res->assertSee('₹500.00');
+
+        // Card 3: Remaining Budget = ₹500.00 (1000 - 500)
+        $res->assertSee('Remaining Budget');
+        $res->assertSee('₹500.00');
+    }
+
+    /**
+     * Required User Scenario 2:
+     * Account Spend Limit = ₹1,000
+     * Lifetime Actual Spend = ₹0
+     * Today's Spend = ₹0
+     *
+     * Expected Analytics:
+     * Today's Spending: ₹0.00
+     * Total Budget Spend: ₹0.00
+     * Remaining Budget: ₹1,000.00
+     */
+    public function test_budget_cards_scenario_2_spend_limit_1000_lifetime_0_today_0(): void
+    {
+        $this->adAccount->update([
+            'client_id' => $this->clientChannel->id,
+            'currency' => 'INR',
+            'spend_limit' => 1000.00,
+            'lifetime_spend' => 0.00,
+        ]);
+
+        $cacheKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}:range_today";
+        $fallbackKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}";
+        $mockMetrics = [
+            'connected' => true,
+            'account_name' => 'Kirtnix Official',
+            'account_id' => $this->adAccount->account_id,
+            'business_name' => 'Kirtnix Agency',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'status' => 'Active',
+            'timezone' => 'Asia/Kolkata',
+            'last_sync' => 'Just now',
+            'date_range' => 'today',
+            'spend_scoped' => 0.00,
+            'spend_total' => 0.00,
+            'lifetime_spend' => 0.00,
+            'spend_today' => 0.00,
+            'clicks' => 0,
+            'impressions' => 0,
+            'reach' => 0,
+            'leads' => 0,
+            'spend_limit' => 1000.00,
+            'balance' => 0.00,
+            'campaigns_count' => 0,
+        ];
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put($fallbackKey, $mockMetrics, 60);
+
+        $res = $this->get('/analytics/detail/clientchannel?date_range=today');
+        $res->assertStatus(200);
+
+        // Card 1: Today's Spending = ₹0.00
+        $res->assertSee("Today's Spending", false);
+        $res->assertSee('₹0.00');
+
+        // Card 2: Total Budget Spend = ₹0.00
+        $res->assertSee('Total Budget Spend');
+
+        // Card 3: Remaining Budget = ₹1,000.00 (1000 - 0)
+        $res->assertSee('Remaining Budget');
+        $res->assertSee('₹1,000.00');
+    }
+
+    /**
+     * Required User Scenario 3:
+     * Account Spend Limit = ₹1,000
+     * Lifetime Spend = ₹250
+     * Today's Spend = ₹50
+     *
+     * Expected Analytics:
+     * Today's Spending: ₹50.00
+     * Total Budget Spend: ₹250.00
+     * Remaining Budget: ₹750.00
+     */
+    public function test_budget_cards_scenario_3_spend_limit_1000_lifetime_250_today_50(): void
+    {
+        $this->adAccount->update([
+            'client_id' => $this->clientChannel->id,
+            'currency' => 'INR',
+            'spend_limit' => 1000.00,
+            'lifetime_spend' => 250.00,
+        ]);
+
+        $cacheKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}:range_today";
+        $fallbackKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}";
+        $mockMetrics = [
+            'connected' => true,
+            'account_name' => 'Kirtnix Official',
+            'account_id' => $this->adAccount->account_id,
+            'business_name' => 'Kirtnix Agency',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'status' => 'Active',
+            'timezone' => 'Asia/Kolkata',
+            'last_sync' => 'Just now',
+            'date_range' => 'today',
+            'spend_scoped' => 50.00,
+            'spend_total' => 250.00,
+            'lifetime_spend' => 250.00,
+            'spend_today' => 50.00,
+            'clicks' => 5,
+            'impressions' => 100,
+            'reach' => 80,
+            'leads' => 1,
+            'spend_limit' => 1000.00,
+            'balance' => 0.00,
+            'campaigns_count' => 1,
+        ];
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put($fallbackKey, $mockMetrics, 60);
+
+        $res = $this->get('/analytics/detail/clientchannel?date_range=today');
+        $res->assertStatus(200);
+
+        // Card 1: Today's Spending = ₹50.00
+        $res->assertSee('₹50.00');
+
+        // Card 2: Total Budget Spend = ₹250.00
+        $res->assertSee('₹250.00');
+
+        // Card 3: Remaining Budget = ₹750.00
+        $res->assertSee('₹750.00');
+    }
+
+    /**
+     * Multi-Currency Scenario:
+     * Ad account in USD ($)
+     * Account Spend Limit = $2,000
+     * Lifetime Spend = $800
+     * Today's Spend = $150
+     *
+     * Expected Analytics:
+     * Today's Spending: $150.00
+     * Total Budget Spend: $800.00
+     * Remaining Budget: $1,200.00
+     */
+    public function test_budget_cards_usd_currency_support(): void
+    {
+        $this->adAccount->update([
+            'client_id' => $this->clientChannel->id,
+            'currency' => 'USD',
+            'spend_limit' => 2000.00,
+            'lifetime_spend' => 800.00,
+        ]);
+
+        $cacheKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}:range_today";
+        $fallbackKey = "meta_analytics:client_{$this->clientChannel->id}:acc_{$this->adAccount->id}";
+        $mockMetrics = [
+            'connected' => true,
+            'account_name' => 'US Meta Ad Account',
+            'account_id' => $this->adAccount->account_id,
+            'business_name' => 'Kirtnix Agency',
+            'currency' => 'USD',
+            'currency_symbol' => '$',
+            'status' => 'Active',
+            'timezone' => 'America/New_York',
+            'last_sync' => 'Just now',
+            'date_range' => 'today',
+            'spend_scoped' => 150.00,
+            'spend_total' => 800.00,
+            'lifetime_spend' => 800.00,
+            'spend_today' => 150.00,
+            'clicks' => 20,
+            'impressions' => 500,
+            'reach' => 400,
+            'leads' => 4,
+            'spend_limit' => 2000.00,
+            'balance' => 0.00,
+            'campaigns_count' => 1,
+        ];
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put($fallbackKey, $mockMetrics, 60);
+
+        $res = $this->get('/analytics/detail/clientchannel?date_range=today');
+        $res->assertStatus(200);
+
+        // Card 1: Today's Spending = $150.00
+        $res->assertSee('$150.00');
+
+        // Card 2: Total Budget Spend = $800.00
+        $res->assertSee('$800.00');
+
+        // Card 3: Remaining Budget = $1,200.00 (2000 - 800)
+        $res->assertSee('$1,200.00');
     }
 }

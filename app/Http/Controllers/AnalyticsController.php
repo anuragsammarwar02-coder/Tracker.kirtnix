@@ -519,27 +519,16 @@ class AnalyticsController extends Controller
 
         $spendCap = (float) ($metaMetrics['spend_limit'] ?? ($adAccount?->spend_limit ?? 0));
         $accountBalance = (float) ($metaMetrics['balance'] ?? ($adAccount?->balance ?? 0));
-        $campaignLifetimeBudgetRemaining = (float) $campaigns->sum('budget_remaining');
 
-        // 1. Box 1: Today's Spending (Actual spending for today / selected single day - NEVER lifetime spend)
-        $spendToday = (float) ($metaMetrics['spend_today'] ?? 0.00);
-        if ($dateRange === 'yesterday') {
-            $todaySpending = $campaignSpend;
-            $todaySpendingSubtitle = 'Actual spending for yesterday';
-        } elseif ($dateRange === 'today') {
-            $todaySpending = $spendToday > 0 ? $spendToday : $campaignSpend;
-            $todaySpendingSubtitle = 'Actual spending for today';
-        } else {
-            // For multi-day views (lifetime, last_30_days, last_7_days, this_month), Box 1 strictly displays today's actual spend
-            $todaySpending = $spendToday;
-            $todaySpendingSubtitle = 'Actual spending for today';
-        }
+        // 1. Box 1: Today's Spending (Actual spending for today from selected Meta Ad Account)
+        $todaySpending = (float) ($metaMetrics['spend_today'] ?? 0.00);
+        $todaySpendingSubtitle = 'Actual spending for today';
 
-        // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation)
+        // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation from Meta)
         $totalBudgetSpend = (float) ($metaMetrics['spend_total'] ?? ($metaMetrics['lifetime_spend'] ?? ($adAccount?->lifetime_spend ?: $campaigns->sum('spend'))));
 
-        // 3. Box 3: Remaining Budget (Actual Meta Billing / Ad Account remaining budget value)
-        // Strictly avoid fake calculations (such as daily_budget * 30 - spend).
+        // 3. Box 3: Remaining Budget (Actual Meta Ad Account remaining account spend limit)
+        // Formula: remaining_budget = account_spend_limit - lifetime_amount_spent
         $remainingBudget = 0.00;
         $hasRemainingBudget = false;
         $remainingSource = 'No spend limit configured in Meta billing';
@@ -548,24 +537,10 @@ class AnalyticsController extends Controller
             $remainingBudget = max(0, $spendCap - $totalBudgetSpend);
             $hasRemainingBudget = true;
             $remainingSource = 'Remaining fund in Meta ad account (Account spend limit from Meta)';
-        } elseif ($accountBalance > 0) {
-            $remainingBudget = $accountBalance;
-            $hasRemainingBudget = true;
-            $remainingSource = 'Available balance in Meta billing';
-        } elseif ($campaignLifetimeBudgetRemaining > 0) {
-            $remainingBudget = $campaignLifetimeBudgetRemaining;
-            $hasRemainingBudget = true;
-            $remainingSource = 'Remaining budget in Meta billing';
-        } elseif ($client && (float) $client->monthly_budget > 0) {
-            $monthSpend = (float) ($metaMetrics['spend_month'] ?? ($dateRange === 'this_month' ? $campaignSpend : 0.00));
-            $remainingBudget = max(0, (float) $client->monthly_budget - $monthSpend);
-            $hasRemainingBudget = true;
-            $remainingSource = 'Remaining of monthly budget';
         } else {
-            // When no spend limit or balance is configured in Meta billing, clearly show unconfigured state
             $remainingBudget = 0.00;
             $hasRemainingBudget = false;
-            $remainingSource = 'No spend limit configured in Meta (No spend limit set in Meta billing)';
+            $remainingSource = 'No spend limit configured in Meta billing';
         }
 
         $budget = [

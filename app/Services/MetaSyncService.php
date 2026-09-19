@@ -692,6 +692,8 @@ class MetaSyncService
                     }
                     if (!empty($accData['currency'])) {
                         $currency = $accData['currency'];
+                        $adAccount->currency = $currency;
+                        $currencySymbol = $adAccount->currency_symbol;
                     }
                     $spendCap = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : (float) ($adAccount->spend_limit ?? 0));
                     $balance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : (float) ($adAccount->balance ?? 0);
@@ -721,6 +723,8 @@ class MetaSyncService
                     $adAccount->spend_limit = $spendCap;
                     $adAccount->balance = $balance;
                     $adAccount->lifetime_spend = $spendTotal;
+                } else {
+                    Log::warning("Meta Graph API error fetching ad account metadata for act_{$rawAccId}: " . ($accRes->body() ?: 'Empty response'));
                 }
 
                 // 2. Date-Scoped Reporting Insights for selected date range
@@ -763,6 +767,8 @@ class MetaSyncService
                         $scopedClicks = 0;
                         $scopedLeads = 0;
                     }
+                } else {
+                    Log::warning("Meta Graph API error fetching scoped insights for act_{$rawAccId} [{$metaPreset}]: " . ($scopedRes->body() ?: 'Empty response'));
                 }
 
                 // 3. TODAY's Insights in the account's configured timezone
@@ -783,7 +789,33 @@ class MetaSyncService
                     }
                 }
 
-                // 4. Dynamic Campaigns with Pagination
+                // 4. Lifetime Spend Reconciliation (Ensure lifetime spend is accurate and >= date-scoped / today's spend)
+                if ($dateRange === 'lifetime' && $scopedSpend > 0) {
+                    $spendTotal = max($spendTotal, $scopedSpend);
+                }
+                if ($spendTotal < $spendToday) {
+                    $spendTotal = max($spendTotal, $spendToday);
+                }
+                if ($spendTotal == 0 && $dateRange !== 'lifetime') {
+                    $maxRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                        'access_token' => $token,
+                        'date_preset' => 'maximum',
+                        'fields' => 'spend',
+                    ]);
+                    if ($maxRes->successful() && !empty($maxRes->json('data'))) {
+                        $maxSpend = (float) ($maxRes->json('data')[0]['spend'] ?? 0.00);
+                        if ($maxSpend > 0) {
+                            $spendTotal = max($spendTotal, $maxSpend);
+                        }
+                    }
+                }
+                $spendTotal = max($spendTotal, $campaignSpend, $spendToday);
+                if ($spendTotal > (float) ($adAccount->lifetime_spend ?? 0)) {
+                    $adAccount->update(['lifetime_spend' => $spendTotal]);
+                    $adAccount->lifetime_spend = $spendTotal;
+                }
+
+                // 5. Dynamic Campaigns with Pagination
                 $allCampaigns = [];
                 $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
                 $params = [
