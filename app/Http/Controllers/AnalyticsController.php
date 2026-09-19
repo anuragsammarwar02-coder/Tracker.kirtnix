@@ -437,8 +437,8 @@ class AnalyticsController extends Controller
         // 3. Telegram Events from DB
         $eventsQuery = TelegramEvent::where('client_id', $client?->id)
             ->where('event_time', '>=', $startDate);
-        $subscribers = (clone $eventsQuery)->where('event_type', 'join')->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->where('event_type', 'join')->count();
-        $directJoins = (clone $eventsQuery)->where('event_type', 'join')->where(function($q) {
+        $subscribers = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->count();
+        $directJoins = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->where(function($q) {
             $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
         })->count();
         $approvedMembers = (clone $eventsQuery)->whereIn('status_after', ['member', 'approved', 'administrator'])->count();
@@ -670,8 +670,8 @@ class AnalyticsController extends Controller
         // 3. Telegram Events from DB
         $eventsQuery = TelegramEvent::where('client_id', $client?->id)
             ->where('event_time', '>=', $startDate);
-        $subscribers = (clone $eventsQuery)->where('event_type', 'join')->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->where('event_type', 'join')->count();
-        $directJoins = (clone $eventsQuery)->where('event_type', 'join')->where(function($q) {
+        $subscribers = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->count();
+        $directJoins = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->where(function($q) {
             $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
         })->count();
         $approvedMembers = (clone $eventsQuery)->whereIn('status_after', ['member', 'approved', 'administrator'])->count();
