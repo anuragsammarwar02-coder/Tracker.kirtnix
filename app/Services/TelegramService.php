@@ -649,7 +649,34 @@ class TelegramService
 
         // Member Join/Leave/Request Tracking Logic
         $chatMemberUpdate = $updateData;
-        $user = $chatMemberUpdate['from'] ?? $chatMemberUpdate['new_chat_member']['user'] ?? $chatMemberUpdate['user'] ?? [];
+
+        // Accurate User Resolution:
+        // In chat_member / my_chat_member, the target affected user is in new_chat_member.user or old_chat_member.user.
+        // chat_member.from is the actor/admin who approved or performed the action.
+        // In chat_join_request, the user requesting to join is in chat_join_request.from.
+        if ($updateType === 'chat_join_request') {
+            $user = $chatMemberUpdate['from'] ?? $chatMemberUpdate['user'] ?? [];
+        } else {
+            $targetUser = $chatMemberUpdate['new_chat_member']['user'] 
+                ?? $chatMemberUpdate['old_chat_member']['user'] 
+                ?? $chatMemberUpdate['user'] 
+                ?? null;
+
+            $actorUser = $chatMemberUpdate['from'] ?? [];
+
+            if ($targetUser) {
+                // If actor is the same person who joined, combine attributes (e.g. username/names)
+                if (isset($actorUser['id']) && isset($targetUser['id']) && (string)$actorUser['id'] === (string)$targetUser['id']) {
+                    $user = array_merge($actorUser, $targetUser);
+                } else {
+                    // Admin approval or external actor action: Target user is the subscriber
+                    $user = $targetUser;
+                }
+            } else {
+                $user = $actorUser;
+            }
+        }
+
         $telegramUserId = (string) ($user['id'] ?? rand(100000000, 999999999));
         $oldStatus = $chatMemberUpdate['old_chat_member']['status'] ?? 'unknown';
         $newStatus = $chatMemberUpdate['new_chat_member']['status'] ?? ($chatMemberUpdate['status'] ?? 'member');
@@ -669,10 +696,10 @@ class TelegramService
             if ($newStatus === 'member' && !isset($chatMemberUpdate['new_chat_member'])) {
                 $newStatus = 'join_request';
             }
-        } elseif (in_array($newStatus, ['member', 'administrator', 'creator']) && in_array($oldStatus, ['left', 'kicked', 'restricted', 'unknown'])) {
+        } elseif (in_array($newStatus, ['member', 'administrator', 'creator']) && in_array($oldStatus, ['left', 'kicked', 'restricted', 'unknown', 'none'])) {
             $eventType = 'join';
             $isVerified = true;
-        } elseif (in_array($newStatus, ['left', 'kicked', 'banned']) && in_array($oldStatus, ['member', 'administrator'])) {
+        } elseif (in_array($newStatus, ['left', 'kicked', 'banned']) && in_array($oldStatus, ['member', 'administrator', 'restricted', 'unknown'])) {
             $eventType = 'leave';
             $isVerified = false;
         }
@@ -707,13 +734,35 @@ class TelegramService
         $device = $matchedSession?->device_type ?? $matchedClick?->device_type ?? 'Mobile';
         $visitorId = $matchedSession?->visitor_id ?? $matchedClick?->visitor_id ?? (string) Str::uuid();
 
+        // Resolve Campaign intelligently from session or active client campaigns
+        $resolvedCampaignId = $matchedSession?->campaign_id ?? $matchedClick?->campaign_id;
+        $utmCampaign = $matchedSession?->utm_campaign ?? $matchedClick?->session?->utm_campaign;
+
+        if (!$resolvedCampaignId && $utmCampaign) {
+            $matchedCamp = \App\Models\Campaign::where('client_id', $channel?->client_id ?? $bot->client_id)
+                ->where(function($q) use ($utmCampaign) {
+                    $q->where('utm_campaign', $utmCampaign)
+                      ->orWhere('name', $utmCampaign)
+                      ->orWhere('meta_campaign_id', $utmCampaign)
+                      ->orWhere('slug', $utmCampaign);
+                })->first();
+            $resolvedCampaignId = $matchedCamp?->id;
+        }
+
+        if (!$resolvedCampaignId && $channel?->client_id && $source === 'ads') {
+            $activeCamp = \App\Models\Campaign::where('client_id', $channel->client_id)->where('status', 'active')->first();
+            if ($activeCamp) {
+                $resolvedCampaignId = $activeCamp->id;
+            }
+        }
+
         // Record TelegramEvent
         $telegramEvent = TelegramEvent::create([
             'telegram_bot_id' => $bot->id,
             'telegram_channel_id' => $channel?->id,
             'update_id' => $updateId,
             'client_id' => $channel?->client_id ?? $bot->client_id,
-            'campaign_id' => $matchedSession?->campaign_id ?? $matchedClick?->campaign_id,
+            'campaign_id' => $resolvedCampaignId,
             'cta_click_id' => $matchedClick?->id,
             'telegram_user_id' => $telegramUserId,
             'telegram_username' => $user['username'] ?? null,
@@ -744,7 +793,7 @@ class TelegramService
                     'conversion_token' => 'conv_' . Str::random(16),
                     'client_id' => $channel->client_id ?? $bot->client_id,
                     'landing_page_id' => $matchedSession?->landing_page_id ?? $matchedClick?->landing_page_id,
-                    'campaign_id' => $matchedSession?->campaign_id ?? $matchedClick?->campaign_id,
+                    'campaign_id' => $resolvedCampaignId,
                     'telegram_bot_id' => $bot->id,
                     'telegram_channel_id' => $channel->id,
                     'telegram_event_id' => $telegramEvent->id,
@@ -787,8 +836,14 @@ class TelegramService
                     $existingConversion->update([
                         'event_type' => 'join',
                         'status' => 'verified',
+                        'campaign_id' => $existingConversion->campaign_id ?: $resolvedCampaignId,
                         'event_time' => now(),
                     ]);
+
+                    // Dispatch Meta CAPI event when join request is accepted/approved by admin
+                    if ($existingConversion->meta_capi_status !== 'sent') {
+                        $this->metaCapiService->sendConversionEvent($existingConversion, 'Subscribe');
+                    }
                 }
             }
         }

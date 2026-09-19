@@ -114,12 +114,46 @@ class TrackingService
         $fbc = $request->input('fbc') ?? $request->cookie('_fbc') ?? ($fbclid ? "fb.1." . time() . ".{$fbclid}" : null);
         $fbp = $request->input('fbp') ?? $request->cookie('_fbp') ?? $request->query('_fbp');
 
+        $campaignId = $landingPage->campaign_id;
+        $campaignParam = $request->input('campaign_id') ?? $request->query('campaign_id');
+        if (!$campaignId && $campaignParam) {
+            $matchedCamp = \App\Models\Campaign::where('client_id', $landingPage->client_id)
+                ->where(function($q) use ($campaignParam) {
+                    $q->where('id', $campaignParam)
+                      ->orWhere('meta_campaign_id', $campaignParam)
+                      ->orWhere('utm_campaign', $campaignParam);
+                })->first();
+            if ($matchedCamp) {
+                $campaignId = $matchedCamp->id;
+            }
+        }
+
+        if (!$campaignId && $utmCampaign) {
+            $matchedCamp = \App\Models\Campaign::where('client_id', $landingPage->client_id)
+                ->where(function($q) use ($utmCampaign) {
+                    $q->where('utm_campaign', $utmCampaign)
+                      ->orWhere('name', $utmCampaign)
+                      ->orWhere('meta_campaign_id', $utmCampaign)
+                      ->orWhere('slug', $utmCampaign);
+                })->first();
+            if ($matchedCamp) {
+                $campaignId = $matchedCamp->id;
+            }
+        }
+
+        if (!$campaignId && ($fbclid || in_array(strtolower($utmSource ?? ''), ['meta', 'facebook', 'fb', 'ig', 'instagram']) || in_array(strtolower($utmMedium ?? ''), ['paid', 'cpc', 'ads']))) {
+            $activeCamp = \App\Models\Campaign::where('client_id', $landingPage->client_id)->where('status', 'active')->first();
+            if ($activeCamp) {
+                $campaignId = $activeCamp->id;
+            }
+        }
+
         $session = TrackingSession::create([
             'session_id' => $sessionId,
             'visitor_id' => $visitorId,
             'client_id' => $landingPage->client_id,
             'landing_page_id' => $landingPage->id,
-            'campaign_id' => $landingPage->campaign_id,
+            'campaign_id' => $campaignId,
             'ip_hash' => $ipHash,
             'user_agent' => $userAgent,
             'device_type' => $this->parseDeviceType($userAgent),
@@ -141,7 +175,7 @@ class TrackingService
             'tracking_session_id' => $session->id,
             'landing_page_id' => $landingPage->id,
             'client_id' => $landingPage->client_id,
-            'campaign_id' => $landingPage->campaign_id,
+            'campaign_id' => $campaignId,
             'visitor_id' => $visitorId,
             'is_unique' => $isUnique,
             'viewed_at' => now(),

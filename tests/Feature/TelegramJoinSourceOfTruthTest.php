@@ -349,4 +349,132 @@ class TelegramJoinSourceOfTruthTest extends TestCase
         $resB = $this->get(route('analytics.detail', 'client-beta'));
         $resB->assertStatus(200);
     }
+
+    /**
+     * Test that when an administrator approves a join request,
+     * the subscriber logged is the joining user (Trader Index Option) and NOT the approving admin (AK GrowthX agency).
+     */
+    public function test_admin_approval_logs_actual_subscriber_not_admin(): void
+    {
+        $bot = TelegramBot::firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->first() ?? TelegramChannel::create([
+            'telegram_bot_id' => $bot->id,
+            'client_id' => $bot->client_id,
+            'telegram_chat_id' => '-1003344556677',
+            'title' => 'Admin Approval Channel',
+            'is_bot_admin' => true,
+        ]);
+
+        $adminUserId = 11223344;
+        $subscriberUserId = 99887766;
+
+        // 1. User submits join request
+        $joinReqPayload = [
+            'update_id' => 7001,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => $subscriberUserId,
+                    'first_name' => 'Trader',
+                    'last_name' => 'Index Option',
+                    'username' => 'trader_index_option',
+                ],
+                'date' => time(),
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinReqPayload)->assertStatus(200);
+
+        // Verify request logged for Trader Index Option
+        $this->assertDatabaseHas('telegram_events', [
+            'telegram_user_id' => (string) $subscriberUserId,
+            'first_name' => 'Trader',
+            'last_name' => 'Index Option',
+            'event_type' => 'join_request',
+        ]);
+
+        // 2. Admin (AK GrowthX agency) approves the request in Telegram
+        $adminApprovePayload = [
+            'update_id' => 7002,
+            'chat_member' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => $adminUserId,
+                    'first_name' => 'AK GrowthX',
+                    'last_name' => 'agency',
+                    'username' => 'ak_growthx_agency',
+                ],
+                'date' => time(),
+                'old_chat_member' => [
+                    'user' => ['id' => $subscriberUserId, 'first_name' => 'Trader', 'last_name' => 'Index Option'],
+                    'status' => 'restricted',
+                ],
+                'new_chat_member' => [
+                    'user' => ['id' => $subscriberUserId, 'first_name' => 'Trader', 'last_name' => 'Index Option', 'username' => 'trader_index_option'],
+                    'status' => 'member',
+                ],
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $adminApprovePayload)->assertStatus(200);
+
+        // Verify that the join event is attributed to subscriber (Trader Index Option), NOT the admin!
+        $this->assertDatabaseHas('telegram_events', [
+            'telegram_user_id' => (string) $subscriberUserId,
+            'first_name' => 'Trader',
+            'last_name' => 'Index Option',
+            'event_type' => 'join',
+        ]);
+
+        $this->assertDatabaseMissing('telegram_events', [
+            'telegram_user_id' => (string) $adminUserId,
+        ]);
+    }
+
+    /**
+     * Test that channel leaves are recorded and visible in Complete Join History.
+     */
+    public function test_channel_leave_is_tracked_and_visible_in_history(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+
+        $leavingUserId = 88776655;
+
+        $leavePayload = [
+            'update_id' => 8001,
+            'chat_member' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => $leavingUserId,
+                    'first_name' => 'Leaving',
+                    'last_name' => 'Member',
+                    'username' => 'leaving_member',
+                ],
+                'date' => time(),
+                'old_chat_member' => [
+                    'user' => ['id' => $leavingUserId, 'first_name' => 'Leaving', 'last_name' => 'Member'],
+                    'status' => 'member',
+                ],
+                'new_chat_member' => [
+                    'user' => ['id' => $leavingUserId, 'first_name' => 'Leaving', 'last_name' => 'Member'],
+                    'status' => 'left',
+                ],
+            ]
+        ];
+
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $leavePayload)->assertStatus(200);
+
+        // Verify event logged with event_type = leave
+        $this->assertDatabaseHas('telegram_events', [
+            'telegram_user_id' => (string) $leavingUserId,
+            'first_name' => 'Leaving',
+            'event_type' => 'leave',
+        ]);
+
+        // Verify analytics detail page displays Channel Leave badge
+        $res = $this->get(route('analytics.detail', $client->kx_code));
+        $res->assertStatus(200);
+        $res->assertSee('Channel Leave');
+        $res->assertSee('Leaving Member');
+    }
 }

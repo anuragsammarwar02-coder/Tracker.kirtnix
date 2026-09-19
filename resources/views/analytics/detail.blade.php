@@ -506,10 +506,14 @@
                             @forelse($joinHistory as $event)
                             <tr class="hover:bg-slate-50/60 transition">
                                 <td class="py-3.5 px-5 font-bold text-slate-900">
-                                    {{ $event->first_name ? $event->first_name . ' ' . ($event->last_name ?? '') : ($event->telegram_username ? '@' . $event->telegram_username : 'User #' . substr($event->telegram_user_id, -4)) }}
+                                    {{ $event->first_name ? trim($event->first_name . ' ' . ($event->last_name ?? '')) : ($event->telegram_username ? '@' . $event->telegram_username : 'User #' . substr($event->telegram_user_id, -4)) }}
                                 </td>
                                 <td class="py-3.5 px-5">
-                                    @if($event->source === 'ads')
+                                    @if($event->event_type === 'leave')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                        Channel Leave
+                                    </span>
+                                    @elseif($event->source === 'ads')
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                                         Ad Join
                                     </span>
@@ -524,8 +528,8 @@
                                     @endif
                                 </td>
                                 <td class="py-3.5 px-5">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600">
-                                        {{ $event->status_after ?? 'member' }}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold {{ $event->event_type === 'leave' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-600' }}">
+                                        {{ $event->status_after ?? ($event->event_type === 'leave' ? 'left' : 'member') }}
                                     </span>
                                 </td>
                                 <td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>
@@ -536,7 +540,16 @@
                                     <span class="text-slate-500">Direct / Organic</span>
                                     @endif
                                 </td>
-                                <td class="py-3.5 px-5 text-slate-400">{{ $event->campaign?->name ?? '—' }}</td>
+                                <td class="py-3.5 px-5">
+                                    @php
+                                        $campDisplay = $event->campaign?->name ?? $event->campaign?->meta_campaign_id ?? $event->click?->session?->utm_campaign ?? null;
+                                    @endphp
+                                    @if($campDisplay)
+                                    <span class="font-medium text-slate-800">{{ $campDisplay }}</span>
+                                    @else
+                                    <span class="text-slate-400">—</span>
+                                    @endif
+                                </td>
                                 <td class="py-3.5 px-5 text-slate-400">{{ $event->country ?? '—' }}</td>
                                 <td class="py-3.5 px-5 text-slate-400">{{ $event->device ?? '—' }}</td>
                                 <td class="py-3.5 px-5 text-right text-slate-500 whitespace-nowrap font-mono text-[11px]">
