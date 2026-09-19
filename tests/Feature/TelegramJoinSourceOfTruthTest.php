@@ -477,4 +477,90 @@ class TelegramJoinSourceOfTruthTest extends TestCase
         $res->assertSee('Channel Leave');
         $res->assertSee('Leaving Member');
     }
+
+    /**
+     * Requirement: Join Request transitions from pending to approved in-place
+     * Member appears only once in the Complete Join History table.
+     */
+    public function test_join_request_transitions_to_approved_in_place_without_duplicate_row(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+
+        $memberUserId = 77112233;
+
+        // Step 1: User requests to join (chat_join_request)
+        $joinReqPayload = [
+            'update_id' => 9001,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => $memberUserId,
+                    'first_name' => 'Trader',
+                    'last_name' => 'Vanshika',
+                    'username' => 'TraderVanshika',
+                ],
+                'date' => time(),
+            ]
+        ];
+
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinReqPayload)->assertStatus(200);
+
+        // Verify initial state is pending
+        $this->assertDatabaseHas('telegram_events', [
+            'telegram_user_id' => (string) $memberUserId,
+            'event_type' => 'join_request',
+            'status_after' => 'pending',
+        ]);
+
+        $res1 = $this->get(route('analytics.detail', $client->kx_code));
+        $res1->assertStatus(200);
+        $res1->assertSee('@TraderVanshika');
+        $res1->assertSee('pending');
+
+        // Step 2: Admin approves/accepts the join request (chat_member with new_chat_member = member)
+        $approvePayload = [
+            'update_id' => 9002,
+            'chat_member' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => 998877, // Admin user ID
+                    'first_name' => 'AK GrowthX',
+                    'username' => 'ak_growthx_admin',
+                ],
+                'date' => time(),
+                'old_chat_member' => [
+                    'user' => ['id' => $memberUserId, 'first_name' => 'Trader', 'last_name' => 'Vanshika', 'username' => 'TraderVanshika'],
+                    'status' => 'restricted',
+                ],
+                'new_chat_member' => [
+                    'user' => ['id' => $memberUserId, 'first_name' => 'Trader', 'last_name' => 'Vanshika', 'username' => 'TraderVanshika'],
+                    'status' => 'member',
+                ],
+            ]
+        ];
+
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $approvePayload)->assertStatus(200);
+
+        // Verify that the existing event was updated in-place to join/member, NOT duplicated!
+        $this->assertEquals(
+            1,
+            TelegramEvent::where('telegram_channel_id', $channel->id)->where('telegram_user_id', (string) $memberUserId)->count(),
+            'Only 1 TelegramEvent record should exist for this subscriber transition'
+        );
+
+        $this->assertDatabaseHas('telegram_events', [
+            'telegram_user_id' => (string) $memberUserId,
+            'event_type' => 'join',
+            'status_after' => 'approved',
+        ]);
+
+        // Verify that detail view renders approved and only 1 occurrence of @TraderVanshika
+        $res2 = $this->get(route('analytics.detail', $client->kx_code));
+        $res2->assertStatus(200);
+        $res2->assertSee('@TraderVanshika');
+        $res2->assertSee('approved');
+        $this->assertEquals(1, substr_count($res2->getContent(), '@TraderVanshika'));
+    }
 }

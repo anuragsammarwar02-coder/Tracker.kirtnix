@@ -754,29 +754,54 @@ class TelegramService
             }
         }
 
-        // Record TelegramEvent
-        $telegramEvent = TelegramEvent::create([
-            'telegram_bot_id' => $bot->id,
-            'telegram_channel_id' => $channel?->id,
-            'update_id' => $updateId,
-            'client_id' => $channel?->client_id ?? $bot->client_id,
-            'campaign_id' => $resolvedCampaignId,
-            'cta_click_id' => $matchedClick?->id,
-            'telegram_user_id' => $telegramUserId,
-            'telegram_username' => $user['username'] ?? null,
-            'first_name' => $user['first_name'] ?? 'Trader',
-            'last_name' => $user['last_name'] ?? null,
-            'event_type' => $eventType,
-            'invite_link' => $payloadInviteLink ?? $matchedInvite?->invite_link,
-            'source' => $source,
-            'country' => $country,
-            'device' => $device,
-            'tracking_token' => $matchedClick?->tracking_token,
-            'status_before' => $oldStatus,
-            'status_after' => $newStatus,
-            'raw_payload' => $update,
-            'event_time' => now(),
-        ]);
+        // Record or update TelegramEvent (Single row transition from pending -> approved)
+        $existingPendingEvent = null;
+        if ($channel && $eventType === 'join') {
+            $existingPendingEvent = TelegramEvent::where('telegram_channel_id', $channel->id)
+                ->where('telegram_user_id', $telegramUserId)
+                ->where(function ($q) {
+                    $q->where('event_type', 'join_request')
+                      ->orWhereIn('status_after', ['join_request', 'pending', 'restricted']);
+                })
+                ->latest('id')
+                ->first();
+        }
+
+        if ($existingPendingEvent) {
+            $existingPendingEvent->update([
+                'event_type' => 'join',
+                'status_before' => $oldStatus ?: 'pending',
+                'status_after' => $newStatus,
+                'campaign_id' => $existingPendingEvent->campaign_id ?: $resolvedCampaignId,
+                'update_id' => $updateId,
+                'event_time' => now(),
+                'raw_payload' => $update,
+            ]);
+            $telegramEvent = $existingPendingEvent;
+        } else {
+            $telegramEvent = TelegramEvent::create([
+                'telegram_bot_id' => $bot->id,
+                'telegram_channel_id' => $channel?->id,
+                'update_id' => $updateId,
+                'client_id' => $channel?->client_id ?? $bot->client_id,
+                'campaign_id' => $resolvedCampaignId,
+                'cta_click_id' => $matchedClick?->id,
+                'telegram_user_id' => $telegramUserId,
+                'telegram_username' => $user['username'] ?? null,
+                'first_name' => $user['first_name'] ?? 'Trader',
+                'last_name' => $user['last_name'] ?? null,
+                'event_type' => $eventType,
+                'invite_link' => $payloadInviteLink ?? $matchedInvite?->invite_link,
+                'source' => $source,
+                'country' => $country,
+                'device' => $device,
+                'tracking_token' => $matchedClick?->tracking_token,
+                'status_before' => $oldStatus,
+                'status_after' => $newStatus,
+                'raw_payload' => $update,
+                'event_time' => now(),
+            ]);
+        }
 
         // Create Verified Conversion Record for join / join_request (Single source of truth for Subscribers)
         if ($channel && in_array($eventType, ['join', 'join_request'])) {

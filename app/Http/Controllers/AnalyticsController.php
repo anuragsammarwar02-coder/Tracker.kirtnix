@@ -575,6 +575,13 @@ class AnalyticsController extends Controller
                         ->orWhere('telegram_user_id', 'like', "%{$search}%");
                 });
             })
+            ->whereNotExists(function ($sub) {
+                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                    ->from('telegram_events as te2')
+                    ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
+                    ->where('te2.event_type', 'join')
+                    ->where('telegram_events.event_type', 'join_request');
+            })
             ->latest('event_time')
             ->paginate(15)
             ->withQueryString();
@@ -704,6 +711,13 @@ class AnalyticsController extends Controller
         $latestEvents = TelegramEvent::with(['channel', 'campaign', 'click.session'])
             ->whereIn('event_type', ['join', 'join_request', 'leave'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
+            ->whereNotExists(function ($sub) {
+                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                    ->from('telegram_events as te2')
+                    ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
+                    ->where('te2.event_type', 'join')
+                    ->where('telegram_events.event_type', 'join_request');
+            })
             ->latest('event_time')
             ->limit(15)
             ->get()
@@ -774,7 +788,16 @@ class AnalyticsController extends Controller
                 'backouts' => number_format($backouts),
             ],
             'events' => $latestEvents,
-            'total_events' => TelegramEvent::whereIn('event_type', ['join', 'join_request', 'leave'])->when($client, fn($q) => $q->where('client_id', $client->id))->count(),
+            'total_events' => TelegramEvent::whereIn('event_type', ['join', 'join_request', 'leave'])
+                ->when($client, fn($q) => $q->where('client_id', $client->id))
+                ->whereNotExists(function ($sub) {
+                    $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                        ->from('telegram_events as te2')
+                        ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
+                        ->where('te2.event_type', 'join')
+                        ->where('telegram_events.event_type', 'join_request');
+                })
+                ->count(),
             'timestamp' => now()->format('n/j/Y, g:i:s A'),
         ]);
     }

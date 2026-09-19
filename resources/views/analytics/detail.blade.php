@@ -507,7 +507,7 @@
                             <tr class="hover:bg-slate-50/60 transition">
                                 <td class="py-3.5 px-5 font-bold text-slate-900">
                                     @if($event->telegram_username)
-                                        <span class="font-bold text-slate-900 block">@<span>{{ $event->telegram_username }}</span></span>
+                                        <span class="font-bold text-slate-900 block">{{ '@' . $event->telegram_username }}</span>
                                         @if($event->first_name)
                                             <span class="text-[11px] text-slate-400 block font-normal">{{ trim($event->first_name . ' ' . ($event->last_name ?? '')) }}</span>
                                         @endif
