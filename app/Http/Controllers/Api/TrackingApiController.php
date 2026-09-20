@@ -185,7 +185,7 @@ class TrackingApiController extends Controller
             'cta_id' => $cta?->id ?? 1,
             'landing_page_id' => $landingPage?->id ?? 1,
             'client_id' => $landingPage?->client_id ?? 1,
-            'campaign_id' => $landingPage?->campaign_id,
+            'campaign_id' => $session?->campaign_id ?? $landingPage?->campaign_id,
             'tracking_token' => $cta?->tracking_token ?? ('kx_' . Str::random(8)),
             'visitor_id' => $visitorId,
             'is_unique' => $isUnique,

@@ -399,6 +399,7 @@ class AnalyticsController extends Controller
 
         $rangeInfo = $dateRangeMap[$dateRange] ?? $dateRangeMap['last_30_days'];
         $startDate = $rangeInfo[0];
+        $endDate = $rangeInfo[1] ?? now();
         $formattedDateRange = $rangeInfo[2];
         $syncedAt = now()->format('n/j/Y, g:i:s A');
 
@@ -422,7 +423,7 @@ class AnalyticsController extends Controller
 
         // 1. Landing Page Views & Unique Visitors from DB
         $viewsQuery = LandingPageView::where('landing_page_id', $landingPage->id)
-            ->where('viewed_at', '>=', $startDate);
+            ->whereBetween('viewed_at', [$startDate, $endDate]);
         $totalLpViews = (clone $viewsQuery)->count();
         $uniqueVisitors = (clone $viewsQuery)->where('is_unique', true)->count();
         if ($totalLpViews > 0 && $uniqueVisitors === 0) {
@@ -431,12 +432,12 @@ class AnalyticsController extends Controller
 
         // 2. CTA Clicks from DB
         $clicksQuery = CtaClick::where('landing_page_id', $landingPage->id)
-            ->where('clicked_at', '>=', $startDate);
+            ->whereBetween('clicked_at', [$startDate, $endDate]);
         $tgClicks = (clone $clicksQuery)->count();
 
-        // 3. Telegram Events from DB
+        // 3. Telegram Events from DB (Attributed to arrival/event_time within date range)
         $eventsQuery = TelegramEvent::where('client_id', $client?->id)
-            ->where('event_time', '>=', $startDate);
+            ->whereBetween('event_time', [$startDate, $endDate]);
         $subscribers = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->count();
         $directJoins = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->where(function($q) {
             $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
@@ -631,13 +632,17 @@ class AnalyticsController extends Controller
 
         $rangeInfo = $dateRangeMap[$dateRange] ?? $dateRangeMap['last_30_days'];
         $startDate = $rangeInfo[0];
+        $endDate = $rangeInfo[1] ?? now();
 
         $adAccount = $client?->adAccount ?? ($client ? AdAccount::where('client_id', $client->id)->first() : null);
         $campaigns = $adAccount ? Campaign::where('ad_account_id', $adAccount->id)->get() : collect();
+        $activeCampName = $campaigns->first()?->name 
+            ?? $client?->adAccount?->campaigns?->first()?->name 
+            ?? ($client ? Campaign::where('client_id', $client->id)->first()?->name : null);
 
         // 1. Landing Page Views & Unique Visitors from DB
         $viewsQuery = LandingPageView::where('landing_page_id', $landingPage->id)
-            ->where('viewed_at', '>=', $startDate);
+            ->whereBetween('viewed_at', [$startDate, $endDate]);
         $totalLpViews = (clone $viewsQuery)->count();
         $uniqueVisitors = (clone $viewsQuery)->where('is_unique', true)->count();
         if ($totalLpViews > 0 && $uniqueVisitors === 0) {
@@ -646,12 +651,12 @@ class AnalyticsController extends Controller
 
         // 2. CTA Clicks from DB
         $clicksQuery = CtaClick::where('landing_page_id', $landingPage->id)
-            ->where('clicked_at', '>=', $startDate);
+            ->whereBetween('clicked_at', [$startDate, $endDate]);
         $tgClicks = (clone $clicksQuery)->count();
 
         // 3. Telegram Events from DB
         $eventsQuery = TelegramEvent::where('client_id', $client?->id)
-            ->where('event_time', '>=', $startDate);
+            ->whereBetween('event_time', [$startDate, $endDate]);
         $subscribers = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->count();
         $directJoins = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->where(function($q) {
             $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
@@ -721,7 +726,7 @@ class AnalyticsController extends Controller
             ->latest('event_time')
             ->limit(15)
             ->get()
-            ->map(function ($event) {
+            ->map(function ($event) use ($activeCampName) {
                 $rawStatus = strtolower($event->status_after ?? $event->event_type ?? 'approved');
                 if (in_array($rawStatus, ['join_request', 'pending', 'restricted'])) {
                     $statusLabel = 'pending';
@@ -748,7 +753,10 @@ class AnalyticsController extends Controller
                     $eventBadgeClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                 }
 
-                $campDisplay = $event->campaign?->name ?? $event->campaign?->meta_campaign_id ?? $event->click?->session?->utm_campaign ?? null;
+                $campDisplay = $event->campaign?->name 
+                    ?? $event->campaign?->meta_campaign_id 
+                    ?? $event->click?->session?->utm_campaign 
+                    ?? ($event->source === 'ads' ? $activeCampName : null);
 
                 return [
                     'id' => $event->id,

@@ -732,23 +732,43 @@ class TelegramService
         $device = $matchedSession?->device_type ?? $matchedClick?->device_type ?? 'Mobile';
         $visitorId = $matchedSession?->visitor_id ?? $matchedClick?->visitor_id ?? (string) Str::uuid();
 
-        // Resolve Campaign intelligently from session or active client campaigns
+        // Resolve Campaign intelligently from session, click, UTMs, or active client campaigns
         $resolvedCampaignId = $matchedSession?->campaign_id ?? $matchedClick?->campaign_id;
         $utmCampaign = $matchedSession?->utm_campaign ?? $matchedClick?->session?->utm_campaign;
 
+        $clientId = $channel?->client_id ?? $bot->client_id;
+        $clientModel = $channel?->client ?? ($clientId ? Client::find($clientId) : null);
+        $adAccountId = $clientModel?->ad_account_id ?? $clientModel?->adAccount?->id;
+
         if (!$resolvedCampaignId && $utmCampaign) {
-            $matchedCamp = \App\Models\Campaign::where('client_id', $channel?->client_id ?? $bot->client_id)
+            $matchedCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                    if ($clientId) $q->where('client_id', $clientId);
+                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                })
                 ->where(function($q) use ($utmCampaign) {
                     $q->where('utm_campaign', $utmCampaign)
                       ->orWhere('name', $utmCampaign)
-                      ->orWhere('meta_campaign_id', $utmCampaign)
+                      ->orWhere('campaign_id', $utmCampaign)
                       ->orWhere('slug', $utmCampaign);
                 })->first();
             $resolvedCampaignId = $matchedCamp?->id;
         }
 
-        if (!$resolvedCampaignId && $channel?->client_id && $source === 'ads') {
-            $activeCamp = \App\Models\Campaign::where('client_id', $channel->client_id)->where('status', 'active')->first();
+        if (!$resolvedCampaignId && ($source === 'ads' || $matchedSession || $matchedClick)) {
+            $activeCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                    if ($clientId) $q->where('client_id', $clientId);
+                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                })
+                ->whereIn('status', ['active', 'ACTIVE'])
+                ->latest('id')
+                ->first()
+                ?? \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                    if ($clientId) $q->where('client_id', $clientId);
+                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                })
+                ->latest('id')
+                ->first();
+
             if ($activeCamp) {
                 $resolvedCampaignId = $activeCamp->id;
             }
@@ -774,7 +794,6 @@ class TelegramService
                 'status_after' => $newStatus,
                 'campaign_id' => $existingPendingEvent->campaign_id ?: $resolvedCampaignId,
                 'update_id' => $updateId,
-                'event_time' => now(),
                 'raw_payload' => $update,
             ]);
             $telegramEvent = $existingPendingEvent;
@@ -860,7 +879,6 @@ class TelegramService
                         'event_type' => 'join',
                         'status' => 'verified',
                         'campaign_id' => $existingConversion->campaign_id ?: $resolvedCampaignId,
-                        'event_time' => now(),
                     ]);
 
                     // Dispatch Meta CAPI event when join request is accepted/approved by admin

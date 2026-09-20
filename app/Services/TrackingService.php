@@ -116,11 +116,18 @@ class TrackingService
 
         $campaignId = $landingPage->campaign_id;
         $campaignParam = $request->input('campaign_id') ?? $request->query('campaign_id');
+        $clientId = $landingPage->client_id;
+        $clientModel = $landingPage->client ?? ($clientId ? \App\Models\Client::find($clientId) : null);
+        $adAccountId = $clientModel?->ad_account_id ?? $clientModel?->adAccount?->id;
+
         if (!$campaignId && $campaignParam) {
-            $matchedCamp = \App\Models\Campaign::where('client_id', $landingPage->client_id)
+            $matchedCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                    if ($clientId) $q->where('client_id', $clientId);
+                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                })
                 ->where(function($q) use ($campaignParam) {
                     $q->where('id', $campaignParam)
-                      ->orWhere('meta_campaign_id', $campaignParam)
+                      ->orWhere('campaign_id', $campaignParam)
                       ->orWhere('utm_campaign', $campaignParam);
                 })->first();
             if ($matchedCamp) {
@@ -129,11 +136,14 @@ class TrackingService
         }
 
         if (!$campaignId && $utmCampaign) {
-            $matchedCamp = \App\Models\Campaign::where('client_id', $landingPage->client_id)
+            $matchedCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                    if ($clientId) $q->where('client_id', $clientId);
+                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                })
                 ->where(function($q) use ($utmCampaign) {
                     $q->where('utm_campaign', $utmCampaign)
                       ->orWhere('name', $utmCampaign)
-                      ->orWhere('meta_campaign_id', $utmCampaign)
+                      ->orWhere('campaign_id', $utmCampaign)
                       ->orWhere('slug', $utmCampaign);
                 })->first();
             if ($matchedCamp) {
@@ -142,7 +152,20 @@ class TrackingService
         }
 
         if (!$campaignId && ($fbclid || in_array(strtolower($utmSource ?? ''), ['meta', 'facebook', 'fb', 'ig', 'instagram']) || in_array(strtolower($utmMedium ?? ''), ['paid', 'cpc', 'ads']))) {
-            $activeCamp = \App\Models\Campaign::where('client_id', $landingPage->client_id)->where('status', 'active')->first();
+            $activeCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                    if ($clientId) $q->where('client_id', $clientId);
+                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                })
+                ->whereIn('status', ['active', 'ACTIVE'])
+                ->latest('id')
+                ->first()
+                ?? \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                    if ($clientId) $q->where('client_id', $clientId);
+                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                })
+                ->latest('id')
+                ->first();
+
             if ($activeCamp) {
                 $campaignId = $activeCamp->id;
             }

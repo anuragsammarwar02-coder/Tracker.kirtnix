@@ -563,4 +563,91 @@ class TelegramJoinSourceOfTruthTest extends TestCase
         $res2->assertSee('approved');
         $this->assertEquals(1, substr_count($res2->getContent(), '@TraderVanshika'));
     }
+
+    /**
+     * Requirement: Original arrival/join_request timestamp is preserved when admin approves.
+     * Approving a yesterday's request today does NOT inflate today's subscriber count.
+     */
+    public function test_original_event_time_preserved_when_admin_approves_and_daily_analytics_not_skewed(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+
+        // Ensure active campaign exists for client
+        $campaign = Campaign::firstOrCreate(
+            ['client_id' => $client->id, 'name' => 'Scalping Masterclass Ad'],
+            ['slug' => 'scalping-masterclass-ad', 'status' => 'ACTIVE', 'ad_account_id' => $client->ad_account_id]
+        );
+
+        $yesterdayUserId = 55667788;
+        $yesterdayTime = now()->subDay()->subHours(2);
+
+        // Step 1: User requested yesterday
+        $joinReqPayload = [
+            'update_id' => 9101,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => $yesterdayUserId,
+                    'first_name' => 'Yesterday',
+                    'last_name' => 'Trader',
+                    'username' => 'YesterdayTrader',
+                ],
+                'date' => $yesterdayTime->timestamp,
+            ]
+        ];
+
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinReqPayload)->assertStatus(200);
+
+        // Manually set event_time and created_at to yesterday for this test
+        TelegramEvent::where('telegram_user_id', (string) $yesterdayUserId)->update([
+            'event_time' => $yesterdayTime,
+            'created_at' => $yesterdayTime,
+        ]);
+
+        // Step 2: Admin approves TODAY
+        $approvePayload = [
+            'update_id' => 9102,
+            'chat_member' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => 998877, // Admin user ID
+                    'first_name' => 'AK GrowthX',
+                    'username' => 'ak_growthx_admin',
+                ],
+                'date' => time(),
+                'old_chat_member' => [
+                    'user' => ['id' => $yesterdayUserId, 'first_name' => 'Yesterday', 'last_name' => 'Trader', 'username' => 'YesterdayTrader'],
+                    'status' => 'restricted',
+                ],
+                'new_chat_member' => [
+                    'user' => ['id' => $yesterdayUserId, 'first_name' => 'Yesterday', 'last_name' => 'Trader', 'username' => 'YesterdayTrader'],
+                    'status' => 'member',
+                ],
+            ]
+        ];
+
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $approvePayload)->assertStatus(200);
+
+        // Verify that event_time remained yesterday's timestamp!
+        $event = TelegramEvent::where('telegram_user_id', (string) $yesterdayUserId)->first();
+        $this->assertNotNull($event);
+        $this->assertEquals('approved', $event->status_after);
+        $this->assertEquals($yesterdayTime->format('Y-m-d H:i:s'), $event->event_time->format('Y-m-d H:i:s'));
+
+        // Verify Today analytics: does NOT count this approved member in today's subscribers count
+        $todayRes = $this->get(route('analytics.detail', ['slug' => $client->kx_code, 'date_range' => 'today']));
+        $todayRes->assertStatus(200);
+
+        // Live metrics endpoint for today
+        $todayLive = $this->getJson(route('api.analytics.live_metrics', ['slug' => $client->kx_code, 'date_range' => 'today']));
+        $todayLive->assertStatus(200);
+        $this->assertEquals(0, $todayLive->json('kpis.subscribers'));
+
+        // Live metrics endpoint for yesterday
+        $yesterdayLive = $this->getJson(route('api.analytics.live_metrics', ['slug' => $client->kx_code, 'date_range' => 'yesterday']));
+        $yesterdayLive->assertStatus(200);
+        $this->assertEquals(1, $yesterdayLive->json('kpis.subscribers'));
+    }
 }

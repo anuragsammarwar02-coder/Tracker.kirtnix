@@ -106,7 +106,7 @@ class RedirectService
             'cta_id' => $cta->id,
             'landing_page_id' => $cta->landing_page_id,
             'client_id' => $cta->client_id,
-            'campaign_id' => $cta->campaign_id,
+            'campaign_id' => $trackingSession?->campaign_id ?? $cta->campaign_id,
             'tracking_token' => $cta->tracking_token,
             'visitor_id' => $visitorId,
             'is_unique' => $isUnique,
