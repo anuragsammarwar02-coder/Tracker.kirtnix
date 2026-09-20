@@ -136,14 +136,20 @@ class TrackingService
         }
 
         if (!$campaignId && $utmCampaign) {
+            $cleanUtm = trim(urldecode($utmCampaign));
+            $slugUtm = \Illuminate\Support\Str::slug($cleanUtm);
             $matchedCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
                     if ($clientId) $q->where('client_id', $clientId);
                     if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
                 })
-                ->where(function($q) use ($utmCampaign) {
+                ->where(function($q) use ($utmCampaign, $cleanUtm, $slugUtm) {
                     $q->where('utm_campaign', $utmCampaign)
                       ->orWhere('name', $utmCampaign)
+                      ->orWhere('name', $cleanUtm)
+                      ->orWhere('name', 'like', "%{$cleanUtm}%")
                       ->orWhere('campaign_id', $utmCampaign)
+                      ->orWhere('campaign_id', 'cmp_' . $utmCampaign)
+                      ->orWhere('slug', $slugUtm)
                       ->orWhere('slug', $utmCampaign);
                 })->first();
             if ($matchedCamp) {
@@ -152,22 +158,15 @@ class TrackingService
         }
 
         if (!$campaignId && ($fbclid || in_array(strtolower($utmSource ?? ''), ['meta', 'facebook', 'fb', 'ig', 'instagram']) || in_array(strtolower($utmMedium ?? ''), ['paid', 'cpc', 'ads']))) {
-            $activeCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+            $activeCamps = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
                     if ($clientId) $q->where('client_id', $clientId);
                     if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
                 })
-                ->whereIn('status', ['active', 'ACTIVE'])
-                ->latest('id')
-                ->first()
-                ?? \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
-                    if ($clientId) $q->where('client_id', $clientId);
-                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
-                })
-                ->latest('id')
-                ->first();
+                ->whereIn('status', ['active', 'ACTIVE', 'Active'])
+                ->get();
 
-            if ($activeCamp) {
-                $campaignId = $activeCamp->id;
+            if ($activeCamps->count() === 1) {
+                $campaignId = $activeCamps->first()->id;
             }
         }
 

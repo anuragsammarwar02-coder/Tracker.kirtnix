@@ -564,10 +564,12 @@
                                 </td>
                                 <td class="py-3.5 px-5">
                                     @php
+                                        $singleCampName = ($campaigns && $campaigns->count() === 1) ? $campaigns->first()->name : null;
                                         $campDisplay = $event->campaign?->name 
                                             ?? $event->campaign?->meta_campaign_id 
+                                            ?? $event->click?->session?->campaign?->name
                                             ?? $event->click?->session?->utm_campaign 
-                                            ?? ($event->source === 'ads' ? ($campaigns->first()?->name ?? $client?->adAccount?->campaigns?->first()?->name ?? $landingPage?->client?->adAccount?->campaigns?->first()?->name) : null);
+                                            ?? ($event->source === 'ads' ? ($singleCampName ?? 'Paid Ad') : null);
                                     @endphp
                                     @if($campDisplay)
                                     <span class="font-medium text-slate-800">{{ $campDisplay }}</span>

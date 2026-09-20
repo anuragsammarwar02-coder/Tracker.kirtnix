@@ -564,7 +564,7 @@ class AnalyticsController extends Controller
         $sourceFilter = $request->input('source');
         $search = $request->input('search');
 
-        $joinHistory = TelegramEvent::with(['channel', 'campaign', 'click'])
+        $joinHistory = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
             ->whereIn('event_type', ['join', 'join_request', 'leave'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
             ->when($eventFilter, fn($q) => $q->where('event_type', $eventFilter))
@@ -712,8 +712,10 @@ class AnalyticsController extends Controller
             ? round(($tgClicks / $totalLpViews) * 100, 1) . '%' 
             : ($uniqueVisitors > 0 ? round(($tgClicks / $uniqueVisitors) * 100, 1) . '%' : '0.0%');
 
+        $singleCampName = ($campaigns && $campaigns->count() === 1) ? $campaigns->first()->name : null;
+
         // Recent Real-Time Events for Dynamic Table Update
-        $latestEvents = TelegramEvent::with(['channel', 'campaign', 'click.session'])
+        $latestEvents = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
             ->whereIn('event_type', ['join', 'join_request', 'leave'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
             ->whereNotExists(function ($sub) {
@@ -726,7 +728,7 @@ class AnalyticsController extends Controller
             ->latest('event_time')
             ->limit(15)
             ->get()
-            ->map(function ($event) use ($activeCampName) {
+            ->map(function ($event) use ($singleCampName) {
                 $rawStatus = strtolower($event->status_after ?? $event->event_type ?? 'approved');
                 if (in_array($rawStatus, ['join_request', 'pending', 'restricted'])) {
                     $statusLabel = 'pending';
@@ -755,8 +757,9 @@ class AnalyticsController extends Controller
 
                 $campDisplay = $event->campaign?->name 
                     ?? $event->campaign?->meta_campaign_id 
+                    ?? $event->click?->session?->campaign?->name
                     ?? $event->click?->session?->utm_campaign 
-                    ?? ($event->source === 'ads' ? $activeCampName : null);
+                    ?? ($event->source === 'ads' ? ($singleCampName ?? 'Paid Ad') : null);
 
                 return [
                     'id' => $event->id,

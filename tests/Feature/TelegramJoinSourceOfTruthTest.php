@@ -650,4 +650,133 @@ class TelegramJoinSourceOfTruthTest extends TestCase
         $yesterdayLive->assertStatus(200);
         $this->assertEquals(1, $yesterdayLive->json('kpis.subscribers'));
     }
+
+    public function test_multiple_campaigns_attribution_accurately_tracks_distinct_campaign_names_per_subscriber(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+        $landingPage = LandingPage::where('client_id', $client->id)->firstOrFail();
+        $cta = Cta::where('landing_page_id', $landingPage->id)->firstOrFail();
+
+        // Create 2 Distinct Campaigns for this client
+        $camp1 = Campaign::create([
+            'client_id' => $client->id,
+            'name' => 'New Lead ad || 19 Sept 1',
+            'slug' => 'new-lead-ad-19-sept-1',
+            'campaign_id' => 'cmp_111111111',
+            'status' => 'active',
+            'ad_account_id' => $client->ad_account_id,
+        ]);
+
+        $camp2 = Campaign::create([
+            'client_id' => $client->id,
+            'name' => 'New Lead ad || 19 Sept 2',
+            'slug' => 'new-lead-ad-19-sept-2',
+            'campaign_id' => 'cmp_222222222',
+            'status' => 'active',
+            'ad_account_id' => $client->ad_account_id,
+        ]);
+
+        // Subscriber A arrives from Campaign 1
+        $sessionA = TrackingSession::create([
+            'session_id' => (string) Str::uuid(),
+            'visitor_id' => 'vid_user_multi_a',
+            'client_id' => $client->id,
+            'landing_page_id' => $landingPage->id,
+            'campaign_id' => $camp1->id,
+            'utm_source' => 'meta',
+            'utm_medium' => 'cpc',
+            'utm_campaign' => 'New Lead ad || 19 Sept 1',
+            'fbclid' => 'fb_click_111',
+        ]);
+
+        $clickA = CtaClick::create([
+            'tracking_session_id' => $sessionA->id,
+            'cta_id' => $cta->id,
+            'landing_page_id' => $landingPage->id,
+            'client_id' => $client->id,
+            'campaign_id' => $camp1->id,
+            'tracking_token' => $cta->tracking_token,
+            'destination_url' => 'https://t.me/multicamp_channel',
+            'visitor_id' => 'vid_user_multi_a',
+        ]);
+
+        // Telegram webhook for Subscriber A
+        $userAId = 11110001;
+        $joinPayloadA = [
+            'update_id' => 9001,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => ['id' => $userAId, 'first_name' => 'Subscriber', 'last_name' => 'One', 'username' => 'subscriber_one'],
+                'user_chat_id' => $userAId,
+                'date' => time(),
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinPayloadA)->assertStatus(200);
+
+        // Subscriber B arrives from Campaign 2
+        $sessionB = TrackingSession::create([
+            'session_id' => (string) Str::uuid(),
+            'visitor_id' => 'vid_user_multi_b',
+            'client_id' => $client->id,
+            'landing_page_id' => $landingPage->id,
+            'campaign_id' => $camp2->id,
+            'utm_source' => 'meta',
+            'utm_medium' => 'cpc',
+            'utm_campaign' => 'New Lead ad || 19 Sept 2',
+            'fbclid' => 'fb_click_222',
+        ]);
+
+        $clickB = CtaClick::create([
+            'tracking_session_id' => $sessionB->id,
+            'cta_id' => $cta->id,
+            'landing_page_id' => $landingPage->id,
+            'client_id' => $client->id,
+            'campaign_id' => $camp2->id,
+            'tracking_token' => $cta->tracking_token,
+            'destination_url' => 'https://t.me/multicamp_channel',
+            'visitor_id' => 'vid_user_multi_b',
+        ]);
+
+        // Telegram webhook for Subscriber B
+        $userBId = 22220002;
+        $joinPayloadB = [
+            'update_id' => 9002,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => ['id' => $userBId, 'first_name' => 'Subscriber', 'last_name' => 'Two', 'username' => 'subscriber_two'],
+                'user_chat_id' => $userBId,
+                'date' => time(),
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinPayloadB)->assertStatus(200);
+
+        // Verify Event A is linked to Campaign 1
+        $eventA = TelegramEvent::where('telegram_user_id', (string) $userAId)->first();
+        $this->assertNotNull($eventA);
+        $this->assertEquals($camp1->id, $eventA->campaign_id);
+
+        // Verify Event B is linked to Campaign 2
+        $eventB = TelegramEvent::where('telegram_user_id', (string) $userBId)->first();
+        $this->assertNotNull($eventB);
+        $this->assertEquals($camp2->id, $eventB->campaign_id);
+
+        // Verify detail page displays both campaign names individually
+        $detailRes = $this->get(route('analytics.detail', $client->kx_code));
+        $detailRes->assertStatus(200);
+        $detailRes->assertSee('New Lead ad || 19 Sept 1');
+        $detailRes->assertSee('New Lead ad || 19 Sept 2');
+
+        // Verify live metrics API returns both campaign names
+        $liveMetricsRes = $this->getJson(route('api.analytics.live_metrics', ['slug' => $client->kx_code]));
+        $liveMetricsRes->assertStatus(200);
+        $recentEvents = $liveMetricsRes->json('events');
+        $this->assertNotEmpty($recentEvents);
+
+        $campNames = array_column($recentEvents, 'campaign');
+        $this->assertContains('New Lead ad || 19 Sept 1', $campNames);
+        $this->assertContains('New Lead ad || 19 Sept 2', $campNames);
+    }
 }
+

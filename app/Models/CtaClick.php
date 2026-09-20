@@ -37,7 +37,12 @@ class CtaClick extends Model
 
     public function trackingSession(): BelongsTo
     {
-        return $this->belongsTo(TrackingSession::class);
+        return $this->belongsTo(TrackingSession::class, 'tracking_session_id');
+    }
+
+    public function session(): BelongsTo
+    {
+        return $this->belongsTo(TrackingSession::class, 'tracking_session_id');
     }
 
     public function cta(): BelongsTo
