@@ -56,6 +56,32 @@ Route::get('/healthz', function () {
             }
         }
 
+        if (request()->query('inspect_campaigns')) {
+            $camps = \App\Models\Campaign::all(['id', 'client_id', 'ad_account_id', 'name', 'slug', 'campaign_id', 'status', 'spend']);
+            $events = \App\Models\TelegramEvent::with(['click.session'])->latest('id')->limit(15)->get();
+            $sessions = \App\Models\TrackingSession::latest('id')->limit(15)->get();
+            return response()->json([
+                'campaigns' => $camps,
+                'events' => $events->map(fn($e) => [
+                    'id' => $e->id,
+                    'user' => $e->telegram_username ?: $e->first_name,
+                    'campaign_id' => $e->campaign_id,
+                    'click_id' => $e->cta_click_id,
+                    'session_utm_campaign' => $e->click?->session?->utm_campaign,
+                    'session_campaign_id' => $e->click?->session?->campaign_id,
+                    'source' => $e->source,
+                    'time' => $e->event_time,
+                ]),
+                'sessions' => $sessions->map(fn($s) => [
+                    'id' => $s->id,
+                    'utm_campaign' => $s->utm_campaign,
+                    'campaign_id' => $s->campaign_id,
+                    'utm_source' => $s->utm_source,
+                    'fbclid' => $s->fbclid ? 'yes' : 'no',
+                    'created_at' => $s->created_at,
+                ]),
+            ]);
+        }
         if (request()->query('set_meta_secret')) {
             $secret = trim(request()->query('set_meta_secret'));
             if (!empty($secret)) {
