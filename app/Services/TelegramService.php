@@ -702,74 +702,151 @@ class TelegramService
             $isVerified = false;
         }
 
-        // Deterministic Attribution Matching
-        $matchedInvite = null;
-        $matchedSession = null;
-        $matchedClick = null;
-
-        if ($payloadInviteLink) {
-            $matchedInvite = TelegramInvite::where('invite_link', $payloadInviteLink)->first();
-            if ($matchedInvite) {
-                $matchedSession = $matchedInvite->trackingSession;
-                $matchedClick = CtaClick::where('tracking_session_id', $matchedInvite->tracking_session_id)->latest('id')->first();
-            }
-        }
-
-        // Secondary matching: Recent unassigned CTA click for this client
-        if (!$matchedSession) {
-            $matchedClick = CtaClick::where('client_id', $channel?->client_id ?? $bot->client_id)
-                ->where('created_at', '>=', now()->subHours(6))
-                ->latest('id')
-                ->first();
-
-            if ($matchedClick && $matchedClick->tracking_session_id) {
-                $matchedSession = TrackingSession::find($matchedClick->tracking_session_id);
-            }
-        }
-
-        $source = $matchedSession ? 'ads' : 'direct';
-        $country = $matchedSession?->country ?? $matchedClick?->country ?? 'IN';
-        $device = $matchedSession?->device_type ?? $matchedClick?->device_type ?? 'Mobile';
-        $visitorId = $matchedSession?->visitor_id ?? $matchedClick?->visitor_id ?? (string) Str::uuid();
-
-        // Resolve Campaign intelligently from session, click, UTMs, or active client campaigns
-        $resolvedCampaignId = $matchedSession?->campaign_id ?? $matchedClick?->campaign_id;
-        $utmCampaign = $matchedSession?->utm_campaign ?? $matchedClick?->session?->utm_campaign;
-
         $clientId = $channel?->client_id ?? $bot->client_id;
         $clientModel = $channel?->client ?? ($clientId ? Client::find($clientId) : null);
         $adAccountId = $clientModel?->ad_account_id ?? $clientModel?->adAccount?->id;
 
-        if (!$resolvedCampaignId && $utmCampaign) {
-            $cleanUtm = trim(urldecode($utmCampaign));
-            $slugUtm = \Illuminate\Support\Str::slug($cleanUtm);
-            $matchedCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
-                    if ($clientId) $q->where('client_id', $clientId);
-                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
-                })
-                ->where(function($q) use ($utmCampaign, $cleanUtm, $slugUtm) {
-                    $q->where('utm_campaign', $utmCampaign)
-                      ->orWhere('name', $utmCampaign)
-                      ->orWhere('name', $cleanUtm)
-                      ->orWhere('name', 'like', "%{$cleanUtm}%")
-                      ->orWhere('campaign_id', $utmCampaign)
-                      ->orWhere('campaign_id', 'cmp_' . $utmCampaign)
-                      ->orWhere('slug', $slugUtm)
-                      ->orWhere('slug', $utmCampaign);
-                })->first();
-            $resolvedCampaignId = $matchedCamp?->id;
-        }
+        $matchedInvite = null;
+        $matchedSession = null;
+        $matchedClick = null;
+        $source = 'direct';
+        $resolvedCampaignId = null;
+        $country = 'IN';
+        $device = 'Mobile';
+        $visitorId = (string) Str::uuid();
 
-        if (!$resolvedCampaignId && ($source === 'ads' || $matchedSession || $matchedClick)) {
-            $activeCamps = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
-                    if ($clientId) $q->where('client_id', $clientId);
-                    if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
-                })
-                ->whereIn('status', ['active', 'ACTIVE', 'Active'])
-                ->get();
+        // 1. Channel Leave Event: Inherit attribution from user's original join event
+        if ($eventType === 'leave') {
+            $existingMemberEvent = TelegramEvent::where('telegram_channel_id', $channel?->id)
+                ->where('telegram_user_id', $telegramUserId)
+                ->whereIn('event_type', ['join', 'join_request'])
+                ->latest('id')
+                ->first();
 
-            if ($activeCamps->count() === 1) {
-                $resolvedCampaignId = $activeCamps->first()->id;
+            if ($existingMemberEvent) {
+                $source = $existingMemberEvent->source ?: 'direct';
+                $resolvedCampaignId = $existingMemberEvent->campaign_id;
+                $matchedClick = $existingMemberEvent->click;
+                $matchedSession = $matchedClick?->trackingSession;
+                $country = $existingMemberEvent->country ?? 'IN';
+                $device = $existingMemberEvent->device ?? 'Mobile';
+                $visitorId = $existingMemberEvent->visitor_id ?? (string) Str::uuid();
+            } else {
+                $source = 'direct';
+            }
+        } else {
+            // 2. Join / Join Request Event:
+            // Check if there is already a pending event for this user (approval transition)
+            $existingPendingEvent = null;
+            if ($channel && $eventType === 'join') {
+                $existingPendingEvent = TelegramEvent::where('telegram_channel_id', $channel->id)
+                    ->where('telegram_user_id', $telegramUserId)
+                    ->where(function ($q) {
+                        $q->where('event_type', 'join_request')
+                          ->orWhereIn('status_after', ['join_request', 'pending', 'restricted']);
+                    })
+                    ->latest('id')
+                    ->first();
+            }
+
+            if ($existingPendingEvent) {
+                $source = $existingPendingEvent->source ?: 'direct';
+                $resolvedCampaignId = $existingPendingEvent->campaign_id;
+                $matchedClick = $existingPendingEvent->click;
+                $matchedSession = $matchedClick?->trackingSession;
+                $country = $existingPendingEvent->country ?? 'IN';
+                $device = $existingPendingEvent->device ?? 'Mobile';
+                $visitorId = $existingPendingEvent->visitor_id ?? (string) Str::uuid();
+            } else {
+                // New Join / Join Request:
+                // Primary: Tracked / Unique Invite Link
+                if ($payloadInviteLink) {
+                    $matchedInvite = TelegramInvite::where('invite_link', $payloadInviteLink)->first();
+                    if ($matchedInvite) {
+                        $matchedSession = $matchedInvite->trackingSession;
+                        $matchedClick = CtaClick::where('tracking_session_id', $matchedInvite->tracking_session_id)->latest('id')->first();
+                    }
+                }
+
+                // Secondary: Recent UNASSIGNED CTA Click for this client (within 30 minutes)
+                if (!$matchedSession) {
+                    $matchedClick = CtaClick::where('client_id', $clientId)
+                        ->where('created_at', '>=', now()->subMinutes(30))
+                        ->whereNotExists(function ($q) {
+                            $q->select(\Illuminate\Support\Facades\DB::raw(1))
+                              ->from('telegram_events')
+                              ->whereColumn('telegram_events.cta_click_id', 'cta_clicks.id');
+                        })
+                        ->latest('id')
+                        ->first();
+
+                    if ($matchedClick && $matchedClick->tracking_session_id) {
+                        $matchedSession = TrackingSession::find($matchedClick->tracking_session_id);
+                    }
+                }
+
+                // Determine if this session is from Paid Ads vs Direct/Organic
+                $isAdSession = false;
+                if ($matchedSession) {
+                    $utmSrc = strtolower($matchedSession->utm_source ?? '');
+                    $utmMed = strtolower($matchedSession->utm_medium ?? '');
+                    $hasFbclid = !empty($matchedSession->fbclid);
+                    $hasCamp = !empty($matchedSession->utm_campaign) || !empty($matchedSession->campaign_id);
+                    $isAdSource = in_array($utmSrc, ['meta', 'facebook', 'fb', 'ig', 'instagram', 'ads', 'paid']);
+                    $isAdMedium = in_array($utmMed, ['cpc', 'paid', 'ads', 'cpm']);
+
+                    if ($hasFbclid || $hasCamp || $isAdSource || $isAdMedium) {
+                        $isAdSession = true;
+                    }
+                }
+
+                if ($isAdSession) {
+                    $source = 'ads';
+                    $resolvedCampaignId = $matchedSession?->campaign_id ?? $matchedClick?->campaign_id;
+                    $utmCampaign = $matchedSession?->utm_campaign ?? $matchedClick?->session?->utm_campaign;
+
+                    if (!$resolvedCampaignId && $utmCampaign) {
+                        $cleanUtm = trim(urldecode($utmCampaign));
+                        $slugUtm = \Illuminate\Support\Str::slug($cleanUtm);
+                        $matchedCamp = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                                if ($clientId) $q->where('client_id', $clientId);
+                                if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                            })
+                            ->where(function($q) use ($utmCampaign, $cleanUtm, $slugUtm) {
+                                $q->where('utm_campaign', $utmCampaign)
+                                  ->orWhere('name', $utmCampaign)
+                                  ->orWhere('name', $cleanUtm)
+                                  ->orWhere('name', 'like', "%{$cleanUtm}%")
+                                  ->orWhere('campaign_id', $utmCampaign)
+                                  ->orWhere('campaign_id', 'cmp_' . $utmCampaign)
+                                  ->orWhere('slug', $slugUtm)
+                                  ->orWhere('slug', $utmCampaign);
+                            })->first();
+                        $resolvedCampaignId = $matchedCamp?->id;
+                    }
+
+                    if (!$resolvedCampaignId) {
+                        $activeCamps = \App\Models\Campaign::where(function($q) use ($clientId, $adAccountId) {
+                                if ($clientId) $q->where('client_id', $clientId);
+                                if ($adAccountId) $q->orWhere('ad_account_id', $adAccountId);
+                            })
+                            ->whereIn('status', ['active', 'ACTIVE', 'Active'])
+                            ->get();
+
+                        if ($activeCamps->count() === 1) {
+                            $resolvedCampaignId = $activeCamps->first()->id;
+                        }
+                    }
+                } else {
+                    $source = 'direct';
+                    $resolvedCampaignId = null;
+                    $matchedClick = null;
+                    $matchedSession = null;
+                }
+
+                $country = $matchedSession?->country ?? $matchedClick?->country ?? 'IN';
+                $device = $matchedSession?->device_type ?? $matchedClick?->device_type ?? 'Mobile';
+                $visitorId = $matchedSession?->visitor_id ?? $matchedClick?->visitor_id ?? (string) Str::uuid();
             }
         }
 

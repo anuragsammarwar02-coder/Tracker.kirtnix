@@ -554,7 +554,9 @@
                                         {{ $statusLabel }}
                                     </span>
                                 </td>
-                                <td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>
+                                <td class="py-3.5 px-5 text-slate-600">
+                                    {{ $event->source === 'ads' ? 'Kirtnix link' : 'Direct link' }}
+                                </td>
                                 <td class="py-3.5 px-5">
                                     @if($event->source === 'ads')
                                     <span class="font-semibold text-amber-600">Paid Ads</span>
@@ -565,11 +567,13 @@
                                 <td class="py-3.5 px-5">
                                     @php
                                         $singleCampName = ($campaigns && $campaigns->count() === 1) ? $campaigns->first()->name : null;
-                                        $campDisplay = $event->campaign?->name 
-                                            ?? $event->campaign?->meta_campaign_id 
-                                            ?? $event->click?->session?->campaign?->name
-                                            ?? $event->click?->session?->utm_campaign 
-                                            ?? ($event->source === 'ads' ? ($singleCampName ?? 'Paid Ad') : null);
+                                        $campDisplay = ($event->source === 'ads')
+                                            ? ($event->campaign?->name 
+                                                ?? $event->campaign?->meta_campaign_id 
+                                                ?? $event->click?->session?->campaign?->name
+                                                ?? $event->click?->session?->utm_campaign 
+                                                ?? ($singleCampName ?? 'Paid Ad'))
+                                            : null;
                                     @endphp
                                     @if($campDisplay)
                                     <span class="font-medium text-slate-800">{{ $campDisplay }}</span>
@@ -742,7 +746,7 @@
                         '<td class="py-3.5 px-5 font-bold text-slate-900">' + subHtml + '</td>' +
                         '<td class="py-3.5 px-5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ' + ev.event_badge + '">' + escapeHtml(ev.event_label) + '</span></td>' +
                         '<td class="py-3.5 px-5"><span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ' + ev.status_badge + '">' + escapeHtml(ev.status_label) + '</span></td>' +
-                        '<td class="py-3.5 px-5 text-slate-600">Kirtnix link</td>' +
+                        '<td class="py-3.5 px-5 text-slate-600">' + (ev.is_ads ? 'Kirtnix link' : 'Direct link') + '</td>' +
                         '<td class="py-3.5 px-5">' + srcHtml + '</td>' +
                         '<td class="py-3.5 px-5">' + campHtml + '</td>' +
                         '<td class="py-3.5 px-5 text-slate-400">' + escapeHtml(ev.country) + '</td>' +

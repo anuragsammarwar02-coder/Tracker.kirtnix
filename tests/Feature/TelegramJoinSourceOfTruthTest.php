@@ -778,5 +778,112 @@ class TelegramJoinSourceOfTruthTest extends TestCase
         $this->assertContains('New Lead ad || 19 Sept 1', $campNames);
         $this->assertContains('New Lead ad || 19 Sept 2', $campNames);
     }
+
+    public function test_direct_joins_accurately_attributed_as_direct_organic_and_never_steal_claimed_ad_clicks(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+        $landingPage = LandingPage::where('client_id', $client->id)->firstOrFail();
+        $cta = Cta::where('landing_page_id', $landingPage->id)->firstOrFail();
+
+        $camp = Campaign::create([
+            'client_id' => $client->id,
+            'name' => 'Paid Scalping Masterclass',
+            'slug' => 'paid-scalping-masterclass',
+            'campaign_id' => 'cmp_999888777',
+            'status' => 'active',
+            'ad_account_id' => $client->ad_account_id,
+        ]);
+
+        // Step 1: User 1 arrives from Paid Ads and clicks CTA
+        $session1 = TrackingSession::create([
+            'session_id' => (string) Str::uuid(),
+            'visitor_id' => 'vid_user_ad_1',
+            'client_id' => $client->id,
+            'landing_page_id' => $landingPage->id,
+            'campaign_id' => $camp->id,
+            'utm_source' => 'meta',
+            'utm_medium' => 'cpc',
+            'utm_campaign' => 'Paid Scalping Masterclass',
+            'fbclid' => 'fb_ad_click_1',
+        ]);
+
+        $click1 = CtaClick::create([
+            'tracking_session_id' => $session1->id,
+            'cta_id' => $cta->id,
+            'landing_page_id' => $landingPage->id,
+            'client_id' => $client->id,
+            'campaign_id' => $camp->id,
+            'tracking_token' => $cta->tracking_token,
+            'destination_url' => 'https://t.me/scalping_channel',
+            'visitor_id' => 'vid_user_ad_1',
+        ]);
+
+        // User 1 joins Telegram
+        $adUserTgId = 77112233;
+        $joinPayloadAd = [
+            'update_id' => 9501,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => ['id' => $adUserTgId, 'first_name' => 'Ad', 'last_name' => 'Subscriber', 'username' => 'ad_subscriber'],
+                'user_chat_id' => $adUserTgId,
+                'date' => time(),
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinPayloadAd)->assertStatus(200);
+
+        // Step 2: User 2 arrives DIRECTLY on Telegram (organic/shared channel link) with NO CTA click
+        $directUserTgId = 88334455;
+        $joinPayloadDirect = [
+            'update_id' => 9502,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => ['id' => $directUserTgId, 'first_name' => 'Direct', 'last_name' => 'Organic', 'username' => 'direct_organic'],
+                'user_chat_id' => $directUserTgId,
+                'date' => time() + 10,
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $joinPayloadDirect)->assertStatus(200);
+
+        // Verify User 1 is marked as ads and linked to campaign
+        $adEvent = TelegramEvent::where('telegram_user_id', (string) $adUserTgId)->first();
+        $this->assertNotNull($adEvent);
+        $this->assertEquals('ads', $adEvent->source);
+        $this->assertEquals($camp->id, $adEvent->campaign_id);
+        $this->assertEquals($click1->id, $adEvent->cta_click_id);
+
+        // Verify User 2 is marked as direct and has NO campaign
+        $directEvent = TelegramEvent::where('telegram_user_id', (string) $directUserTgId)->first();
+        $this->assertNotNull($directEvent);
+        $this->assertEquals('direct', $directEvent->source);
+        $this->assertNull($directEvent->campaign_id);
+        $this->assertNull($directEvent->cta_click_id);
+
+        // Verify Detail view shows Paid Ads for User 1 and Direct / Organic for User 2
+        $detailRes = $this->get(route('analytics.detail', $client->kx_code));
+        $detailRes->assertStatus(200);
+        $detailRes->assertSee('Paid Ads');
+        $detailRes->assertSee('Direct / Organic');
+        $detailRes->assertSee('Paid Scalping Masterclass');
+
+        // Verify Live metrics endpoint
+        $liveRes = $this->getJson(route('api.analytics.live_metrics', ['slug' => $client->kx_code]));
+        $liveRes->assertStatus(200);
+        $events = $liveRes->json('events');
+
+        $directRow = collect($events)->firstWhere('user_id', (string) $directUserTgId);
+        $this->assertNotNull($directRow);
+        $this->assertEquals('Direct / Organic', $directRow['source_label']);
+        $this->assertFalse($directRow['is_ads']);
+        $this->assertNull($directRow['campaign']);
+
+        $adRow = collect($events)->firstWhere('user_id', (string) $adUserTgId);
+        $this->assertNotNull($adRow);
+        $this->assertEquals('Paid Ads', $adRow['source_label']);
+        $this->assertTrue($adRow['is_ads']);
+        $this->assertEquals('Paid Scalping Masterclass', $adRow['campaign']);
+    }
 }
+
 

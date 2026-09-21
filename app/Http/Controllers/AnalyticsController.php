@@ -755,11 +755,13 @@ class AnalyticsController extends Controller
                     $eventBadgeClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                 }
 
-                $campDisplay = $event->campaign?->name 
-                    ?? $event->campaign?->meta_campaign_id 
-                    ?? $event->click?->session?->campaign?->name
-                    ?? $event->click?->session?->utm_campaign 
-                    ?? ($event->source === 'ads' ? ($singleCampName ?? 'Paid Ad') : null);
+                $campDisplay = ($event->source === 'ads')
+                    ? ($event->campaign?->name 
+                        ?? $event->campaign?->meta_campaign_id 
+                        ?? $event->click?->session?->campaign?->name
+                        ?? $event->click?->session?->utm_campaign 
+                        ?? ($singleCampName ?? 'Paid Ad'))
+                    : null;
 
                 return [
                     'id' => $event->id,
