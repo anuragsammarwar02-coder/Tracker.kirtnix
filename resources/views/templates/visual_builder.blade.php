@@ -376,7 +376,13 @@
           <p>{{ e($block['copyright'] ?? '© ' . date('Y') . ' ' . $brand . '. All rights reserved.') }}</p>
           @if(!empty($block['managed_by']) || $isLight)
             <div class="text-[11px] font-medium {{ $isLight ? 'text-slate-400' : 'text-slate-500' }}">
-              {{ e($block['managed_by'] ?? '⚡ Ads Managed by Kirtnix Media') }}
+              @if(!empty($block['managed_by_url']))
+                <a href="{{ $block['managed_by_url'] }}" target="_blank" rel="noopener noreferrer" class="hover:underline hover:text-blue-400 transition inline-flex items-center gap-1">
+                  {{ e($block['managed_by'] ?? '⚡ Ads Managed by AK GrowthX Media') }}
+                </a>
+              @else
+                <span>{{ e($block['managed_by'] ?? '⚡ Ads Managed by AK GrowthX Media') }}</span>
+              @endif
             </div>
           @endif
           <div class="flex justify-center gap-3 text-xs font-medium {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} pt-1">

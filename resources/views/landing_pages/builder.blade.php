@@ -409,7 +409,14 @@
               <template x-if="block.type === 'footer'">
                 <div class="pt-3 pb-1 text-center text-[11px] space-y-1" :class="theme === 'minimal_light' ? 'text-slate-500 border-t border-slate-200' : 'text-slate-500 border-t border-slate-800/80'">
                   <p x-text="block.copyright || ('© ' + (brandName || 'VIP Trading') + '. All rights reserved.')"></p>
-                  <p class="text-[10px] font-medium" :class="theme === 'minimal_light' ? 'text-slate-400' : 'text-slate-500'" x-text="block.managed_by || '⚡ Ads Managed by Kirtnix Media'"></p>
+                  <p class="text-[10px] font-medium" :class="theme === 'minimal_light' ? 'text-slate-400' : 'text-slate-500'">
+                    <template x-if="block.managed_by_url">
+                      <a :href="block.managed_by_url" target="_blank" class="hover:underline hover:text-blue-400 cursor-pointer inline-flex items-center gap-1 transition" x-text="block.managed_by || '⚡ Ads Managed by AK GrowthX Media'"></a>
+                    </template>
+                    <template x-if="!block.managed_by_url">
+                      <span x-text="block.managed_by || '⚡ Ads Managed by AK GrowthX Media'"></span>
+                    </template>
+                  </p>
                   <div class="flex justify-center gap-3 text-[10px] pt-0.5" :class="theme === 'minimal_light' ? 'text-slate-500' : 'text-slate-400'">
                     <span>Telegram</span>
                     <span>•</span>
@@ -854,7 +861,12 @@
                   </div>
                   <div>
                     <label class="block text-[11px] font-semibold text-slate-300 mb-1">Managed By Branding</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].managed_by" placeholder="⚡ Ads Managed by Kirtnix Media" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                    <input type="text" x-model="blocks[selectedBlockIndex].managed_by" placeholder="⚡ Ads Managed by AK GrowthX Media" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Managed By Link / Trigger URL</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].managed_by_url" placeholder="https://akgrowthx.com or https://..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono text-[11px] focus:border-yellow-400 outline-none">
+                    <p class="text-[10px] text-slate-400 mt-1">When clicked on the landing page, opens this URL in a new tab.</p>
                   </div>
                 </div>
               </template>
@@ -1230,7 +1242,8 @@ function visualBuilder(config) {
             id: newId,
             type: 'footer',
             copyright: '© ' + new Date().getFullYear() + ' ' + (this.brandName || 'VIP Trading') + '. All rights reserved.',
-            managed_by: '⚡ Ads Managed by Kirtnix Media'
+            managed_by: '⚡ Ads Managed by AK GrowthX Media',
+            managed_by_url: ''
           };
           break;
       }

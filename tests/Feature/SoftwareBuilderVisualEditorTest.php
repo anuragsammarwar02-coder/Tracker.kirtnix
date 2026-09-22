@@ -677,4 +677,47 @@ class SoftwareBuilderVisualEditorTest extends TestCase
         $response->assertDontSee($secretAppSecret);
         $response->assertDontSee('meta_access_token');
     }
+
+    public function test_footer_branding_url_is_rendered_and_triggers_external_link(): void
+    {
+        $blocks = [
+            [
+                'id' => 'hero_1',
+                'type' => 'hero',
+                'heading' => 'VIP Community',
+                'button_text' => 'Join Telegram',
+            ],
+            [
+                'id' => 'footer_1',
+                'type' => 'footer',
+                'copyright' => '© 2026 VIP TRADING. All rights reserved.',
+                'managed_by' => '⚡ Ads Managed by AK GrowthX Media',
+                'managed_by_url' => 'https://akgrowthx.com',
+            ],
+        ];
+
+        $page = LandingPage::create([
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'AK GrowthX Branded Page',
+            'slug' => 'ak-growthx-branded-page',
+            'template_type' => 'visual_builder',
+            'theme' => 'premium_dark',
+            'brand_name' => 'VIP TRADING',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'blocks_json' => $blocks,
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(route('public.landing_page', $page->slug));
+        $response->assertStatus(200);
+        $response->assertSee('⚡ Ads Managed by AK GrowthX Media');
+        $response->assertSee('href="https://akgrowthx.com"', false);
+        $response->assertSee('target="_blank"', false);
+
+        // Also check builder UI shows Managed By Link input field
+        $resBuilder = $this->actingAs($this->user)->get(route('landing-pages.edit', $page));
+        $resBuilder->assertStatus(200);
+        $resBuilder->assertSee('Managed By Link / Trigger URL');
+    }
 }

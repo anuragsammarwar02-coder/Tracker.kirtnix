@@ -161,7 +161,8 @@ class LandingPage extends Model
                 'type' => 'footer',
                 'brand_name' => $brand,
                 'copyright' => '© ' . date('Y') . ' ' . $brand . '. All rights reserved.',
-                'managed_by' => '⚡ Ads Managed by Kirtnix Media',
+                'managed_by' => '⚡ Ads Managed by AK GrowthX Media',
+                'managed_by_url' => '',
                 'padding' => 'py-6',
             ]
         ];
