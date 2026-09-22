@@ -39,6 +39,9 @@
           <span class="pill pill-yellow" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;">
             {{ $client->kx_code ?? 'KX-00' . $client->id }} {{ $client->company_name }}
           </span>
+          <span class="pill pill-blue" style="font-size: 10.5px; font-weight: 600;">
+            🏷️ {{ $client->category ?? $client->industry ?? 'Stock Market & Options Trading' }}
+          </span>
           @if($assignedAdAccount)
             <span class="pill pill-green" style="font-size: 10.5px;"><span class="pill-dot"></span> Meta Connected ({{ $assignedAdAccount->name }})</span>
           @else

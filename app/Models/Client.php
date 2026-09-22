@@ -17,6 +17,7 @@ class Client extends Model
         'company_name',
         'client_name',
         'industry',
+        'category',
         'email',
         'phone',
         'logo_path',
@@ -28,6 +29,25 @@ class Client extends Model
         'notes',
         'timezone',
     ];
+
+    /**
+     * Standard list of categories for Meta audience targeting and niche segmentation.
+     */
+    public static function categories(): array
+    {
+        return [
+            'Stock Market & Options Trading' => '📈 Stock Market & Options Trading',
+            'Forex & Currency Trading' => '💱 Forex & Currency Trading',
+            'Crypto & Web3 Trading' => '🪙 Crypto & Web3 Trading',
+            'Finance, Investment & Wealth' => '💰 Finance & Investment',
+            'E-Commerce & Dropshipping' => '🛍️ E-Commerce & Dropshipping',
+            'Digital Marketing & Lead Gen' => '🎯 Digital Marketing Agency',
+            'Job Hiring & Career Recruitment' => '💼 Job Hiring & Career',
+            'Education & Online Coaching' => '🎓 Education & Online Coaching',
+            'Real Estate & Property' => '🏢 Real Estate & Property',
+            'General Community' => '🌐 Other / General Community',
+        ];
+    }
 
     protected $casts = [
         'meta_ads_connected' => 'boolean',

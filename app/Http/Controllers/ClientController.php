@@ -34,8 +34,9 @@ class ClientController extends Controller
         $clients = $query->latest('id')->paginate(12)->withQueryString();
         $availableAdAccounts = AdAccount::with('metaBusiness')->orderBy('name')->get();
         $hasGlobalMetaConnection = MetaConnection::where('status', 'active')->exists();
+        $categories = Client::categories();
 
-        return view('clients.index', compact('clients', 'availableAdAccounts', 'hasGlobalMetaConnection'));
+        return view('clients.index', compact('clients', 'availableAdAccounts', 'hasGlobalMetaConnection', 'categories'));
     }
 
     public function create()
@@ -48,8 +49,9 @@ class ClientController extends Controller
         }
         $availableAdAccounts = AdAccount::with('metaBusiness')->orderBy('name')->get();
         $hasGlobalMetaConnection = MetaConnection::where('status', 'active')->exists();
+        $categories = Client::categories();
 
-        return view('clients.create', compact('suggestedKxCode', 'availableAdAccounts', 'hasGlobalMetaConnection'));
+        return view('clients.create', compact('suggestedKxCode', 'availableAdAccounts', 'hasGlobalMetaConnection', 'categories'));
     }
 
     public function store(Request $request)
@@ -64,6 +66,7 @@ class ClientController extends Controller
             'company_name' => ['required', 'string', 'max:255'],
             'client_name' => ['required', 'string', 'max:255'],
             'industry' => ['nullable', 'string', 'max:100'],
+            'category' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'ad_account_id' => ['nullable', 'exists:ad_accounts,id'],
@@ -73,6 +76,12 @@ class ClientController extends Controller
             'notes' => ['nullable', 'string'],
             'timezone' => ['nullable', 'string'],
         ]);
+
+        if (!empty($validated['category']) && empty($validated['industry'])) {
+            $validated['industry'] = $validated['category'];
+        } elseif (!empty($validated['industry']) && empty($validated['category'])) {
+            $validated['category'] = $validated['industry'];
+        }
 
         if (empty($validated['kx_code'])) {
             $count = Client::count() + 1;
@@ -181,8 +190,9 @@ class ClientController extends Controller
     {
         $availableAdAccounts = AdAccount::with('metaBusiness')->orderBy('name')->get();
         $hasGlobalMetaConnection = MetaConnection::where('status', 'active')->exists();
+        $categories = Client::categories();
 
-        return view('clients.edit', compact('client', 'availableAdAccounts', 'hasGlobalMetaConnection'));
+        return view('clients.edit', compact('client', 'availableAdAccounts', 'hasGlobalMetaConnection', 'categories'));
     }
 
     public function update(Request $request, Client $client)
@@ -192,6 +202,7 @@ class ClientController extends Controller
             'company_name' => ['required', 'string', 'max:255'],
             'client_name' => ['required', 'string', 'max:255'],
             'industry' => ['nullable', 'string', 'max:100'],
+            'category' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'ad_account_id' => ['nullable', 'exists:ad_accounts,id'],
@@ -201,6 +212,12 @@ class ClientController extends Controller
             'notes' => ['nullable', 'string'],
             'timezone' => ['nullable', 'string'],
         ]);
+
+        if (!empty($validated['category']) && empty($validated['industry'])) {
+            $validated['industry'] = $validated['category'];
+        } elseif (!empty($validated['industry']) && empty($validated['category'])) {
+            $validated['category'] = $validated['industry'];
+        }
 
         if ($request->hasFile('logo')) {
             if ($client->logo_path && !str_starts_with($client->logo_path, 'assets/')) {

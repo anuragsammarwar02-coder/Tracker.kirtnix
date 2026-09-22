@@ -63,11 +63,11 @@
           </span>
         </div>
 
-        <!-- Industry & Meta Connection Status -->
+        <!-- Category & Meta Connection Status -->
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--bg-subtle); border-radius: 6px; margin-bottom: 14px; font-size: 11.5px;">
-          <div>
-            <span style="color: var(--text-muted);">Industry:</span>
-            <strong style="color: var(--text-main);">{{ $client->industry ?? 'Stock Trading' }}</strong>
+          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%;">
+            <span style="color: var(--text-muted);">Category:</span>
+            <strong style="color: var(--text-main);" title="{{ $client->category ?? $client->industry ?? 'Stock Market & Options Trading' }}">{{ $client->category ?? $client->industry ?? 'Stock Trading' }}</strong>
           </div>
           <div>
             @if($client->adAccount)
@@ -164,8 +164,14 @@
             <input type="text" id="modal_client_name" name="client_name" class="form-input" placeholder="e.g. Nandu Meena" required />
           </div>
           <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" for="modal_industry">Industry / Niche</label>
-            <input type="text" id="modal_industry" name="industry" class="form-input" placeholder="Stock Trading" value="Stock Market & Options" />
+            <label class="form-label" for="modal_category">Category / Niche *</label>
+            <select id="modal_category" name="category" class="form-select" style="font-size: 12px;" required>
+              @foreach($categories as $catKey => $catLabel)
+                <option value="{{ $catKey }}" {{ $catKey === 'Stock Market & Options Trading' ? 'selected' : '' }}>
+                  {{ $catLabel }}
+                </option>
+              @endforeach
+            </select>
           </div>
         </div>
 

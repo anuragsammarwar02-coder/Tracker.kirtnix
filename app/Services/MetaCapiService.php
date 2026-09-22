@@ -87,6 +87,13 @@ class MetaCapiService
             'fbp' => $fbp,
         ]);
 
+        if (empty($customData['content_category'])) {
+            $customData['content_category'] = $landingPage->client?->category ?? $landingPage->client?->industry ?? 'Stock Market & Options Trading';
+        }
+        if (empty($customData['content_name'])) {
+            $customData['content_name'] = $landingPage->title ?? 'Telegram Landing Page';
+        }
+
         $apiVersion = Setting::get('meta_api_version', 'v21.0');
         $eventPayload = [
             'event_name' => $eventName,
@@ -170,6 +177,8 @@ class MetaCapiService
         $eventSourceUrl = $landingPage?->public_url ?? url('/lp/' . ($landingPage?->slug ?? 'kirtnix-digital'));
         $apiVersion = Setting::get('meta_api_version', 'v21.0');
 
+        $clientCategory = $click->client?->category ?? $click->client?->industry ?? ($landingPage?->client?->category ?? 'Stock Market & Options Trading');
+
         $eventPayload = [
             'event_name' => $eventName,
             'event_time' => $click->clicked_at ? $click->clicked_at->timestamp : time(),
@@ -180,6 +189,9 @@ class MetaCapiService
             'custom_data' => [
                 'button_text' => 'Join Telegram',
                 'destination_url' => $click->destination_url,
+                'content_category' => $clientCategory,
+                'content_name' => $landingPage?->title ?? 'Join Telegram CTA',
+                'content_type' => 'telegram_community',
                 'currency' => 'INR',
                 'value' => 0.00,
             ],
@@ -273,6 +285,8 @@ class MetaCapiService
         $eventSourceUrl = $landingPage?->public_url ?? url('/lp/' . ($landingPage?->slug ?? 'kirtnix-digital'));
         $apiVersion = Setting::get('meta_api_version', 'v21.0');
 
+        $clientCategory = $conversion->client?->category ?? $conversion->client?->industry ?? ($landingPage?->client?->category ?? 'Stock Market & Options Trading');
+
         $eventPayload = [
             'event_name' => $eventName,
             'event_time' => $conversion->event_time ? $conversion->event_time->timestamp : time(),
@@ -285,6 +299,9 @@ class MetaCapiService
                 'client_name' => $conversion->client?->company_name ?? 'Client',
                 'campaign_name' => $conversion->campaign?->name ?? $conversion->utm_campaign ?? 'Direct',
                 'source' => $conversion->source,
+                'content_category' => $clientCategory,
+                'content_name' => $conversion->channel?->title ?? $conversion->client?->company_name ?? 'Telegram Community',
+                'content_type' => 'telegram_community',
                 'currency' => 'INR',
                 'value' => 0.00,
             ],

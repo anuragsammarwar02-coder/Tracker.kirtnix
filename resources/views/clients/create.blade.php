@@ -47,8 +47,15 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="industry">Industry / Niche *</label>
-          <input type="text" id="industry" name="industry" class="form-input" placeholder="e.g. STOXK / Stock Market / Forex" value="{{ old('industry', 'Stock Market & Option Trading') }}" required />
+          <label class="form-label" for="category">Client Category / Niche *</label>
+          <select id="category" name="category" class="form-select" required>
+            @foreach($categories as $catKey => $catLabel)
+              <option value="{{ $catKey }}" {{ old('category', old('industry', 'Stock Market & Options Trading')) === $catKey ? 'selected' : '' }}>
+                {{ $catLabel }}
+              </option>
+            @endforeach
+          </select>
+          <div class="form-hint">Meta Conversions API (CAPI) will optimize for this specific niche audience.</div>
         </div>
       </div>
 
