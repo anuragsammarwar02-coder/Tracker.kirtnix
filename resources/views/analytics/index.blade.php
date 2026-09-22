@@ -173,7 +173,14 @@
               {{ $cp['name'] }}
             </a>
           </td>
-          <td><span style="font-weight: 600;">{{ $cp['client_name'] }}</span></td>
+          <td>
+            <span style="font-weight: 600;">{{ $cp['client_name'] }}</span>
+            @if(!empty($cp['client_category']))
+              <div style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 3px; margin-top: 2px;">
+                <span>🏷️</span> {{ $cp['client_category'] }}
+              </div>
+            @endif
+          </td>
           <td><strong>{{ $cp['currency_symbol'] }}{{ number_format($cp['spend'], 2) }}</strong></td>
           <td>{{ number_format($cp['reach']) }}</td>
           <td>{{ number_format($cp['impressions']) }}</td>

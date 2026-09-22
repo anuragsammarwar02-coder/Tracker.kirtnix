@@ -17,6 +17,7 @@
     <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
       @if($landingPage->client)
         Client: <a href="{{ route('clients.show', $landingPage->client) }}" style="color: var(--brand-yellow); font-weight: 600; text-decoration: none;">{{ $landingPage->client->company_name }}</a>
+        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #B45309; font-weight: 700; margin-left: 4px;">🏷️ {{ $landingPage->client->category ?? $landingPage->client->industry ?? 'Stock Market & Options Trading' }}</span>
       @else
         Client: <span style="color: var(--text-muted); font-style: italic;">Unassigned / Deleted Client</span>
       @endif

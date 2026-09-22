@@ -153,6 +153,7 @@ class AnalyticsController extends Controller
                 'id' => $camp->id,
                 'name' => $camp->name,
                 'client_name' => $camp->client?->company_name ?? 'Client',
+                'client_category' => $camp->client?->category ?? $camp->client?->industry ?? 'Stock Market & Options Trading',
                 'status' => $camp->status,
                 'spend' => $spend,
                 'currency_symbol' => $cSymbol,

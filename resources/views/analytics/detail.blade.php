@@ -93,8 +93,14 @@
                     <span>•</span>
                     @if($client)
                         <span>{{ $client->client_name ?? $client->company_name ?? 'Nandu Meena' }} ({{ $client->kx_code ?? 'KX-001' }})</span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200/90 shadow-2xs">
+                            🏷️ Category: {{ $client->category ?? $client->industry ?? 'Stock Market & Options Trading' }}
+                        </span>
                     @else
                         <span>Nandu Meena (KX-001)</span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200/90 shadow-2xs">
+                            🏷️ Category: Stock Market & Options Trading
+                        </span>
                     @endif
                 </div>
             </div>
@@ -253,10 +259,16 @@
                 </div>
 
                 <!-- Footer Sub-row -->
-                <div class="bg-[#f8fafc]/50 px-5 py-3.5 flex items-center justify-between">
+                <div class="bg-[#f8fafc]/50 px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">CAMPAIGNS</span>
                         <span class="text-slate-800 font-bold text-xs mt-0.5 block">{{ $campaigns->where('status', 'active')->count() + $campaigns->where('status', 'ACTIVE')->count() }} active / {{ $metaMetrics['campaigns_count'] ?? $campaigns->count() }} total</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">CLIENT NICHE / CATEGORY</span>
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200/90 shadow-2xs mt-0.5">
+                            🎯 {{ $client->category ?? $client->industry ?? 'Stock Market & Options Trading' }}
+                        </span>
                     </div>
                 </div>
             </div>
