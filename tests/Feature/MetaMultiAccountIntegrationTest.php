@@ -267,4 +267,128 @@ class MetaMultiAccountIntegrationTest extends TestCase
 
         $this->assertEquals((string) $connB->id, Setting::get('active_meta_connection_id'));
     }
+
+    public function test_ad_account_sync_traverses_multiple_pages_of_pagination(): void
+    {
+        $conn = MetaConnection::create([
+            'user_id' => $this->user->id,
+            'facebook_user_id' => 'fb_page_user',
+            'facebook_name' => 'Paginated Agency Account',
+            'access_token' => 'PAGE_TOKEN',
+            'status' => 'active',
+        ]);
+
+        Http::fake([
+            'https://graph.facebook.com/*/me/adaccounts?*page=2*' => Http::response([
+                'data' => [
+                    ['id' => 'act_100000000002', 'account_id' => '100000000002', 'name' => 'Page 2 Ad Account', 'currency' => 'INR', 'account_status' => 1, 'amount_spent' => 20000],
+                ],
+                'paging' => ['next' => null],
+            ], 200),
+            'https://graph.facebook.com/*/me/adaccounts*' => Http::response([
+                'data' => [
+                    ['id' => 'act_100000000001', 'account_id' => '100000000001', 'name' => 'Page 1 Ad Account', 'currency' => 'INR', 'account_status' => 1, 'amount_spent' => 10000],
+                ],
+                'paging' => [
+                    'next' => 'https://graph.facebook.com/v20.0/me/adaccounts?access_token=PAGE_TOKEN&page=2',
+                ],
+            ], 200),
+            'https://graph.facebook.com/*/me/assigned_ad_accounts*' => Http::response(['data' => []], 200),
+            'https://graph.facebook.com/*/me/businesses*' => Http::response(['data' => []], 200),
+            'https://graph.facebook.com/*/me/assigned_businesses*' => Http::response(['data' => []], 200),
+        ]);
+
+        $service = app(MetaSyncService::class);
+        $accounts = $service->syncAdAccounts($conn);
+
+        $accountIds = collect($accounts)->pluck('account_id')->toArray();
+        $this->assertContains('act_100000000001', $accountIds);
+        $this->assertContains('act_100000000002', $accountIds);
+        $this->assertEquals(2, AdAccount::where('meta_connection_id', $conn->id)->count());
+    }
+
+    public function test_quick_fetch_endpoint_fetches_and_persists_single_ad_account(): void
+    {
+        MetaConnection::create([
+            'user_id' => $this->user->id,
+            'facebook_user_id' => 'fb_quick_user',
+            'facebook_name' => 'Quick Fetch Profile',
+            'access_token' => 'QUICK_TOKEN',
+            'status' => 'active',
+        ]);
+
+        Http::fake([
+            'https://graph.facebook.com/*/act_1049354661209537/campaigns*' => Http::response(['data' => []], 200),
+            'https://graph.facebook.com/*/act_1049354661209537*' => Http::response([
+                'id' => 'act_1049354661209537',
+                'account_id' => '1049354661209537',
+                'name' => 'AK001 - Radhika Account',
+                'currency' => 'INR',
+                'account_status' => 1,
+                'spend_cap' => 100000,
+                'balance' => 0,
+                'amount_spent' => 500000,
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->user)->postJson(route('meta.ad_accounts.quick_fetch'), [
+            'account_id' => '1049354661209537',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'ad_account' => [
+                'name' => 'AK001 - Radhika Account',
+                'account_id' => 'act_1049354661209537',
+                'currency' => 'INR',
+            ],
+        ]);
+
+        $this->assertDatabaseHas('ad_accounts', [
+            'account_id' => 'act_1049354661209537',
+            'name' => 'AK001 - Radhika Account',
+        ]);
+    }
+
+    public function test_client_creation_with_custom_ad_account_id_fetches_and_links(): void
+    {
+        MetaConnection::create([
+            'user_id' => $this->user->id,
+            'facebook_user_id' => 'fb_client_link_user',
+            'facebook_name' => 'Link Profile',
+            'access_token' => 'LINK_TOKEN',
+            'status' => 'active',
+        ]);
+
+        Http::fake([
+            'https://graph.facebook.com/*/act_9988776655/campaigns*' => Http::response(['data' => []], 200),
+            'https://graph.facebook.com/*/act_9988776655*' => Http::response([
+                'id' => 'act_9988776655',
+                'account_id' => '9988776655',
+                'name' => 'Brand Custom Ad Account',
+                'currency' => 'INR',
+                'account_status' => 1,
+                'amount_spent' => 350000,
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->user)->post(route('clients.store'), [
+            'company_name' => 'Test Custom Link Client',
+            'client_name' => 'Rajesh Sharma',
+            'category' => 'Stock Market & Options Trading',
+            'custom_ad_account_id' => '9988776655',
+            'status' => 'active',
+        ]);
+
+        $response->assertRedirect();
+
+        $client = \App\Models\Client::where('company_name', 'Test Custom Link Client')->first();
+        $this->assertNotNull($client);
+        $this->assertNotNull($client->ad_account_id);
+
+        $adAcc = AdAccount::find($client->ad_account_id);
+        $this->assertEquals('act_9988776655', $adAcc->account_id);
+        $this->assertEquals('Brand Custom Ad Account', $adAcc->name);
+    }
 }

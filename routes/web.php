@@ -607,6 +607,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/meta/disconnect', [MetaIntegrationController::class, 'disconnect'])->name('meta.disconnect');
     Route::delete('/meta/connections/{metaConnection}', [MetaIntegrationController::class, 'disconnectConnection'])->name('meta.connections.destroy');
     Route::post('/meta/ad-accounts', [MetaIntegrationController::class, 'storeAdAccount'])->name('meta.ad_accounts.store');
+    Route::post('/meta/ad-accounts/quick-fetch', [MetaIntegrationController::class, 'quickFetch'])->name('meta.ad_accounts.quick_fetch');
     Route::delete('/meta/ad-accounts/{adAccount}', [MetaIntegrationController::class, 'destroyAdAccount'])->name('meta.ad_accounts.destroy');
 
     // 11. Notifications Center

@@ -586,8 +586,13 @@
       <form action="{{ route('clients.assign_ad_account', $client) }}" method="POST">
         @csrf
         
-        <div class="form-group" style="margin-bottom: 18px;">
-          <label class="form-label" for="modal_ad_account_id">Available Ad Accounts</label>
+        <div class="form-group" style="margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label class="form-label" for="modal_ad_account_id" style="margin-bottom: 0;">Available Ad Accounts</label>
+            <a href="{{ route('settings.index', ['tab' => 'meta']) }}" target="_blank" style="font-size: 11px; color: var(--accent-blue); text-decoration: none; font-weight: 600;">
+              🔄 Deep Sync All
+            </a>
+          </div>
           <select id="modal_ad_account_id" name="ad_account_id" class="form-select" style="width: 100%; padding: 8px 12px; font-size: 13px;">
             <option value="">-- Unassigned (Clear Ad Account) --</option>
             @foreach($availableAdAccounts as $acc)
@@ -596,6 +601,63 @@
               </option>
             @endforeach
           </select>
+
+          <!-- Quick Custom ID Entry Accordion -->
+          <div style="margin-top: 6px;" x-data="{ customOpen: false, inputId: '', fetching: false, fetchMsg: '', fetchErr: '' }">
+            <button type="button" @click="customOpen = !customOpen" style="background: none; border: none; padding: 0; font-size: 11px; color: #b45309; font-weight: 700; cursor: pointer; text-decoration: underline;">
+              <span x-text="customOpen ? '▲ Hide Custom Ad Account ID' : '➕ Can\'t find your account? Enter Ad Account ID directly'"></span>
+            </button>
+
+            <div x-show="customOpen" x-cloak style="margin-top: 8px; padding: 10px; background: var(--bg-subtle, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px;">
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-main); display: block; margin-bottom: 4px;">Enter Ad Account ID (e.g. 1049354661209537):</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" name="custom_ad_account_id" x-model="inputId" placeholder="e.g. 1049354661209537 or act_..." class="form-input" style="font-size: 12px; font-family: monospace;" />
+                <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px; white-space: nowrap;" :disabled="fetching || !inputId" @click="
+                  if(!inputId) return;
+                  fetching = true;
+                  fetchMsg = '';
+                  fetchErr = '';
+                  fetch('{{ route('meta.ad_accounts.quick_fetch') }}', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                      'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ account_id: inputId })
+                  })
+                  .then(res => res.json())
+                  .then(data => {
+                    fetching = false;
+                    if(data.success && data.ad_account) {
+                      fetchMsg = '✓ ' + data.ad_account.name + ' (' + data.ad_account.account_id + ') fetched & synced!';
+                      const sel = document.getElementById('modal_ad_account_id');
+                      if(sel) {
+                        let opt = Array.from(sel.options).find(o => o.value == data.ad_account.id);
+                        if(!opt) {
+                          opt = new Option(data.ad_account.name + ' (' + data.ad_account.account_id + ') · ' + data.ad_account.currency + ' · ' + data.ad_account.status, data.ad_account.id);
+                          sel.add(opt);
+                        }
+                        sel.value = data.ad_account.id;
+                      }
+                    } else {
+                      fetchErr = data.error || 'Failed to fetch account.';
+                    }
+                  })
+                  .catch(e => {
+                    fetching = false;
+                    fetchErr = 'Connection error: ' + e.message;
+                  });
+                ">
+                  <span x-show="!fetching">🔍 Fetch &amp; Select</span>
+                  <span x-show="fetching">Fetching...</span>
+                </button>
+              </div>
+              <div x-show="fetchMsg" style="font-size: 11px; color: #16a34a; font-weight: 600; margin-top: 4px;" x-text="fetchMsg"></div>
+              <div x-show="fetchErr" style="font-size: 11px; color: #dc2626; font-weight: 600; margin-top: 4px;" x-text="fetchErr"></div>
+            </div>
+          </div>
+
           @if(!$hasGlobalMetaConnection)
             <div class="form-hint" style="color: #b45309; margin-top: 6px;">
               ⚠️ Meta integration is not connected globally. Connect it in <a href="{{ route('settings.index', ['tab' => 'meta']) }}" style="color: var(--accent-blue);">Settings ➔ Meta</a>.

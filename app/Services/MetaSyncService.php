@@ -23,6 +23,39 @@ class MetaSyncService
     }
 
     /**
+     * Helper to fetch all pages from Meta Graph API using paging.next cursor / url
+     */
+    public function fetchPagedGraphApi(string $url, array $params = [], int $maxPages = 20): array
+    {
+        $allData = [];
+        $nextUrl = $url;
+        $page = 0;
+
+        while ($nextUrl && $page < $maxPages) {
+            $page++;
+            try {
+                $res = ($page === 1)
+                    ? Http::withoutVerifying()->timeout(15)->get($nextUrl, $params)
+                    : Http::withoutVerifying()->timeout(15)->get($nextUrl);
+
+                if ($res->successful() && !empty($res->json('data'))) {
+                    foreach ($res->json('data') as $item) {
+                        $allData[] = $item;
+                    }
+                    $nextUrl = $res->json('paging.next');
+                } else {
+                    break;
+                }
+            } catch (\Exception $e) {
+                Log::warning("fetchPagedGraphApi error on page {$page} for {$url}: " . $e->getMessage());
+                break;
+            }
+        }
+
+        return $allData;
+    }
+
+    /**
      * Validate an access token against Meta Graph API and get user / business / ad account details
      */
     public function validateToken(string $token): array
@@ -48,34 +81,35 @@ class MetaSyncService
             $userId = $profile['id'] ?? null;
             $userName = $profile['name'] ?? 'Meta Business User';
 
-            // Fetch Businesses
-            $businesses = [];
-            try {
-                $bizRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/me/businesses", [
-                    'access_token' => $token,
-                    'fields' => 'id,name,verification_status',
-                    'limit' => 50,
-                ]);
-                if ($bizRes->successful() && !empty($bizRes->json('data'))) {
-                    $businesses = $bizRes->json('data');
-                }
-            } catch (\Exception $e) {
-                Log::warning('validateToken businesses check: ' . $e->getMessage());
-            }
+            // Fetch Businesses with pagination
+            $businesses = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/businesses", [
+                'access_token' => $token,
+                'fields' => 'id,name,verification_status',
+                'limit' => 100,
+            ], 10);
 
-            // Fetch Ad Accounts
-            $adAccounts = [];
-            try {
-                $accRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/me/adaccounts", [
-                    'access_token' => $token,
-                    'fields' => 'id,account_id,name,currency,account_status,amount_spent,business{id,name,verification_status}',
-                    'limit' => 100,
-                ]);
-                if ($accRes->successful() && !empty($accRes->json('data'))) {
-                    $adAccounts = $accRes->json('data');
+            // Fetch Direct & Assigned Ad Accounts with pagination
+            $adAccounts = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/adaccounts", [
+                'access_token' => $token,
+                'fields' => 'id,account_id,name,currency,account_status,amount_spent,business{id,name,verification_status}',
+                'limit' => 100,
+            ], 20);
+
+            $assignedAccounts = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/assigned_ad_accounts", [
+                'access_token' => $token,
+                'fields' => 'id,account_id,name,currency,account_status,amount_spent,business{id,name,verification_status}',
+                'limit' => 100,
+            ], 20);
+
+            // Merge and deduplicate by account_id / id
+            $seenIds = [];
+            $allAccounts = [];
+            foreach (array_merge($adAccounts, $assignedAccounts) as $acc) {
+                $rawId = (string) ($acc['account_id'] ?? $acc['id'] ?? '');
+                if ($rawId && !isset($seenIds[$rawId])) {
+                    $seenIds[$rawId] = true;
+                    $allAccounts[] = $acc;
                 }
-            } catch (\Exception $e) {
-                Log::warning('validateToken ad accounts check: ' . $e->getMessage());
             }
 
             return [
@@ -85,9 +119,9 @@ class MetaSyncService
                 'email' => $profile['email'] ?? null,
                 'businesses_count' => count($businesses),
                 'businesses' => $businesses,
-                'ad_accounts_count' => count($adAccounts),
-                'ad_accounts' => $adAccounts,
-                'message' => "Token is valid! Found " . count($businesses) . " Business Portfolio(s) and " . count($adAccounts) . " Ad Account(s).",
+                'ad_accounts_count' => count($allAccounts),
+                'ad_accounts' => $allAccounts,
+                'message' => "Token is valid! Found " . count($businesses) . " Business Portfolio(s) and " . count($allAccounts) . " Ad Account(s).",
             ];
         } catch (\Exception $e) {
             return [
@@ -258,169 +292,148 @@ class MetaSyncService
     }
 
     /**
-     * Sync Businesses from Meta Graph API
+     * Sync Businesses from Meta Graph API with multi-page traversal
      */
     public function syncBusinesses(MetaConnection $connection): array
     {
         $token = $connection->access_token;
         $results = [];
+        $version = $this->getGraphApiVersion();
 
-        // Attempt live Graph API query
-        try {
-            $version = $this->getGraphApiVersion();
-            $res = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/me/businesses", [
-                'access_token' => $token,
-                'fields' => 'id,name,verification_status',
-                'limit' => 50,
-            ]);
+        // 1. Query /me/businesses with full pagination
+        $bizData = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/businesses", [
+            'access_token' => $token,
+            'fields' => 'id,name,verification_status',
+            'limit' => 100,
+        ], 10);
 
-            if ($res->successful() && !empty($res->json('data'))) {
-                foreach ($res->json('data') as $b) {
-                    $results[] = MetaBusiness::updateOrCreate(
-                        ['business_id' => $b['id']],
-                        [
-                            'meta_connection_id' => $connection->id,
-                            'name' => $b['name'] ?? ('Meta Business ' . $b['id']),
-                            'verification_status' => $b['verification_status'] ?? 'verified',
-                        ]
-                    );
-                }
-                return $results;
-            }
-        } catch (\Exception $e) {
-            Log::warning('Meta Graph API Businesses Error: ' . $e->getMessage());
+        // 2. Also query /me/assigned_businesses if available
+        $assignedBizData = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/assigned_businesses", [
+            'access_token' => $token,
+            'fields' => 'id,name,verification_status',
+            'limit' => 100,
+        ], 10);
+
+        $mergedBiz = array_merge($bizData, $assignedBizData);
+
+        foreach ($mergedBiz as $b) {
+            if (empty($b['id'])) continue;
+            $results[$b['id']] = MetaBusiness::updateOrCreate(
+                ['business_id' => $b['id']],
+                [
+                    'meta_connection_id' => $connection->id,
+                    'name' => $b['name'] ?? ('Meta Business ' . $b['id']),
+                    'verification_status' => $b['verification_status'] ?? 'verified',
+                ]
+            );
+        }
+
+        if (!empty($results)) {
+            return array_values($results);
         }
 
         $existing = MetaBusiness::where('meta_connection_id', $connection->id)->get()->all();
-        if (!empty($existing)) {
-            return $existing;
-        }
-
-        return [];
+        return $existing ?: [];
     }
 
     /**
-     * Sync Ad Accounts from Meta Graph API
+     * Sync Ad Accounts from Meta Graph API with multi-edge and multi-page traversal
      */
     public function syncAdAccounts(MetaConnection $connection): array
     {
         $token = $connection->access_token;
         $results = [];
+        $version = $this->getGraphApiVersion();
 
-        // 1. Attempt live Graph API query for direct Ad Accounts
-        try {
-            $version = $this->getGraphApiVersion();
-            $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$version}/me/adaccounts", [
-                'access_token' => $token,
-                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
-                'limit' => 100,
-            ]);
+        // Helper closure to process and persist an ad account item from Graph API
+        $processAccount = function(array $acc, ?int $forceBusinessId = null) use (&$results, $connection) {
+            $rawId = (string) ($acc['account_id'] ?? $acc['id'] ?? '');
+            if (empty($rawId)) return null;
 
-            if ($res->successful() && !empty($res->json('data'))) {
-                $accountsData = $res->json('data');
+            $numericId = preg_replace('/[^0-9]/', '', $rawId);
+            $accId = 'act_' . $numericId;
+            $statusNum = $acc['account_status'] ?? 1;
+            $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
 
-                foreach ($accountsData as $acc) {
-                    $rawId = (string) ($acc['account_id'] ?? $acc['id']);
-                    $accId = str_starts_with($rawId, 'act_') ? $rawId : ('act_' . $rawId);
-                    $statusNum = $acc['account_status'] ?? 1;
-                    $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
+            $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : (isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00);
+            $balance = isset($acc['balance']) ? ((float) $acc['balance'] / 100) : 0.00;
+            $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
 
-                    $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : (isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00);
-                    $balance = isset($acc['balance']) ? ((float) $acc['balance'] / 100) : 0.00;
-                    $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
-                    $dailyBudget = 0.00;
-
-                    // Authoritative Meta Business resolution:
-                    // Ad Account -> business -> business.id / business.name
-                    $metaBusinessId = null;
-                    if (!empty($acc['business']['id']) && !empty($acc['business']['name'])) {
-                        $metaBusiness = MetaBusiness::updateOrCreate(
-                            ['business_id' => $acc['business']['id']],
-                            [
-                                'meta_connection_id' => $connection->id,
-                                'name' => $acc['business']['name'],
-                                'verification_status' => $acc['business']['verification_status'] ?? 'verified',
-                            ]
-                        );
-                        $metaBusinessId = $metaBusiness->id;
-                    }
-
-                    $record = AdAccount::updateOrCreate(
-                        ['account_id' => $accId],
-                        [
-                            'meta_connection_id' => $connection->id,
-                            'meta_business_id' => $metaBusinessId,
-                            'name' => $acc['name'] ?? ('Meta Ad Account ' . $rawId),
-                            'currency' => $acc['currency'] ?? 'INR',
-                            'status' => $status,
-                            'spend_limit' => $spendLimit,
-                            'balance' => $balance,
-                            'lifetime_spend' => $lifetimeSpend,
-                            'active_daily_budget' => $dailyBudget,
-                            'payment_method' => 'Meta Billing',
-                            'is_active' => true,
-                            'last_synced_at' => now(),
-                        ]
-                    );
-
-                    $results[$accId] = $record;
-                }
+            // Authoritative Meta Business resolution:
+            $metaBusinessId = $forceBusinessId;
+            if (!$metaBusinessId && !empty($acc['business']['id']) && !empty($acc['business']['name'])) {
+                $metaBusiness = MetaBusiness::updateOrCreate(
+                    ['business_id' => $acc['business']['id']],
+                    [
+                        'meta_connection_id' => $connection->id,
+                        'name' => $acc['business']['name'],
+                        'verification_status' => $acc['business']['verification_status'] ?? 'verified',
+                    ]
+                );
+                $metaBusinessId = $metaBusiness->id;
             }
-        } catch (\Exception $e) {
-            Log::warning('Meta Graph API Ad Accounts Error: ' . $e->getMessage());
+
+            $record = AdAccount::updateOrCreate(
+                ['account_id' => $accId],
+                [
+                    'meta_connection_id' => $connection->id,
+                    'meta_business_id' => $metaBusinessId,
+                    'name' => $acc['name'] ?? ('Meta Ad Account ' . $numericId),
+                    'currency' => $acc['currency'] ?? 'INR',
+                    'status' => $status,
+                    'spend_limit' => $spendLimit,
+                    'balance' => $balance,
+                    'lifetime_spend' => $lifetimeSpend,
+                    'active_daily_budget' => 0.00,
+                    'payment_method' => 'Meta Billing',
+                    'is_active' => true,
+                    'last_synced_at' => now(),
+                ]
+            );
+
+            $results[$accId] = $record;
+            return $record;
+        };
+
+        // 1. Direct Ad Accounts (/me/adaccounts with full multi-page traversal)
+        $directAccounts = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/adaccounts", [
+            'access_token' => $token,
+            'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+            'limit' => 100,
+        ], 25);
+
+        foreach ($directAccounts as $acc) {
+            $processAccount($acc);
         }
 
-        // 2. Also check all businesses for client / owned ad accounts
-        try {
-            $version = $this->getGraphApiVersion();
-            $businesses = MetaBusiness::where('meta_connection_id', $connection->id)->get();
-            foreach ($businesses as $biz) {
-                foreach (['client_ad_accounts', 'owned_ad_accounts'] as $edge) {
-                    $bizRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/{$biz->business_id}/{$edge}", [
-                        'access_token' => $token,
-                        'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent',
-                        'limit' => 50,
-                    ]);
-                    if ($bizRes->successful() && !empty($bizRes->json('data'))) {
-                        foreach ($bizRes->json('data') as $acc) {
-                            $rawId = (string) ($acc['account_id'] ?? $acc['id']);
-                            $accId = str_starts_with($rawId, 'act_') ? $rawId : ('act_' . $rawId);
-                            if (isset($results[$accId])) {
-                                continue;
-                            }
-                            $statusNum = $acc['account_status'] ?? 1;
-                            $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
-                            $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : 0.00;
-                            $balance = isset($acc['balance']) ? ((float) $acc['balance'] / 100) : 0.00;
-                            $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
+        // 2. Assigned Ad Accounts (/me/assigned_ad_accounts with multi-page traversal)
+        $assignedAccounts = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/assigned_ad_accounts", [
+            'access_token' => $token,
+            'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+            'limit' => 100,
+        ], 25);
 
-                            $record = AdAccount::updateOrCreate(
-                                ['account_id' => $accId],
-                                [
-                                    'meta_connection_id' => $connection->id,
-                                    'meta_business_id' => $biz->id,
-                                    'name' => $acc['name'] ?? ('Meta Ad Account ' . $rawId),
-                                    'currency' => $acc['currency'] ?? 'INR',
-                                    'status' => $status,
-                                    'spend_limit' => $spendLimit,
-                                    'balance' => $balance,
-                                    'lifetime_spend' => $lifetimeSpend,
-                                    'active_daily_budget' => 0.00,
-                                    'payment_method' => 'Meta Billing',
-                                    'is_active' => true,
-                                    'last_synced_at' => now(),
-                                ]
-                            );
-                            $results[$accId] = $record;
-                        }
-                    }
-                }
-            }
-        } catch (\Exception $e) {
-            Log::warning('Meta Graph API Business Ad Accounts Error: ' . $e->getMessage());
+        foreach ($assignedAccounts as $acc) {
+            $processAccount($acc);
         }
 
-        // 3. Re-sync and link all existing Ad Accounts in database
+        // 3. Check all Business Portfolios for adaccounts, client_ad_accounts, owned_ad_accounts (with multi-page traversal)
+        $businesses = MetaBusiness::where('meta_connection_id', $connection->id)->get();
+        foreach ($businesses as $biz) {
+            foreach (['adaccounts', 'client_ad_accounts', 'owned_ad_accounts'] as $edge) {
+                $bizAccounts = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/{$biz->business_id}/{$edge}", [
+                    'access_token' => $token,
+                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+                    'limit' => 100,
+                ], 25);
+
+                foreach ($bizAccounts as $acc) {
+                    $processAccount($acc, $biz->id);
+                }
+            }
+        }
+
+        // 4. Re-sync and link all existing Ad Accounts in database
         $allDbAccounts = AdAccount::all();
         foreach ($allDbAccounts as $dbAcc) {
             if (!$dbAcc->meta_connection_id) {
@@ -435,7 +448,7 @@ class MetaSyncService
             }
         }
 
-        // 4. If no accounts exist yet, auto-populate primary agency account and link client accounts with 0.00 defaults
+        // 5. If no accounts exist yet, auto-populate primary agency account and link client accounts with 0.00 defaults
         if (empty($results)) {
             $business = MetaBusiness::where('meta_connection_id', $connection->id)->first();
 
@@ -486,6 +499,105 @@ class MetaSyncService
         }
 
         return array_values($results);
+    }
+
+    /**
+     * Fetch a specific single Ad Account by raw ID (e.g. act_123456789 or 123456789) directly from Meta Graph API
+     */
+    public function fetchAndSaveSingleAdAccount(string $rawId, ?MetaConnection $connection = null): ?AdAccount
+    {
+        $cleanId = trim($rawId);
+        if (empty($cleanId)) {
+            return null;
+        }
+
+        $numericId = preg_replace('/[^0-9]/', '', $cleanId);
+        if (empty($numericId)) {
+            return null;
+        }
+
+        $actId = 'act_' . $numericId;
+
+        // Find connection with access token
+        $conn = $connection 
+            ?: MetaConnection::where('status', 'active')->latest('id')->first()
+            ?: MetaConnection::first();
+
+        $token = $conn?->access_token ?: Setting::get('meta_system_user_token');
+        $version = $this->getGraphApiVersion();
+
+        if ($token) {
+            try {
+                $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$version}/{$actId}", [
+                    'access_token' => $token,
+                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+                ]);
+
+                if ($res->successful() && !empty($res->json())) {
+                    $acc = $res->json();
+                    $statusNum = $acc['account_status'] ?? 1;
+                    $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
+                    $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : (isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00);
+                    $balance = isset($acc['balance']) ? ((float) $acc['balance'] / 100) : 0.00;
+                    $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
+
+                    $metaBusinessId = null;
+                    if (!empty($acc['business']['id']) && !empty($acc['business']['name'])) {
+                        $metaBusiness = MetaBusiness::updateOrCreate(
+                            ['business_id' => $acc['business']['id']],
+                            [
+                                'meta_connection_id' => $conn?->id,
+                                'name' => $acc['business']['name'],
+                                'verification_status' => $acc['business']['verification_status'] ?? 'verified',
+                            ]
+                        );
+                        $metaBusinessId = $metaBusiness->id;
+                    }
+
+                    $adAccount = AdAccount::updateOrCreate(
+                        ['account_id' => $actId],
+                        [
+                            'meta_connection_id' => $conn?->id,
+                            'meta_business_id' => $metaBusinessId,
+                            'name' => $acc['name'] ?? ('Meta Ad Account ' . $numericId),
+                            'currency' => $acc['currency'] ?? 'INR',
+                            'status' => $status,
+                            'spend_limit' => $spendLimit,
+                            'balance' => $balance,
+                            'lifetime_spend' => $lifetimeSpend,
+                            'active_daily_budget' => 0.00,
+                            'payment_method' => 'Meta Billing',
+                            'is_active' => true,
+                            'last_synced_at' => now(),
+                        ]
+                    );
+
+                    // Also sync its campaigns
+                    $this->syncSingleAdAccount($adAccount);
+
+                    return $adAccount;
+                }
+            } catch (\Exception $e) {
+                Log::warning("fetchAndSaveSingleAdAccount Graph API error for {$actId}: " . $e->getMessage());
+            }
+        }
+
+        // Fallback: create or retrieve local record
+        return AdAccount::firstOrCreate(
+            ['account_id' => $actId],
+            [
+                'meta_connection_id' => $conn?->id,
+                'name' => 'Ad Account ' . $numericId,
+                'currency' => 'INR',
+                'status' => 'Active',
+                'spend_limit' => 0.00,
+                'balance' => 0.00,
+                'lifetime_spend' => 0.00,
+                'active_daily_budget' => 0.00,
+                'is_active' => true,
+                'last_synced_at' => now(),
+            ]
+        );
     }
 
     /**

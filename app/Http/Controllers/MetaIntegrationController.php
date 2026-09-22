@@ -392,4 +392,37 @@ class MetaIntegrationController extends Controller
 
         return redirect()->back()->with('success', "Ad Account '{$name}' removed successfully.");
     }
+
+    /**
+     * Quick-fetch or discover a single Meta Ad Account by ID directly via Graph API
+     */
+    public function quickFetch(Request $request): JsonResponse
+    {
+        $rawId = $request->input('account_id');
+        if (empty($rawId)) {
+            return response()->json(['success' => false, 'error' => 'Ad Account ID is required.'], 422);
+        }
+
+        try {
+            $adAccount = $this->metaSyncService->fetchAndSaveSingleAdAccount($rawId);
+            if (!$adAccount) {
+                return response()->json(['success' => false, 'error' => 'Could not fetch Ad Account from Meta. Please verify account ID and access.'], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Ad Account '{$adAccount->name}' ({$adAccount->account_id}) fetched successfully!",
+                'ad_account' => [
+                    'id' => $adAccount->id,
+                    'name' => $adAccount->name,
+                    'account_id' => $adAccount->account_id,
+                    'currency' => $adAccount->currency,
+                    'status' => $adAccount->status,
+                    'spend' => number_format((float) $adAccount->lifetime_spend, 2),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => 'Error fetching ad account: ' . $e->getMessage()], 500);
+        }
+    }
 }

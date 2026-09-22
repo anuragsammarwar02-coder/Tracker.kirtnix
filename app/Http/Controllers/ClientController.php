@@ -99,6 +99,16 @@ class ClientController extends Controller
         }
 
         $adAccountId = $request->input('ad_account_id');
+        $customAdAccountId = $request->input('custom_ad_account_id');
+
+        if (!empty($customAdAccountId)) {
+            $syncService = app(\App\Services\MetaSyncService::class);
+            $fetchedAcc = $syncService->fetchAndSaveSingleAdAccount($customAdAccountId);
+            if ($fetchedAcc) {
+                $adAccountId = $fetchedAcc->id;
+            }
+        }
+
         $validated['ad_account_id'] = $adAccountId ?: null;
         $validated['meta_ads_connected'] = !empty($adAccountId) || $request->has('meta_ads_connected');
 
@@ -237,6 +247,16 @@ class ClientController extends Controller
         }
 
         $adAccountId = $request->input('ad_account_id');
+        $customAdAccountId = $request->input('custom_ad_account_id');
+
+        if (!empty($customAdAccountId)) {
+            $syncService = app(\App\Services\MetaSyncService::class);
+            $fetchedAcc = $syncService->fetchAndSaveSingleAdAccount($customAdAccountId);
+            if ($fetchedAcc) {
+                $adAccountId = $fetchedAcc->id;
+            }
+        }
+
         $validated['ad_account_id'] = $adAccountId ?: null;
         $validated['meta_ads_connected'] = !empty($adAccountId) || $request->has('meta_ads_connected');
 
@@ -267,24 +287,31 @@ class ClientController extends Controller
      */
     public function assignAdAccount(Request $request, Client $client)
     {
-        $validated = $request->validate([
-            'ad_account_id' => ['nullable', 'exists:ad_accounts,id'],
-        ]);
+        $adAccountId = $request->input('ad_account_id');
+        $customAdAccountId = $request->input('custom_ad_account_id');
 
-        $adAccountId = $validated['ad_account_id'] ?? null;
+        if (!empty($customAdAccountId)) {
+            $syncService = app(\App\Services\MetaSyncService::class);
+            $fetchedAcc = $syncService->fetchAndSaveSingleAdAccount($customAdAccountId);
+            if ($fetchedAcc) {
+                $adAccountId = $fetchedAcc->id;
+            }
+        }
 
         if ($adAccountId) {
-            $adAccount = AdAccount::findOrFail($adAccountId);
-            $client->update([
-                'ad_account_id' => $adAccountId,
-                'meta_ads_connected' => true,
-            ]);
+            $adAccount = AdAccount::find($adAccountId);
+            if ($adAccount) {
+                $client->update([
+                    'ad_account_id' => $adAccountId,
+                    'meta_ads_connected' => true,
+                ]);
 
-            // Sync bi-directional reference
-            AdAccount::where('id', $adAccountId)->update(['client_id' => $client->id]);
-            AdAccount::where('client_id', $client->id)->where('id', '!=', $adAccountId)->update(['client_id' => null]);
+                // Sync bi-directional reference
+                AdAccount::where('id', $adAccountId)->update(['client_id' => $client->id]);
+                AdAccount::where('client_id', $client->id)->where('id', '!=', $adAccountId)->update(['client_id' => null]);
 
-            return back()->with('success', "Meta Ad Account '{$adAccount->name}' ({$adAccount->account_id}) assigned to {$client->company_name} successfully.");
+                return back()->with('success', "Meta Ad Account '{$adAccount->name}' ({$adAccount->account_id}) assigned to {$client->company_name} successfully.");
+            }
         }
 
         // Unassign Ad Account
