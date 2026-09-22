@@ -75,7 +75,7 @@ class DashboardController extends Controller
             $campaigns = Campaign::where(function ($q) use ($activeClientIds, $assignedAdAccountIds) {
                 $q->whereIn('client_id', $activeClientIds)
                   ->orWhereIn('ad_account_id', $assignedAdAccountIds);
-            })->get();
+            })->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])->get();
 
             $totalSpend = (float) $campaigns->sum('spend');
             if ($totalSpend <= 0 && !empty($assignedAdAccountIds)) {
@@ -114,6 +114,7 @@ class DashboardController extends Controller
             $adAccount = $c->adAccount;
             $cCampaigns = Campaign::where('client_id', $c->id)
                 ->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))
+                ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
                 ->get();
 
             $spend = (float) $cCampaigns->sum('spend');

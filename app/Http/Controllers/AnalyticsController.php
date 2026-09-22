@@ -63,7 +63,7 @@ class AnalyticsController extends Controller
                 if ($adAccount) {
                     $q->orWhere('ad_account_id', $adAccount->id);
                 }
-            });
+            })->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED']);
             $campaigns = $campaignsQuery->get();
             $totalSpend = (float) $campaigns->sum('spend');
             if ($totalSpend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
@@ -79,7 +79,7 @@ class AnalyticsController extends Controller
             $campaigns = Campaign::where(function ($q) use ($activeClientIds, $assignedAdAccountIds) {
                 $q->whereIn('client_id', $activeClientIds)
                   ->orWhereIn('ad_account_id', $assignedAdAccountIds);
-            })->get();
+            })->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])->get();
 
             $totalSpend = (float) $campaigns->sum('spend');
             if ($totalSpend <= 0 && !empty($assignedAdAccountIds)) {
@@ -216,7 +216,10 @@ class AnalyticsController extends Controller
         $clientComparison = $clients->map(function ($c) {
             $joins = $c->telegramEvents()->where('event_type', 'join')->count();
             $adAccount = $c->adAccount;
-            $cCampaigns = Campaign::where('client_id', $c->id)->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))->get();
+            $cCampaigns = Campaign::where('client_id', $c->id)
+                ->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))
+                ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
+                ->get();
             $spend = (float) $cCampaigns->sum('spend');
             if ($spend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
                 $spend = (float) $adAccount->lifetime_spend;
@@ -409,11 +412,15 @@ class AnalyticsController extends Controller
 
         // Campaigns Live from Meta for this client's assigned ad account
         if ($adAccount) {
-            $campaigns = Campaign::where('ad_account_id', $adAccount->id)->get();
+            $campaigns = Campaign::where('ad_account_id', $adAccount->id)
+                ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
+                ->get();
             if ($campaigns->isEmpty() || $request->has('sync')) {
                 try {
                     app(\App\Services\MetaSyncService::class)->syncSingleAdAccount($adAccount);
-                    $campaigns = Campaign::where('ad_account_id', $adAccount->id)->get();
+                    $campaigns = Campaign::where('ad_account_id', $adAccount->id)
+                        ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
+                        ->get();
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::warning('Meta auto sync error: ' . $e->getMessage());
                 }
@@ -529,16 +536,31 @@ class AnalyticsController extends Controller
         // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation from Meta)
         $totalBudgetSpend = (float) ($metaMetrics['spend_total'] ?? ($metaMetrics['lifetime_spend'] ?? ($adAccount?->lifetime_spend ?: $campaigns->sum('spend'))));
 
-        // 3. Box 3: Remaining Budget (Actual Meta Ad Account remaining account spend limit)
-        // Formula: remaining_budget = account_spend_limit - lifetime_amount_spent
+        // 3. Box 3: Remaining Budget (Actual Meta Ad Account remaining account spend limit / available funds)
         $remainingBudget = 0.00;
         $hasRemainingBudget = false;
         $remainingSource = 'No spend limit configured in Meta billing';
 
-        if ($spendCap > 0) {
-            $remainingBudget = max(0, $spendCap - $totalBudgetSpend);
+        if ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
+            $remainingBudget = $spendCap - $totalBudgetSpend;
             $hasRemainingBudget = true;
             $remainingSource = 'Remaining fund in Meta ad account (Account spend limit from Meta)';
+        } elseif ($accountBalance > 0) {
+            $remainingBudget = $accountBalance;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Prepaid fund balance in Meta billing';
+        } elseif ($campaignLifetimeBudgetSum > $totalBudgetSpend) {
+            $remainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Remaining campaign lifetime budget';
+        } elseif ($activeDailyBudgetSum > 0) {
+            $remainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
+            $hasRemainingBudget = true;
+            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day)';
+        } elseif ($spendCap > 0) {
+            $remainingBudget = 0.00;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Spend limit reached in Meta (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit / ' . ($adAccount?->currency_symbol ?? '₹') . number_format($totalBudgetSpend, 2) . ' spent)';
         } else {
             $remainingBudget = 0.00;
             $hasRemainingBudget = false;
@@ -636,7 +658,7 @@ class AnalyticsController extends Controller
         $endDate = $rangeInfo[1] ?? now();
 
         $adAccount = $client?->adAccount ?? ($client ? AdAccount::where('client_id', $client->id)->first() : null);
-        $campaigns = $adAccount ? Campaign::where('ad_account_id', $adAccount->id)->get() : collect();
+        $campaigns = $adAccount ? Campaign::where('ad_account_id', $adAccount->id)->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])->get() : collect();
         $activeCampName = $campaigns->first()?->name 
             ?? $client?->adAccount?->campaigns?->first()?->name 
             ?? ($client ? Campaign::where('client_id', $client->id)->first()?->name : null);

@@ -658,13 +658,17 @@ class MetaSyncService
                 $adAccount->lifetime_spend = $lifetimeSpend;
             }
 
-            // 2. Sync campaigns and insights from Meta with pagination
+            // 2. Sync campaigns and insights from Meta with pagination (Strictly active and paused campaigns, exclude archived)
+            Campaign::where('ad_account_id', $adAccount->id)
+                ->whereIn('status', ['archived', 'ARCHIVED', 'Archived'])
+                ->delete();
+
             $allCampaignData = [];
             $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
             $params = [
                 'access_token' => $token,
                 'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
-                'effective_status' => '["ACTIVE","PAUSED","ARCHIVED","IN_PROCESS","WITH_ISSUES"]',
+                'effective_status' => '["ACTIVE","PAUSED","IN_PROCESS","WITH_ISSUES"]',
                 'limit' => 100,
             ];
 
@@ -677,7 +681,10 @@ class MetaSyncService
 
                 if ($res->successful() && !empty($res->json('data'))) {
                     foreach ($res->json('data') as $c) {
-                        $allCampaignData[] = $c;
+                        $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? ''));
+                        if (!in_array($rawStatus, ['archived', 'deleted'])) {
+                            $allCampaignData[] = $c;
+                        }
                     }
                     $nextUrl = $res->json('paging.next');
                 } else {
@@ -687,6 +694,11 @@ class MetaSyncService
 
             if (!empty($allCampaignData)) {
                 foreach ($allCampaignData as $c) {
+                    $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'active'));
+                    if (in_array($rawStatus, ['archived', 'deleted'])) {
+                        continue;
+                    }
+
                     $insights = $c['insights']['data'][0] ?? [];
                     $spend = (float) ($insights['spend'] ?? 0);
                     $reach = (int) ($insights['reach'] ?? 0);
@@ -701,8 +713,7 @@ class MetaSyncService
                         : 0;
                     $costPerSub = $actualSubscribers > 0 ? round($spend / $actualSubscribers, 2) : 0.00;
 
-                    $rawStatus = $c['status'] ?? $c['effective_status'] ?? 'ACTIVE';
-                    $status = ucfirst(strtolower($rawStatus));
+                    $status = ucfirst($rawStatus);
 
                     $campaign = Campaign::updateOrCreate(
                         ['campaign_id' => 'cmp_' . $c['id']],
@@ -720,7 +731,7 @@ class MetaSyncService
                             'status' => $status,
                             'spend' => $spend,
                             'budget' => $lifetimeBudget,
-                            'active_daily_budget' => $dailyBudget,
+                            'active_daily_budget' => in_array(strtolower($status), ['active', '1']) ? $dailyBudget : 0.00,
                             'reach' => $reach,
                             'impressions' => $impressions,
                             'subscribers' => $actualSubscribers,
@@ -764,7 +775,9 @@ class MetaSyncService
         $token = $connection?->access_token ?? \App\Models\Setting::get('meta_system_user_token');
 
         // Baseline / Database values for this exact account
-        $campaigns = Campaign::where('ad_account_id', $adAccount->id)->get();
+        $campaigns = Campaign::where('ad_account_id', $adAccount->id)
+            ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
+            ->get();
         $campaignIds = $campaigns->pluck('id');
         $currency = $adAccount->currency ?? 'INR';
         $currencySymbol = $adAccount->currency_symbol ?? '₹';
@@ -927,13 +940,13 @@ class MetaSyncService
                     $adAccount->lifetime_spend = $spendTotal;
                 }
 
-                // 5. Dynamic Campaigns with Pagination
+                // 5. Dynamic Campaigns with Pagination (Active & Paused campaigns only, exclude archived)
                 $allCampaigns = [];
                 $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
                 $params = [
                     'access_token' => $token,
                     'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
-                    'effective_status' => '["ACTIVE","PAUSED","ARCHIVED","IN_PROCESS","WITH_ISSUES"]',
+                    'effective_status' => '["ACTIVE","PAUSED","IN_PROCESS","WITH_ISSUES"]',
                     'limit' => 100,
                 ];
 
@@ -943,7 +956,12 @@ class MetaSyncService
                     $cRes = Http::withoutVerifying()->timeout(15)->get($nextUrl, $params);
                     if ($cRes->successful() && !empty($cRes->json('data'))) {
                         $cData = $cRes->json('data');
-                        $allCampaigns = array_merge($allCampaigns, $cData);
+                        foreach ($cData as $c) {
+                            $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? ''));
+                            if (!in_array($rawStatus, ['archived', 'deleted'])) {
+                                $allCampaigns[] = $c;
+                            }
+                        }
                         $paging = $cRes->json('paging');
                         $nextUrl = $paging['next'] ?? null;
                         $params = [];
@@ -955,6 +973,11 @@ class MetaSyncService
                 if (!empty($allCampaigns)) {
                     $campaignsCount = count($allCampaigns);
                     foreach ($allCampaigns as $c) {
+                        $cStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'paused'));
+                        if (in_array($cStatus, ['archived', 'deleted'])) {
+                            continue;
+                        }
+
                         $rawCampId = $c['id'];
                         $campInsights = $c['insights']['data'][0] ?? [];
                         $cSpend = isset($campInsights['spend']) ? (float) $campInsights['spend'] : 0.00;
@@ -963,8 +986,6 @@ class MetaSyncService
                         $cDailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
                         $cLifetimeBudget = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
                         $cBudgetRemaining = isset($c['budget_remaining']) ? ((float) $c['budget_remaining'] / 100) : 0.00;
-
-                        $cStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'paused'));
 
                         $campModel = Campaign::updateOrCreate(
                             ['campaign_id' => $rawCampId],

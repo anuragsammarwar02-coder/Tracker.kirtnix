@@ -29,6 +29,7 @@ class ReportController extends Controller
             $adAccount = $activeClient->adAccount;
             $campaigns = Campaign::where('client_id', $activeClient->id)
                 ->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))
+                ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
                 ->get();
             $totalSpend = (float) $campaigns->sum('spend');
             if ($totalSpend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
@@ -41,7 +42,10 @@ class ReportController extends Controller
         } else {
             $activeClientIds = $clients->pluck('id')->all();
             $assignedAdAccountIds = $clients->pluck('ad_account_id')->filter()->all();
-            $campaigns = Campaign::whereIn('client_id', $activeClientIds)->orWhereIn('ad_account_id', $assignedAdAccountIds)->get();
+            $campaigns = Campaign::where(function ($q) use ($activeClientIds, $assignedAdAccountIds) {
+                $q->whereIn('client_id', $activeClientIds)
+                  ->orWhereIn('ad_account_id', $assignedAdAccountIds);
+            })->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])->get();
             $totalSpend = (float) $campaigns->sum('spend');
             if ($totalSpend <= 0 && !empty($assignedAdAccountIds)) {
                 $totalSpend = (float) \App\Models\AdAccount::whereIn('id', $assignedAdAccountIds)->sum('lifetime_spend');
@@ -58,7 +62,10 @@ class ReportController extends Controller
         // Client wise breakdown
         $clientBreakdown = $clients->map(function ($c) {
             $adAccount = $c->adAccount;
-            $cCampaigns = Campaign::where('client_id', $c->id)->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))->get();
+            $cCampaigns = Campaign::where('client_id', $c->id)
+                ->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))
+                ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
+                ->get();
             $spend = (float) $cCampaigns->sum('spend');
             if ($spend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
                 $spend = (float) $adAccount->lifetime_spend;

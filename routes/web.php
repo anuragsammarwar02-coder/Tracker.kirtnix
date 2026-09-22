@@ -505,6 +505,15 @@ Route::get('/api/public/kx.js', function (\Illuminate\Http\Request $request) {
     ]);
 });
 
+// Session Keepalive to prevent 419 Page Expired
+Route::get('/session-keepalive', function () {
+    return response()->json([
+        'status' => 'alive',
+        'csrf_token' => csrf_token(),
+        'timestamp' => now()->toISOString(),
+    ]);
+})->middleware('web');
+
 /*
 |--------------------------------------------------------------------------
 | Authentication Routes

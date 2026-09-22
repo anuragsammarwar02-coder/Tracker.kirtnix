@@ -1193,6 +1193,26 @@
               this.searchModalOpen = !this.searchModalOpen;
             }
           });
+
+          // Periodic Session & CSRF Keepalive (Every 5 minutes to prevent 419 Page Expired)
+          setInterval(() => {
+            fetch('/session-keepalive', {
+              headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data && data.csrf_token) {
+                document.querySelectorAll('input[name="_token"]').forEach(input => {
+                  input.value = data.csrf_token;
+                });
+                const metaCsrf = document.querySelector('meta[name="csrf-token"]');
+                if (metaCsrf) {
+                  metaCsrf.setAttribute('content', data.csrf_token);
+                }
+              }
+            })
+            .catch(() => {});
+          }, 300000);
         },
         toggleTheme() {
           this.theme = this.theme === 'light' ? 'dark' : 'light';

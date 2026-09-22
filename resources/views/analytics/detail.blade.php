@@ -205,7 +205,7 @@
             <div class="flex items-center gap-2.5">
                 <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">AD ACCOUNT (LIVE FROM META) <span class="sr-only">Ad Account (Live from Meta)</span></h2>
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                    Budget from: {{ ($adAccount?->spend_limit ?? 0) > 0 ? 'Account spend limit' : 'No spend limit set in Meta' }}
+                    Budget from: {{ ($adAccount?->spend_limit ?? 0) > 0 ? 'Account spend limit from Meta' : 'No spend limit set in Meta' }}
                 </span>
             </div>
 
