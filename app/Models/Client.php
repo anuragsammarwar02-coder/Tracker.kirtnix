@@ -136,4 +136,14 @@ class Client extends Model
     {
         return $this->adAccount?->currency_symbol ?? '₹';
     }
+
+    public function getCategoryAttribute($value): string
+    {
+        return $value ?: ($this->attributes['industry'] ?? 'Stock Market & Options Trading');
+    }
+
+    public function getIndustryAttribute($value): string
+    {
+        return $value ?: ($this->attributes['category'] ?? 'Stock Market & Options Trading');
+    }
 }

@@ -138,6 +138,12 @@ class AppServiceProvider extends ServiceProvider
                             if (!$hasAdAccountCol && count($clientCols) > 0) {
                                 \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN ad_account_id INTEGER NULL;");
                             }
+
+                            $hasCategoryCol = collect($clientCols)->firstWhere('name', 'category') !== null;
+                            if (!$hasCategoryCol && count($clientCols) > 0) {
+                                \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN category VARCHAR(100) NULL DEFAULT 'Stock Market & Options Trading';");
+                                \Illuminate\Support\Facades\DB::statement("UPDATE clients SET category = industry WHERE (category IS NULL OR category = '') AND industry IS NOT NULL AND industry != '';");
+                            }
                         } catch (\Throwable $ce) {
                             @error_log('AppServiceProvider clients column check: ' . $ce->getMessage());
                         }

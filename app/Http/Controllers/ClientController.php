@@ -102,6 +102,15 @@ class ClientController extends Controller
         $validated['ad_account_id'] = $adAccountId ?: null;
         $validated['meta_ads_connected'] = !empty($adAccountId) || $request->has('meta_ads_connected');
 
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('clients', 'category')) {
+            try {
+                \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN category VARCHAR(100) NULL DEFAULT 'Stock Market & Options Trading';");
+                \Illuminate\Support\Facades\DB::statement("UPDATE clients SET category = industry WHERE (category IS NULL OR category = '') AND industry IS NOT NULL AND industry != '';");
+            } catch (\Throwable $e) {
+                unset($validated['category']);
+            }
+        }
+
         $client = Client::create($validated);
 
         if ($adAccountId) {
@@ -230,6 +239,15 @@ class ClientController extends Controller
         $adAccountId = $request->input('ad_account_id');
         $validated['ad_account_id'] = $adAccountId ?: null;
         $validated['meta_ads_connected'] = !empty($adAccountId) || $request->has('meta_ads_connected');
+
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('clients', 'category')) {
+            try {
+                \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN category VARCHAR(100) NULL DEFAULT 'Stock Market & Options Trading';");
+                \Illuminate\Support\Facades\DB::statement("UPDATE clients SET category = industry WHERE (category IS NULL OR category = '') AND industry IS NOT NULL AND industry != '';");
+            } catch (\Throwable $e) {
+                unset($validated['category']);
+            }
+        }
 
         $client->update($validated);
 
