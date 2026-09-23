@@ -34,8 +34,24 @@ class RedirectService
             ];
         }
 
-        // Check if invite link with + (e.g. https://t.me/+abc12345 or t.me/+abc12345)
-        if (preg_match('/(?:https?:\/\/)?(?:www\.)?t\.me\/\+([a-zA-Z0-9_\-]+)/i', $cleanUrl, $matches)) {
+        // Already tg:// protocol
+        if (str_starts_with($cleanUrl, 'tg://join?invite=')) {
+            $inviteHash = substr($cleanUrl, strlen('tg://join?invite='));
+            return [
+                'deep_link' => $cleanUrl,
+                'web_url' => "https://t.me/+{$inviteHash}",
+            ];
+        }
+        if (str_starts_with($cleanUrl, 'tg://resolve?domain=')) {
+            $params = substr($cleanUrl, strlen('tg://resolve?domain='));
+            return [
+                'deep_link' => $cleanUrl,
+                'web_url' => "https://t.me/{$params}",
+            ];
+        }
+
+        // Check if invite link with + (e.g. https://t.me/+abc12345, telegram.me/+abc12345, or t.me/+abc12345)
+        if (preg_match('/(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)\/\+([a-zA-Z0-9_\-]+)/i', $cleanUrl, $matches)) {
             $inviteHash = $matches[1];
             return [
                 'deep_link' => "tg://join?invite={$inviteHash}",
@@ -43,8 +59,8 @@ class RedirectService
             ];
         }
 
-        // Check if joinchat link (e.g. https://t.me/joinchat/abc12345)
-        if (preg_match('/(?:https?:\/\/)?(?:www\.)?t\.me\/joinchat\/([a-zA-Z0-9_\-]+)/i', $cleanUrl, $matches)) {
+        // Check if joinchat link (e.g. https://t.me/joinchat/abc12345 or telegram.me/joinchat/abc12345)
+        if (preg_match('/(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)\/joinchat\/([a-zA-Z0-9_\-]+)/i', $cleanUrl, $matches)) {
             $inviteHash = $matches[1];
             return [
                 'deep_link' => "tg://join?invite={$inviteHash}",
@@ -52,12 +68,13 @@ class RedirectService
             ];
         }
 
-        // Check if standard public channel username (e.g. https://t.me/username)
-        if (preg_match('/(?:https?:\/\/)?(?:www\.)?t\.me\/([a-zA-Z0-9_]{4,})/i', $cleanUrl, $matches)) {
+        // Check if standard public channel username or bot with query (e.g. https://t.me/username or https://t.me/username?start=xxx)
+        if (preg_match('/(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog)\/([a-zA-Z0-9_]{4,})(?:\?(.*))?/i', $cleanUrl, $matches)) {
             $username = $matches[1];
+            $query = isset($matches[2]) && !empty($matches[2]) ? '&' . $matches[2] : '';
             return [
-                'deep_link' => "tg://resolve?domain={$username}",
-                'web_url' => "https://t.me/{$username}",
+                'deep_link' => "tg://resolve?domain={$username}{$query}",
+                'web_url' => "https://t.me/{$username}" . (isset($matches[2]) && !empty($matches[2]) ? '?' . $matches[2] : ''),
             ];
         }
 
