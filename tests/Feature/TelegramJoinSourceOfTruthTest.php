@@ -884,6 +884,60 @@ class TelegramJoinSourceOfTruthTest extends TestCase
         $this->assertTrue($adRow['is_ads']);
         $this->assertEquals('Paid Scalping Masterclass', $adRow['campaign']);
     }
+
+    /**
+     * Requirement: If a user sends join request multiple times, it is deduplicated
+     * and produces exactly 1 event and 1 subscriber count.
+     */
+    public function test_duplicate_join_request_by_same_user_is_deduplicated_and_counts_once(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+
+        $repeatUserId = 99112244;
+
+        // First request
+        $reqPayload1 = [
+            'update_id' => 9501,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => ['id' => $repeatUserId, 'first_name' => 'Vipul', 'last_name' => 'Tank', 'username' => 'vipultank'],
+                'user_chat_id' => $repeatUserId,
+                'date' => time() - 300,
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $reqPayload1)->assertStatus(200);
+
+        // Second request by same user (repeat request)
+        $reqPayload2 = [
+            'update_id' => 9502,
+            'chat_join_request' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => ['id' => $repeatUserId, 'first_name' => 'Vipul', 'last_name' => 'Tank', 'username' => 'vipultank'],
+                'user_chat_id' => $repeatUserId,
+                'date' => time(),
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $reqPayload2)->assertStatus(200);
+
+        // Verify only 1 TelegramEvent exists for this user in this channel
+        $this->assertEquals(
+            1,
+            TelegramEvent::where('telegram_channel_id', $channel->id)->where('telegram_user_id', (string) $repeatUserId)->count()
+        );
+
+        // Verify only 1 Conversion exists
+        $this->assertEquals(
+            1,
+            Conversion::where('telegram_channel_id', $channel->id)->where('telegram_user_id', (string) $repeatUserId)->count()
+        );
+
+        // Verify analytics view
+        $detailRes = $this->get(route('analytics.detail', $client->kx_code));
+        $detailRes->assertStatus(200);
+        $this->assertEquals(1, substr_count($detailRes->getContent(), '@vipultank'));
+    }
 }
 
 

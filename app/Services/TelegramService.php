@@ -736,14 +736,14 @@ class TelegramService
             }
         } else {
             // 2. Join / Join Request Event:
-            // Check if there is already a pending event for this user (approval transition)
+            // Check if there is already an existing event for this user (approval transition or duplicate join request)
             $existingPendingEvent = null;
-            if ($channel && $eventType === 'join') {
+            if ($channel && in_array($eventType, ['join', 'join_request'])) {
                 $existingPendingEvent = TelegramEvent::where('telegram_channel_id', $channel->id)
                     ->where('telegram_user_id', $telegramUserId)
                     ->where(function ($q) {
-                        $q->where('event_type', 'join_request')
-                          ->orWhereIn('status_after', ['join_request', 'pending', 'restricted']);
+                        $q->whereIn('event_type', ['join_request', 'join'])
+                          ->orWhereIn('status_after', ['join_request', 'pending', 'restricted', 'approved', 'member']);
                     })
                     ->latest('id')
                     ->first();
@@ -850,29 +850,38 @@ class TelegramService
             }
         }
 
-        // Record or update TelegramEvent (Single row transition from pending -> approved)
-        $existingPendingEvent = null;
-        if ($channel && $eventType === 'join') {
-            $existingPendingEvent = TelegramEvent::where('telegram_channel_id', $channel->id)
+        // Record or update TelegramEvent (Single row transition from pending -> approved, deduplicate repeat join requests)
+        $existingEvent = null;
+        if ($channel && in_array($eventType, ['join', 'join_request'])) {
+            $existingEvent = TelegramEvent::where('telegram_channel_id', $channel->id)
                 ->where('telegram_user_id', $telegramUserId)
                 ->where(function ($q) {
-                    $q->where('event_type', 'join_request')
-                      ->orWhereIn('status_after', ['join_request', 'pending', 'restricted']);
+                    $q->whereIn('event_type', ['join_request', 'join'])
+                      ->orWhereIn('status_after', ['join_request', 'pending', 'restricted', 'approved', 'member']);
                 })
                 ->latest('id')
                 ->first();
         }
 
-        if ($existingPendingEvent) {
-            $existingPendingEvent->update([
-                'event_type' => 'join',
-                'status_before' => $oldStatus ?: 'pending',
-                'status_after' => $newStatus,
-                'campaign_id' => $existingPendingEvent->campaign_id ?: $resolvedCampaignId,
-                'update_id' => $updateId,
-                'raw_payload' => $update,
-            ]);
-            $telegramEvent = $existingPendingEvent;
+        if ($existingEvent) {
+            if ($eventType === 'join') {
+                $existingEvent->update([
+                    'event_type' => 'join',
+                    'status_before' => $oldStatus ?: 'pending',
+                    'status_after' => $newStatus,
+                    'campaign_id' => $existingEvent->campaign_id ?: $resolvedCampaignId,
+                    'update_id' => $updateId,
+                    'raw_payload' => $update,
+                ]);
+            } else {
+                // Duplicate join_request: update metadata in place without creating a new row
+                $existingEvent->update([
+                    'campaign_id' => $existingEvent->campaign_id ?: $resolvedCampaignId,
+                    'update_id' => $updateId,
+                    'raw_payload' => $update,
+                ]);
+            }
+            $telegramEvent = $existingEvent;
         } else {
             $telegramEvent = TelegramEvent::create([
                 'telegram_bot_id' => $bot->id,

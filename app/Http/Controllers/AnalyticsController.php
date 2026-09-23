@@ -449,12 +449,19 @@ class AnalyticsController extends Controller
         $subscribers = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->count();
         $directJoins = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->where(function($q) {
             $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
-        })->count();
-        $approvedMembers = (clone $eventsQuery)->whereIn('status_after', ['member', 'approved', 'administrator'])->count();
+        })->distinct('telegram_user_id')->count('telegram_user_id');
+        $approvedMembers = (clone $eventsQuery)->whereIn('status_after', ['member', 'approved', 'administrator'])->distinct('telegram_user_id')->count('telegram_user_id');
         if ($approvedMembers === 0 && $subscribers > 0) {
             $approvedMembers = $subscribers;
         }
-        $pendingRequests = (clone $eventsQuery)->whereIn('event_type', ['pending', 'join_request'])->count();
+        $pendingRequests = (clone $eventsQuery)
+            ->where(function($q) {
+                $q->whereIn('event_type', ['pending', 'join_request'])
+                  ->orWhereIn('status_after', ['pending', 'join_request', 'restricted']);
+            })
+            ->whereNotIn('status_after', ['approved', 'member', 'administrator', 'creator', 'left', 'kicked', 'banned'])
+            ->distinct('telegram_user_id')
+            ->count('telegram_user_id');
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
         // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account and date range
@@ -603,8 +610,8 @@ class AnalyticsController extends Controller
                 $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                     ->from('telegram_events as te2')
                     ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
-                    ->where('te2.event_type', 'join')
-                    ->where('telegram_events.event_type', 'join_request');
+                    ->whereColumn('te2.id', '>', 'telegram_events.id')
+                    ->whereIn('te2.event_type', ['join', 'join_request', 'leave']);
             })
             ->latest('event_time')
             ->paginate(15)
@@ -683,12 +690,19 @@ class AnalyticsController extends Controller
         $subscribers = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->distinct('telegram_user_id')->count('telegram_user_id') ?: (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->count();
         $directJoins = (clone $eventsQuery)->whereIn('event_type', ['join', 'join_request'])->where(function($q) {
             $q->where('source', 'direct')->orWhereNull('source')->orWhere('source', '');
-        })->count();
-        $approvedMembers = (clone $eventsQuery)->whereIn('status_after', ['member', 'approved', 'administrator'])->count();
+        })->distinct('telegram_user_id')->count('telegram_user_id');
+        $approvedMembers = (clone $eventsQuery)->whereIn('status_after', ['member', 'approved', 'administrator'])->distinct('telegram_user_id')->count('telegram_user_id');
         if ($approvedMembers === 0 && $subscribers > 0) {
             $approvedMembers = $subscribers;
         }
-        $pendingRequests = (clone $eventsQuery)->whereIn('event_type', ['pending', 'join_request'])->count();
+        $pendingRequests = (clone $eventsQuery)
+            ->where(function($q) {
+                $q->whereIn('event_type', ['pending', 'join_request'])
+                  ->orWhereIn('status_after', ['pending', 'join_request', 'restricted']);
+            })
+            ->whereNotIn('status_after', ['approved', 'member', 'administrator', 'creator', 'left', 'kicked', 'banned'])
+            ->distinct('telegram_user_id')
+            ->count('telegram_user_id');
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
         // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account and date range
@@ -745,8 +759,8 @@ class AnalyticsController extends Controller
                 $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                     ->from('telegram_events as te2')
                     ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
-                    ->where('te2.event_type', 'join')
-                    ->where('telegram_events.event_type', 'join_request');
+                    ->whereColumn('te2.id', '>', 'telegram_events.id')
+                    ->whereIn('te2.event_type', ['join', 'join_request', 'leave']);
             })
             ->latest('event_time')
             ->limit(15)
@@ -830,8 +844,8 @@ class AnalyticsController extends Controller
                     $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                         ->from('telegram_events as te2')
                         ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
-                        ->where('te2.event_type', 'join')
-                        ->where('telegram_events.event_type', 'join_request');
+                        ->whereColumn('te2.id', '>', 'telegram_events.id')
+                        ->whereIn('te2.event_type', ['join', 'join_request', 'leave']);
                 })
                 ->count(),
             'timestamp' => now()->format('n/j/Y, g:i:s A'),
