@@ -266,6 +266,8 @@
     if (!deepLink && webUrl) {
       if (webUrl.indexOf('t.me/+') !== -1) {
         deepLink = 'tg://join?invite=' + webUrl.split('t.me/+')[1];
+      } else if (webUrl.indexOf('t.me/joinchat/') !== -1) {
+        deepLink = 'tg://join?invite=' + webUrl.split('t.me/joinchat/')[1];
       } else if (webUrl.indexOf('t.me/') !== -1) {
         deepLink = 'tg://resolve?domain=' + webUrl.split('t.me/')[1];
       }
