@@ -109,6 +109,12 @@
             <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
                 <!-- Date Range Dropdown Form -->
                 <form method="GET" action="{{ url()->current() }}" id="dateRangeForm" class="flex items-center">
+                    @if(!empty($statusFilter))
+                        <input type="hidden" name="status" value="{{ $statusFilter }}">
+                    @endif
+                    @if(request('search'))
+                        <input type="hidden" name="search" value="{{ request('search') }}">
+                    @endif
                     <div class="relative">
                         <div class="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:border-slate-300 transition">
                             <svg class="w-3.5 h-3.5 text-slate-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -441,17 +447,22 @@
                     </div>
                 </div>
 
-                <!-- 9. Subscribers (Highlighted Yellow Border Card) -->
-                <div class="bg-[#fefce8] p-5 rounded-2xl border-2 border-[#fef08a] shadow-sm flex flex-col justify-between min-h-[115px] relative">
+                <!-- 9. Subscribers (Highlighted Yellow Border Card - Clickable filter) -->
+                <a href="{{ request()->fullUrlWithQuery(['status' => ($statusFilter === 'approved' ? null : 'approved'), 'page' => null]) }}#join-history-section" class="bg-[#fefce8] p-5 rounded-2xl border-2 {{ $statusFilter === 'approved' ? 'border-yellow-500 ring-2 ring-yellow-400/40' : 'border-[#fef08a]' }} shadow-sm flex flex-col justify-between min-h-[115px] relative group hover:border-yellow-400 transition cursor-pointer text-left block">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-slate-700">Subscribers</span>
-                        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                        <span class="text-xs font-semibold text-slate-700 group-hover:text-yellow-900 transition">Subscribers</span>
+                        <div class="flex items-center gap-1.5">
+                            @if($statusFilter === 'approved')
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-300 text-yellow-900">Filtered</span>
+                            @endif
+                            <svg class="w-4 h-4 text-slate-600 group-hover:translate-y-[-1px] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                        </div>
                     </div>
                     <div>
                         <span id="kpi-subscribers" class="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">{{ number_format($kpis['subscribers']) }}</span>
-                        <p class="text-[11px] text-slate-500 mt-0.5">Actual Telegram joins</p>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Actual Telegram joins • <span class="underline group-hover:text-slate-900 font-medium">{{ $statusFilter === 'approved' ? 'Clear filter' : 'View approved' }}</span></p>
                     </div>
-                </div>
+                </a>
 
                 <!-- 10. Cost / subscriber -->
                 <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
@@ -465,42 +476,83 @@
                     </div>
                 </div>
 
-                <!-- 11. Pending join requests -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
+                <!-- 11. Pending join requests (Clickable filter) -->
+                <a href="{{ request()->fullUrlWithQuery(['status' => ($statusFilter === 'pending' ? null : 'pending'), 'page' => null]) }}#join-history-section" class="bg-white p-5 rounded-2xl border {{ $statusFilter === 'pending' ? 'border-amber-400 ring-2 ring-amber-300/40 bg-amber-50/20' : 'border-slate-200/90' }} shadow-sm flex flex-col justify-between min-h-[115px] group hover:border-slate-300 transition cursor-pointer text-left block">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">Pending join requests</span>
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span class="text-xs font-medium text-slate-500 group-hover:text-slate-800 transition">Pending join requests</span>
+                        <div class="flex items-center gap-1.5">
+                            @if($statusFilter === 'pending')
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">Filtered</span>
+                            @endif
+                            <svg class="w-4 h-4 text-slate-400 group-hover:translate-y-[-1px] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
                     </div>
                     <div>
                         <span id="kpi-pending-requests" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['pending_requests']) }}</span>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Private channel approvals</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Private channel approvals • <span class="underline group-hover:text-slate-800 font-medium">{{ $statusFilter === 'pending' ? 'Clear filter' : 'View pending' }}</span></p>
                     </div>
-                </div>
+                </a>
 
-                <!-- 12. Channel leaves -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-sm flex flex-col justify-between min-h-[115px]">
+                <!-- 12. Channel leaves (Clickable filter) -->
+                <a href="{{ request()->fullUrlWithQuery(['status' => ($statusFilter === 'left' ? null : 'left'), 'page' => null]) }}#join-history-section" class="bg-white p-5 rounded-2xl border {{ $statusFilter === 'left' ? 'border-rose-400 ring-2 ring-rose-300/40 bg-rose-50/20' : 'border-slate-200/90' }} shadow-sm flex flex-col justify-between min-h-[115px] group hover:border-slate-300 transition cursor-pointer text-left block">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-medium text-slate-500">Channel leaves</span>
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        <span class="text-xs font-medium text-slate-500 group-hover:text-slate-800 transition">Channel leaves</span>
+                        <div class="flex items-center gap-1.5">
+                            @if($statusFilter === 'left')
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-200 text-rose-900">Filtered</span>
+                            @endif
+                            <svg class="w-4 h-4 text-slate-400 group-hover:translate-y-[-1px] transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        </div>
                     </div>
                     <div>
                         <span id="kpi-backouts" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ number_format($kpis['backouts']) }}</span>
-                        <p class="text-[11px] text-slate-400 mt-0.5">Left channel / unsubs</p>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Left channel / unsubs • <span class="underline group-hover:text-slate-800 font-medium">{{ $statusFilter === 'left' ? 'Clear filter' : 'View left' }}</span></p>
                     </div>
-                </div>
+                </a>
             </div>
         </div>
 
         <!-- 6. COMPLETE JOIN HISTORY TABLE -->
-        <div class="space-y-2.5">
+        <div id="join-history-section" class="space-y-2.5">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">COMPLETE JOIN HISTORY <span class="sr-only">Complete Join History</span></h2>
-                <span id="joinHistoryCount" class="text-[11px] text-slate-400 font-mono">{{ $joinHistory->total() }} events</span>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">COMPLETE JOIN HISTORY <span class="sr-only">Complete Join History</span></h2>
+                    @if(!empty($statusFilter))
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold {{ $statusFilter === 'approved' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : ($statusFilter === 'pending' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-rose-50 text-rose-800 border border-rose-200') }}">
+                            <span class="w-1.5 h-1.5 rounded-full {{ $statusFilter === 'approved' ? 'bg-emerald-500' : ($statusFilter === 'pending' ? 'bg-amber-500' : 'bg-rose-500') }}"></span>
+                            Filtered: {{ ucfirst($statusFilter) }} ({{ $joinHistory->total() }})
+                            <a href="{{ request()->fullUrlWithQuery(['status' => null, 'page' => null]) }}#join-history-section" class="ml-1 hover:text-slate-900 font-extrabold text-[13px] leading-none" title="Clear status filter">×</a>
+                        </span>
+                    @endif
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <!-- Status Filter Dropdown Form -->
+                    <form method="GET" action="{{ url()->current() }}" id="statusFilterForm" class="flex items-center">
+                        <input type="hidden" name="date_range" value="{{ $dateRange }}">
+                        @if(request('search'))
+                            <input type="hidden" name="search" value="{{ request('search') }}">
+                        @endif
+                        <div class="relative flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:border-slate-300 transition">
+                            <svg class="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                            <label for="statusFilterSelect" class="text-slate-500 mr-1.5 font-medium">Status:</label>
+                            <select id="statusFilterSelect" name="status" onchange="document.getElementById('statusFilterForm').submit()" class="bg-transparent text-slate-800 text-xs font-bold focus:outline-none cursor-pointer pr-4 appearance-none">
+                                <option value="" {{ empty($statusFilter) ? 'selected' : '' }}>All Statuses (All Events)</option>
+                                <option value="approved" {{ $statusFilter === 'approved' ? 'selected' : '' }}>✅ Approved (Subscribed)</option>
+                                <option value="pending" {{ $statusFilter === 'pending' ? 'selected' : '' }}>⏳ Pending (Requests)</option>
+                                <option value="left" {{ $statusFilter === 'left' ? 'selected' : '' }}>🚪 Left (Unsubscribed)</option>
+                            </select>
+                            <svg class="w-3.5 h-3.5 text-slate-400 -ml-2 pointer-events-none shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        </div>
+                    </form>
+
+                    <span id="joinHistoryCount" class="text-[11px] text-slate-400 font-mono whitespace-nowrap bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200/60">{{ $joinHistory->total() }} events</span>
+                </div>
             </div>
 
             <div class="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto custom-scrollbar">
-                    <table class="w-full text-left border-collapse text-xs">
+                <table class="w-full text-left border-collapse text-xs">
                         <thead>
                             <tr class="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
                                 <th class="py-3 px-5">SUBSCRIBER</th>
@@ -604,8 +656,20 @@
                                 <td colspan="9" class="py-8 px-5 text-center text-slate-400 font-medium">
                                     <div class="flex flex-col items-center justify-center space-y-1">
                                         <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                                        <span class="text-xs font-semibold text-slate-600">No join events recorded yet for this client</span>
-                                        <span class="text-[11px] text-slate-400">Join events and subscriber conversions will appear here in real-time as users enter your Telegram channel.</span>
+                                        <span class="text-xs font-semibold text-slate-600">
+                                            @if(!empty($statusFilter))
+                                                No {{ $statusFilter }} events found for this filter
+                                            @else
+                                                No join events recorded yet for this client
+                                            @endif
+                                        </span>
+                                        <span class="text-[11px] text-slate-400">
+                                            @if(!empty($statusFilter))
+                                                Try selecting "All Statuses" or choosing a different date range.
+                                            @else
+                                                Join events and subscriber conversions will appear here in real-time as users enter your Telegram channel.
+                                            @endif
+                                        </span>
                                     </div>
                                 </td>
                             </tr>

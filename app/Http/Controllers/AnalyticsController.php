@@ -592,9 +592,10 @@ class AnalyticsController extends Controller
         // Complete Join History Table with filters (Actual subscriber joins and leaves - excludes raw channel_post)
         $eventFilter = $request->input('event_type');
         $sourceFilter = $request->input('source');
+        $statusFilter = strtolower($request->input('status', ''));
         $search = $request->input('search');
 
-        $joinHistory = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
+        $joinHistoryQuery = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
             ->whereIn('event_type', ['join', 'join_request', 'leave'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
             ->when($eventFilter, fn($q) => $q->where('event_type', $eventFilter))
@@ -605,7 +606,32 @@ class AnalyticsController extends Controller
                         ->orWhere('first_name', 'like', "%{$search}%")
                         ->orWhere('telegram_user_id', 'like', "%{$search}%");
                 });
-            })
+            });
+
+        // Apply Status Filter (Approved, Pending, Left)
+        if ($statusFilter === 'approved') {
+            $joinHistoryQuery->where(function ($q) {
+                $q->whereIn('status_after', ['approved', 'member', 'administrator', 'creator'])
+                  ->orWhere(function ($sq) {
+                      $sq->whereIn('event_type', ['join', 'approved'])
+                         ->whereNotIn('status_after', ['left', 'kicked', 'banned', 'pending', 'join_request', 'restricted']);
+                  });
+            });
+        } elseif ($statusFilter === 'pending') {
+            $joinHistoryQuery->where(function ($q) {
+                $q->where(function ($sq) {
+                    $sq->whereIn('event_type', ['pending', 'join_request'])
+                       ->orWhereIn('status_after', ['pending', 'join_request', 'restricted']);
+                })->whereNotIn('status_after', ['approved', 'member', 'administrator', 'creator', 'left', 'kicked', 'banned']);
+            });
+        } elseif ($statusFilter === 'left') {
+            $joinHistoryQuery->where(function ($q) {
+                $q->where('event_type', 'leave')
+                  ->orWhereIn('status_after', ['left', 'kicked', 'banned']);
+            });
+        }
+
+        $joinHistory = $joinHistoryQuery
             ->whereNotExists(function ($sub) {
                 $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                     ->from('telegram_events as te2')
@@ -633,6 +659,7 @@ class AnalyticsController extends Controller
             'syncedAt',
             'eventFilter',
             'sourceFilter',
+            'statusFilter',
             'search'
         ));
     }
@@ -752,9 +779,53 @@ class AnalyticsController extends Controller
         $singleCampName = ($campaigns && $campaigns->count() === 1) ? $campaigns->first()->name : null;
 
         // Recent Real-Time Events for Dynamic Table Update
-        $latestEvents = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
+        $statusFilter = strtolower($request->input('status', ''));
+        $search = $request->input('search');
+
+        $latestEventsQuery = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
             ->whereIn('event_type', ['join', 'join_request', 'leave'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($sq) use ($search) {
+                    $sq->where('telegram_username', 'like', "%{$search}%")
+                        ->orWhere('first_name', 'like', "%{$search}%")
+                        ->orWhere('telegram_user_id', 'like', "%{$search}%");
+                });
+            });
+
+        if ($statusFilter === 'approved') {
+            $latestEventsQuery->where(function ($q) {
+                $q->whereIn('status_after', ['approved', 'member', 'administrator', 'creator'])
+                  ->orWhere(function ($sq) {
+                      $sq->whereIn('event_type', ['join', 'approved'])
+                         ->whereNotIn('status_after', ['left', 'kicked', 'banned', 'pending', 'join_request', 'restricted']);
+                  });
+            });
+        } elseif ($statusFilter === 'pending') {
+            $latestEventsQuery->where(function ($q) {
+                $q->where(function ($sq) {
+                    $sq->whereIn('event_type', ['pending', 'join_request'])
+                       ->orWhereIn('status_after', ['pending', 'join_request', 'restricted']);
+                })->whereNotIn('status_after', ['approved', 'member', 'administrator', 'creator', 'left', 'kicked', 'banned']);
+            });
+        } elseif ($statusFilter === 'left') {
+            $latestEventsQuery->where(function ($q) {
+                $q->where('event_type', 'leave')
+                  ->orWhereIn('status_after', ['left', 'kicked', 'banned']);
+            });
+        }
+
+        $totalEventsCount = (clone $latestEventsQuery)
+            ->whereNotExists(function ($sub) {
+                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                    ->from('telegram_events as te2')
+                    ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
+                    ->whereColumn('te2.id', '>', 'telegram_events.id')
+                    ->whereIn('te2.event_type', ['join', 'join_request', 'leave']);
+            })
+            ->count();
+
+        $latestEvents = $latestEventsQuery
             ->whereNotExists(function ($sub) {
                 $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                     ->from('telegram_events as te2')
@@ -838,16 +909,7 @@ class AnalyticsController extends Controller
                 'backouts' => number_format($backouts),
             ],
             'events' => $latestEvents,
-            'total_events' => TelegramEvent::whereIn('event_type', ['join', 'join_request', 'leave'])
-                ->when($client, fn($q) => $q->where('client_id', $client->id))
-                ->whereNotExists(function ($sub) {
-                    $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                        ->from('telegram_events as te2')
-                        ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
-                        ->whereColumn('te2.id', '>', 'telegram_events.id')
-                        ->whereIn('te2.event_type', ['join', 'join_request', 'leave']);
-                })
-                ->count(),
+            'total_events' => $totalEventsCount,
             'timestamp' => now()->format('n/j/Y, g:i:s A'),
         ]);
     }
