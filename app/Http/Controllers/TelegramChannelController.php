@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\TelegramBot;
 use App\Models\TelegramChannel;
+use App\Models\LandingPage;
+use App\Models\Cta;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class TelegramChannelController extends Controller
 {
@@ -85,15 +89,51 @@ class TelegramChannelController extends Controller
 
         $clientName = $channel->fresh()->client ? $channel->fresh()->client->company_name : 'Unassigned';
 
+        if ($clientId) {
+            $bot = $channel->bot ?? TelegramBot::where('client_id', $clientId)->first() ?? TelegramBot::where('is_global', true)->first();
+            $inviteDestination = null;
+
+            if ($bot && !empty($bot->bot_token) && !empty($channel->telegram_chat_id)) {
+                try {
+                    $apiUrl = "https://api.telegram.org/bot{$bot->bot_token}/createChatInviteLink";
+                    $res = Http::timeout(6)->post($apiUrl, [
+                        'chat_id' => $channel->telegram_chat_id,
+                        'name' => "kx_client_{$clientId}",
+                        'creates_join_request' => true,
+                    ]);
+                    $json = $res->json();
+                    if ($res->successful() && ($json['ok'] ?? false)) {
+                        $inviteDestination = $json['result']['invite_link'] ?? null;
+                    }
+                } catch (\Throwable $e) {
+                    Log::info("assignClient createChatInviteLink note: " . $e->getMessage());
+                }
+            }
+
+            if (!$inviteDestination && !empty($channel->username)) {
+                $inviteDestination = 'https://t.me/' . ltrim($channel->username, '@');
+            }
+
+            if ($inviteDestination) {
+                // Sync destination URL across this client's landing pages and CTAs
+                LandingPage::where('client_id', $clientId)->update([
+                    'telegram_destination' => $inviteDestination,
+                ]);
+                Cta::where('client_id', $clientId)->update([
+                    'telegram_destination' => $inviteDestination,
+                ]);
+            }
+        }
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => "Channel '{$channel->title}' assigned to {$clientName}.",
+                'message' => "Channel '{$channel->title}' assigned to {$clientName} and landing pages synced.",
                 'channel' => $channel->fresh()->load('client'),
             ]);
         }
 
-        return back()->with('success', "Channel '{$channel->title}' assigned to {$clientName}.");
+        return back()->with('success', "Channel '{$channel->title}' assigned to {$clientName} and landing pages synced.");
     }
 
     /**

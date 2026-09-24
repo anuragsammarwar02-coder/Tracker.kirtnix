@@ -401,12 +401,19 @@ class TelegramService
         TrackingSession $session,
         string $visitorId
     ): array {
-        // Resolve target channel and bot
-        $channel = TelegramChannel::where('landing_page_id', $landingPage->id)
-            ->orWhere('client_id', $landingPage->client_id)
-            ->first();
+        // Resolve target channel and bot for this specific landing page / client
+        $channel = null;
+        if ($landingPage->id) {
+            $channel = TelegramChannel::where('landing_page_id', $landingPage->id)->where('is_active', true)->first();
+        }
+        if (!$channel && $landingPage->client_id) {
+            $channel = TelegramChannel::where('client_id', $landingPage->client_id)->where('is_active', true)->latest('id')->first();
+        }
 
-        $bot = $channel ? $channel->bot : TelegramBot::where('client_id', $landingPage->client_id)->first();
+        $bot = $channel ? $channel->bot : (
+            TelegramBot::where('client_id', $landingPage->client_id)->where('is_active', true)->first()
+            ?? TelegramBot::where('is_global', true)->where('is_active', true)->latest('id')->first()
+        );
 
         // Check if an active invite link already exists for this session
         $existingInvite = TelegramInvite::where('tracking_session_id', $session->id)
@@ -447,10 +454,16 @@ class TelegramService
             }
         }
 
-        // Deterministic unique invite fallback for development / offline sandbox
+        // Deterministic invite fallback
         if (!$inviteLink) {
-            $uniqueHash = substr(md5($visitorId . $session->id . config('app.key')), 0, 16);
-            $inviteLink = "https://t.me/+kx_{$uniqueHash}";
+            if ($channel && !empty($channel->username)) {
+                $inviteLink = 'https://t.me/' . ltrim($channel->username, '@');
+            } elseif (!empty($landingPage->telegram_destination) && !str_contains($landingPage->telegram_destination, 'kirtnix')) {
+                $inviteLink = $landingPage->telegram_destination;
+            } else {
+                $uniqueHash = substr(md5($visitorId . $session->id . config('app.key')), 0, 16);
+                $inviteLink = "https://t.me/+kx_{$uniqueHash}";
+            }
         }
 
         $invite = TelegramInvite::create([
