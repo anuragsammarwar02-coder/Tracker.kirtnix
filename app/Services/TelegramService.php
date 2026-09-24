@@ -447,10 +447,25 @@ class TelegramService
 
                 $json = $res->json();
                 if ($res->successful() && ($json['ok'] ?? false)) {
-                    $inviteLink = $json['result']['invite_link'];
+                    $inviteLink = $json['result']['invite_link'] ?? null;
                 }
             } catch (\Exception $e) {
                 Log::info("Telegram createChatInviteLink note: " . $e->getMessage());
+            }
+
+            if (!$inviteLink) {
+                try {
+                    $exportUrl = "{$this->telegramApiBase}{$bot->bot_token}/exportChatInviteLink";
+                    $exportRes = Http::timeout(6)->post($exportUrl, [
+                        'chat_id' => $channel->telegram_chat_id,
+                    ]);
+                    $exportJson = $exportRes->json();
+                    if ($exportRes->successful() && ($exportJson['ok'] ?? false)) {
+                        $inviteLink = $exportJson['result'] ?? null;
+                    }
+                } catch (\Exception $e) {
+                    Log::info("Telegram exportChatInviteLink note: " . $e->getMessage());
+                }
             }
         }
 
@@ -458,12 +473,27 @@ class TelegramService
         if (!$inviteLink) {
             if ($channel && !empty($channel->username)) {
                 $inviteLink = 'https://t.me/' . ltrim($channel->username, '@');
-            } elseif (!empty($landingPage->telegram_destination) && !str_contains($landingPage->telegram_destination, 'kirtnix')) {
+            } elseif ($channel) {
+                $existingInvite = TelegramInvite::where('telegram_channel_id', $channel->id)->where('status', 'active')->latest('id')->first();
+                if ($existingInvite && !empty($existingInvite->invite_link)) {
+                    $inviteLink = $existingInvite->invite_link;
+                }
+            }
+        }
+
+        if (!$inviteLink) {
+            if (!empty($landingPage->telegram_destination) && !str_contains($landingPage->telegram_destination, 'kirtnix') && !$channel) {
                 $inviteLink = $landingPage->telegram_destination;
             } else {
-                $uniqueHash = substr(md5($visitorId . $session->id . config('app.key')), 0, 16);
+                $uniqueHash = substr(md5($visitorId . $session->id . ($channel ? $channel->telegram_chat_id : '') . config('app.key')), 0, 16);
                 $inviteLink = "https://t.me/+kx_{$uniqueHash}";
             }
+        }
+
+        // Sync invite link across landing page and CTAs so they stay up-to-date
+        if ($inviteLink && $landingPage->telegram_destination !== $inviteLink && $channel) {
+            $landingPage->update(['telegram_destination' => $inviteLink]);
+            $landingPage->ctas()->update(['telegram_destination' => $inviteLink]);
         }
 
         $invite = TelegramInvite::create([

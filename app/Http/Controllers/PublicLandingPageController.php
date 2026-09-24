@@ -48,9 +48,39 @@ class PublicLandingPageController extends Controller
             );
         }
 
-        // 4. Resolve CTAs for dynamic insertion into template
+        // 4. Dynamically resolve client assigned Telegram Channel destination
+        $channel = null;
+        if ($landingPage->id) {
+            $channel = \App\Models\TelegramChannel::where('landing_page_id', $landingPage->id)->where('is_active', true)->first();
+        }
+        if (!$channel && $landingPage->client_id) {
+            $channel = \App\Models\TelegramChannel::where('client_id', $landingPage->client_id)->where('is_active', true)->latest('id')->first();
+        }
+
+        if ($channel) {
+            $channelDestination = null;
+            if (!empty($channel->username)) {
+                $channelDestination = 'https://t.me/' . ltrim($channel->username, '@');
+            } else {
+                $existingInvite = \App\Models\TelegramInvite::where('telegram_channel_id', $channel->id)->where('status', 'active')->latest('id')->first();
+                if ($existingInvite && !empty($existingInvite->invite_link)) {
+                    $channelDestination = $existingInvite->invite_link;
+                }
+            }
+
+            if ($channelDestination) {
+                $landingPage->telegram_destination = $channelDestination;
+            }
+        }
+
+        // 5. Resolve CTAs for dynamic insertion into template
         $primaryCta = $landingPage->ctas->where('button_type', 'primary')->first() ?? $landingPage->ctas->first();
         $secondaryCta = $landingPage->ctas->where('button_type', 'secondary')->first() ?? $primaryCta;
+
+        if ($channel && isset($channelDestination) && $channelDestination) {
+            if ($primaryCta) $primaryCta->telegram_destination = $channelDestination;
+            if ($secondaryCta) $secondaryCta->telegram_destination = $channelDestination;
+        }
 
         $template = match (true) {
             !empty($landingPage->blocks_json) || $landingPage->template_type === 'visual_builder' => 'templates.visual_builder',

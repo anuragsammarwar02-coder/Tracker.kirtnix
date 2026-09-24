@@ -156,6 +156,19 @@ class LandingPageController extends Controller
             $validated['brand_logo_url'] = $client?->logo_url ?? '/assets/branding/kirtnix-logo-dark-icon.png';
         }
 
+        // Auto-link client's assigned Telegram channel destination
+        $channel = \App\Models\TelegramChannel::where('client_id', $validated['client_id'])->where('is_active', true)->latest('id')->first();
+        if ($channel) {
+            if (!empty($channel->username)) {
+                $validated['telegram_destination'] = 'https://t.me/' . ltrim($channel->username, '@');
+            } else {
+                $existingInvite = \App\Models\TelegramInvite::where('telegram_channel_id', $channel->id)->where('status', 'active')->latest('id')->first();
+                if ($existingInvite && !empty($existingInvite->invite_link)) {
+                    $validated['telegram_destination'] = $existingInvite->invite_link;
+                }
+            }
+        }
+
         // Race-condition safe insertion: retry with unique suffix if collision occurs
         $created = false;
         $attempts = 0;
