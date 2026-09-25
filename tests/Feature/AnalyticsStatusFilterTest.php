@@ -85,14 +85,21 @@ class AnalyticsStatusFilterTest extends TestCase
         $responseLeft->assertDontSee('@approved_user');
         $responseLeft->assertDontSee('@pending_user');
 
-        // 4. No filter: All events
+        // 4. Filter: Paid Ads
+        $responsePaidAds = $this->get('/analytics/detail/mynkgujarati?status=paid_ads');
+        $responsePaidAds->assertStatus(200);
+        $responsePaidAds->assertSee('@approved_user');
+        $responsePaidAds->assertDontSee('@pending_user');
+        $responsePaidAds->assertDontSee('@left_user');
+
+        // 5. No filter: All events
         $responseAll = $this->get('/analytics/detail/mynkgujarati');
         $responseAll->assertStatus(200);
         $responseAll->assertSee('@approved_user');
         $responseAll->assertSee('@pending_user');
         $responseAll->assertSee('@left_user');
 
-        // 5. Live Metrics API with status filter
+        // 6. Live Metrics API with status filter
         $liveApproved = $this->getJson('/analytics/detail/mynkgujarati/live-metrics?status=approved');
         $liveApproved->assertStatus(200)
             ->assertJson(['ok' => true])
@@ -110,5 +117,11 @@ class AnalyticsStatusFilterTest extends TestCase
             ->assertJson(['ok' => true])
             ->assertJsonPath('total_events', 1)
             ->assertJsonPath('events.0.username', 'left_user');
+
+        $livePaidAds = $this->getJson('/analytics/detail/mynkgujarati/live-metrics?status=paid_ads');
+        $livePaidAds->assertStatus(200)
+            ->assertJson(['ok' => true])
+            ->assertJsonPath('total_events', 1)
+            ->assertJsonPath('events.0.username', 'approved_user');
     }
 }

@@ -608,7 +608,7 @@ class AnalyticsController extends Controller
                 });
             });
 
-        // Apply Status Filter (Approved, Pending, Left)
+        // Apply Status Filter (Approved, Pending, Left, Paid Ads)
         if ($statusFilter === 'approved') {
             $joinHistoryQuery->where(function ($q) {
                 $q->whereIn('status_after', ['approved', 'member', 'administrator', 'creator'])
@@ -628,6 +628,11 @@ class AnalyticsController extends Controller
             $joinHistoryQuery->where(function ($q) {
                 $q->where('event_type', 'leave')
                   ->orWhereIn('status_after', ['left', 'kicked', 'banned']);
+            });
+        } elseif (in_array($statusFilter, ['paid_ads', 'ads', 'paid'])) {
+            $joinHistoryQuery->where(function ($q) {
+                $q->where('source', 'ads')
+                  ->orWhereNotNull('campaign_id');
             });
         }
 
@@ -812,6 +817,11 @@ class AnalyticsController extends Controller
             $latestEventsQuery->where(function ($q) {
                 $q->where('event_type', 'leave')
                   ->orWhereIn('status_after', ['left', 'kicked', 'banned']);
+            });
+        } elseif (in_array($statusFilter, ['paid_ads', 'ads', 'paid'])) {
+            $latestEventsQuery->where(function ($q) {
+                $q->where('source', 'ads')
+                  ->orWhereNotNull('campaign_id');
             });
         }
 

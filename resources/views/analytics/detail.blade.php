@@ -518,9 +518,29 @@
                 <div class="flex flex-wrap items-center gap-2.5">
                     <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">COMPLETE JOIN HISTORY <span class="sr-only">Complete Join History</span></h2>
                     @if(!empty($statusFilter))
-                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold {{ $statusFilter === 'approved' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : ($statusFilter === 'pending' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-rose-50 text-rose-800 border border-rose-200') }}">
-                            <span class="w-1.5 h-1.5 rounded-full {{ $statusFilter === 'approved' ? 'bg-emerald-500' : ($statusFilter === 'pending' ? 'bg-amber-500' : 'bg-rose-500') }}"></span>
-                            Filtered: {{ ucfirst($statusFilter) }} ({{ $joinHistory->total() }})
+                        @php
+                            $badgeColor = match($statusFilter) {
+                                'approved' => 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                                'pending' => 'bg-amber-50 text-amber-800 border-amber-200',
+                                'left' => 'bg-rose-50 text-rose-800 border-rose-200',
+                                'paid_ads', 'ads', 'paid' => 'bg-amber-100/90 text-amber-950 border-amber-300 font-bold',
+                                default => 'bg-slate-100 text-slate-800 border-slate-200',
+                            };
+                            $dotColor = match($statusFilter) {
+                                'approved' => 'bg-emerald-500',
+                                'pending' => 'bg-amber-500',
+                                'left' => 'bg-rose-500',
+                                'paid_ads', 'ads', 'paid' => 'bg-amber-600 animate-pulse',
+                                default => 'bg-slate-500',
+                            };
+                            $statusLabel = match($statusFilter) {
+                                'paid_ads', 'ads', 'paid' => 'Paid Ads',
+                                default => ucfirst($statusFilter),
+                            };
+                        @endphp
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold {{ $badgeColor }}">
+                            <span class="w-1.5 h-1.5 rounded-full {{ $dotColor }}"></span>
+                            Filtered: {{ $statusLabel }} ({{ $joinHistory->total() }})
                             <a href="{{ request()->fullUrlWithQuery(['status' => null, 'page' => null]) }}#join-history-section" class="ml-1 hover:text-slate-900 font-extrabold text-[13px] leading-none" title="Clear status filter">×</a>
                         </span>
                     @endif
@@ -538,6 +558,7 @@
                             <label for="statusFilterSelect" class="text-slate-500 mr-1.5 font-medium">Status:</label>
                             <select id="statusFilterSelect" name="status" onchange="document.getElementById('statusFilterForm').submit()" class="bg-transparent text-slate-800 text-xs font-bold focus:outline-none cursor-pointer pr-4 appearance-none">
                                 <option value="" {{ empty($statusFilter) ? 'selected' : '' }}>All Statuses (All Events)</option>
+                                <option value="paid_ads" {{ in_array($statusFilter, ['paid_ads', 'ads', 'paid']) ? 'selected' : '' }}>🎯 Paid Ads</option>
                                 <option value="approved" {{ $statusFilter === 'approved' ? 'selected' : '' }}>✅ Approved (Subscribed)</option>
                                 <option value="pending" {{ $statusFilter === 'pending' ? 'selected' : '' }}>⏳ Pending (Requests)</option>
                                 <option value="left" {{ $statusFilter === 'left' ? 'selected' : '' }}>🚪 Left (Unsubscribed)</option>
@@ -658,7 +679,7 @@
                                         <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                                         <span class="text-xs font-semibold text-slate-600">
                                             @if(!empty($statusFilter))
-                                                No {{ $statusFilter }} events found for this filter
+                                                No {{ in_array($statusFilter, ['paid_ads', 'ads', 'paid']) ? 'Paid Ads' : $statusFilter }} events found for this filter
                                             @else
                                                 No join events recorded yet for this client
                                             @endif
