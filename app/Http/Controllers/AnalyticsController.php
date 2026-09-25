@@ -598,6 +598,7 @@ class AnalyticsController extends Controller
         $joinHistoryQuery = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
             ->whereIn('event_type', ['join', 'join_request', 'leave'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
+            ->whereBetween('event_time', [$startDate, $endDate])
             ->when($eventFilter, fn($q) => $q->where('event_type', $eventFilter))
             ->when($sourceFilter, fn($q) => $q->where('source', $sourceFilter))
             ->when($search, function ($q) use ($search) {
@@ -790,6 +791,7 @@ class AnalyticsController extends Controller
         $latestEventsQuery = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
             ->whereIn('event_type', ['join', 'join_request', 'leave'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
+            ->whereBetween('event_time', [$startDate, $endDate])
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($sq) use ($search) {
                     $sq->where('telegram_username', 'like', "%{$search}%")
