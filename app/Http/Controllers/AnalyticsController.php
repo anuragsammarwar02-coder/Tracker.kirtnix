@@ -543,32 +543,54 @@ class AnalyticsController extends Controller
         // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation from Meta)
         $totalBudgetSpend = (float) ($metaMetrics['spend_total'] ?? ($metaMetrics['lifetime_spend'] ?? ($adAccount?->lifetime_spend ?: $campaigns->sum('spend'))));
 
-        // 3. Box 3: Remaining Budget (Actual Meta Ad Account remaining account spend limit / available funds)
+        // 3. Box 3: Remaining Budget (Reflects real available prepaid funds, active daily budget, or lifetime budget)
         $remainingBudget = 0.00;
         $hasRemainingBudget = false;
         $remainingSource = 'No spend limit configured in Meta billing';
 
-        if ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
-            $remainingBudget = $spendCap - $totalBudgetSpend;
-            $hasRemainingBudget = true;
-            $remainingSource = 'Remaining fund in Meta ad account (Account spend limit from Meta)';
-        } elseif ($accountBalance > 0) {
+        // Priority 1: Real Prepaid Account Balance in Meta billing
+        if ($accountBalance > 0) {
             $remainingBudget = $accountBalance;
             $hasRemainingBudget = true;
             $remainingSource = 'Prepaid fund balance in Meta billing';
-        } elseif ($campaignLifetimeBudgetSum > $totalBudgetSpend) {
+        }
+        // Priority 2: Active Daily Budget (For active campaigns running today)
+        elseif ($activeDailyBudgetSum > 0) {
+            $remainingToday = max(0, $activeDailyBudgetSum - $todaySpending);
+            if ($spendCap > 0 && ($spendCap - $totalBudgetSpend) < $remainingToday) {
+                $remainingBudget = max(0, $spendCap - $totalBudgetSpend);
+            } else {
+                $remainingBudget = $remainingToday;
+            }
+            $hasRemainingBudget = true;
+            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day)';
+        }
+        // Priority 3: Campaign Lifetime Budget (Fixed budget set on campaign level)
+        elseif ($campaignLifetimeBudgetSum > 0 && $campaignLifetimeBudgetSum > $totalBudgetSpend) {
             $remainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
             $hasRemainingBudget = true;
             $remainingSource = 'Remaining campaign lifetime budget';
-        } elseif ($activeDailyBudgetSum > 0) {
-            $remainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
+        }
+        // Priority 4: Meta Account Spend Limit (when configured and headroom remains)
+        elseif ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
+            $remainingBudget = $spendCap - $totalBudgetSpend;
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day)';
-        } elseif ($spendCap > 0) {
+            $remainingSource = 'Remaining fund in Meta ad account (Account spend limit from Meta)';
+        }
+        // Priority 5: Meta Account Spend Limit reached
+        elseif ($spendCap > 0) {
             $remainingBudget = 0.00;
             $hasRemainingBudget = true;
             $remainingSource = 'Spend limit reached in Meta (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit / ' . ($adAccount?->currency_symbol ?? '₹') . number_format($totalBudgetSpend, 2) . ' spent)';
-        } else {
+        }
+        // Priority 6: All campaigns paused without spend limit
+        elseif ($campaigns->isNotEmpty() && $activeCampaigns->isEmpty()) {
+            $remainingBudget = 0.00;
+            $hasRemainingBudget = false;
+            $remainingSource = 'All campaigns paused • No active daily budget';
+        }
+        // Priority 7: No limit / No active budget
+        else {
             $remainingBudget = 0.00;
             $hasRemainingBudget = false;
             $remainingSource = 'No spend limit configured in Meta billing';

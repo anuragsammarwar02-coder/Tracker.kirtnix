@@ -268,7 +268,7 @@
                 <div class="bg-[#f8fafc]/50 px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">CAMPAIGNS</span>
-                        <span class="text-slate-800 font-bold text-xs mt-0.5 block">{{ $campaigns->where('status', 'active')->count() + $campaigns->where('status', 'ACTIVE')->count() }} active / {{ $metaMetrics['campaigns_count'] ?? $campaigns->count() }} total</span>
+                        <span class="text-slate-800 font-bold text-xs mt-0.5 block">{{ $campaigns->filter(fn($c) => in_array(strtolower($c->status ?? ''), ['active', '1']))->count() }} active / {{ $metaMetrics['campaigns_count'] ?? $campaigns->count() }} total</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">CLIENT NICHE / CATEGORY</span>
