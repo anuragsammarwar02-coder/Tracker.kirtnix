@@ -543,7 +543,7 @@ class AnalyticsController extends Controller
         // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation from Meta)
         $totalBudgetSpend = (float) ($metaMetrics['spend_total'] ?? ($metaMetrics['lifetime_spend'] ?? ($adAccount?->lifetime_spend ?: $campaigns->sum('spend'))));
 
-        // 3. Box 3: Remaining Budget (Reflects real available prepaid funds, active daily budget, or lifetime budget)
+        // 3. Box 3: Remaining Budget (Reflects live remaining fund in Meta ad account billing)
         $remainingBudget = 0.00;
         $hasRemainingBudget = false;
         $remainingSource = 'No spend limit configured in Meta billing';
@@ -552,36 +552,31 @@ class AnalyticsController extends Controller
         if ($accountBalance > 0) {
             $remainingBudget = $accountBalance;
             $hasRemainingBudget = true;
-            $remainingSource = 'Prepaid fund balance in Meta billing';
+            $remainingSource = 'Live fund balance in Meta billing (without GST)';
         }
-        // Priority 2: Active Daily Budget (For active campaigns running today)
-        elseif ($activeDailyBudgetSum > 0) {
-            $remainingToday = max(0, $activeDailyBudgetSum - $todaySpending);
-            if ($spendCap > 0 && ($spendCap - $totalBudgetSpend) < $remainingToday) {
-                $remainingBudget = max(0, $spendCap - $totalBudgetSpend);
-            } else {
-                $remainingBudget = $remainingToday;
-            }
+        // Priority 2: Meta Ad Account Live Remaining Fund (Spend limit / Prepaid Fund - Lifetime Spend)
+        elseif ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
+            $remainingBudget = $spendCap - $totalBudgetSpend;
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day)';
+            $remainingSource = 'Remaining fund in Meta ad account (without GST)';
         }
         // Priority 3: Campaign Lifetime Budget (Fixed budget set on campaign level)
         elseif ($campaignLifetimeBudgetSum > 0 && $campaignLifetimeBudgetSum > $totalBudgetSpend) {
             $remainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining campaign lifetime budget';
+            $remainingSource = 'Remaining campaign lifetime budget (without GST)';
         }
-        // Priority 4: Meta Account Spend Limit (when configured and headroom remains)
-        elseif ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
-            $remainingBudget = $spendCap - $totalBudgetSpend;
+        // Priority 4: Active Daily Budget (For active campaigns running on daily budget when no spend limit is set)
+        elseif ($activeDailyBudgetSum > 0) {
+            $remainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining fund in Meta ad account (Account spend limit from Meta)';
+            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day)';
         }
-        // Priority 5: Meta Account Spend Limit reached
+        // Priority 5: Meta Account Spend Limit reached / Fund exhausted
         elseif ($spendCap > 0) {
             $remainingBudget = 0.00;
             $hasRemainingBudget = true;
-            $remainingSource = 'Spend limit reached in Meta (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit / ' . ($adAccount?->currency_symbol ?? '₹') . number_format($totalBudgetSpend, 2) . ' spent)';
+            $remainingSource = 'Fund exhausted in Meta ad account • Please add funds (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit reached)';
         }
         // Priority 6: All campaigns paused without spend limit
         elseif ($campaigns->isNotEmpty() && $activeCampaigns->isEmpty()) {
@@ -596,6 +591,8 @@ class AnalyticsController extends Controller
             $remainingSource = 'No spend limit configured in Meta billing';
         }
 
+        $availableBalance = ($accountBalance > 0) ? $accountBalance : (($spendCap > 0 && $spendCap >= $totalBudgetSpend) ? ($spendCap - $totalBudgetSpend) : 0.00);
+
         $budget = [
             'today_spending' => $todaySpending,
             'today_spending_subtitle' => $todaySpendingSubtitle,
@@ -604,9 +601,10 @@ class AnalyticsController extends Controller
             'total_budget' => $totalBudgetSpend, // legacy fallback for existing tests
             'remaining_budget' => $remainingBudget,
             'has_remaining_budget' => $hasRemainingBudget,
+            'account_balance' => $availableBalance,
             'currency_symbol' => $adAccount?->currency_symbol ?? '₹',
             'spending_source' => $todaySpendingSubtitle,
-            'budget_source' => 'Actual spending since account creation',
+            'budget_source' => 'Actual spending since account creation (without GST)',
             'remaining_source' => $remainingSource,
             'last_synced' => $adAccount?->last_synced_at ? $adAccount->last_synced_at->diffForHumans() : 'Never',
         ];
@@ -924,6 +922,52 @@ class AnalyticsController extends Controller
                 ];
             });
 
+        // Active Daily Budget & Real-time Budget Metrics
+        $activeCampaigns = $campaigns->filter(fn($c) => in_array(strtolower($c->status ?? ''), ['active', '1']));
+        $activeDailyBudgetSum = (float) $activeCampaigns->sum('active_daily_budget');
+        $campaignLifetimeBudgetSum = (float) $campaigns->sum('budget');
+
+        $spendCap = (float) ($metaMetrics['spend_limit'] ?? ($adAccount?->spend_limit ?? 0));
+        $accountBalance = (float) ($metaMetrics['balance'] ?? ($adAccount?->balance ?? 0));
+        $todaySpending = (float) ($metaMetrics['spend_today'] ?? 0.00);
+        $totalBudgetSpend = (float) ($metaMetrics['spend_total'] ?? ($metaMetrics['lifetime_spend'] ?? ($adAccount?->lifetime_spend ?: $campaigns->sum('spend'))));
+
+        $remainingBudget = 0.00;
+        $hasRemainingBudget = false;
+        $remainingSource = 'No spend limit configured in Meta billing';
+
+        if ($accountBalance > 0) {
+            $remainingBudget = $accountBalance;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Live fund balance in Meta billing (without GST)';
+        } elseif ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
+            $remainingBudget = $spendCap - $totalBudgetSpend;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Remaining fund in Meta ad account (without GST)';
+        } elseif ($campaignLifetimeBudgetSum > 0 && $campaignLifetimeBudgetSum > $totalBudgetSpend) {
+            $remainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Remaining campaign lifetime budget (without GST)';
+        } elseif ($activeDailyBudgetSum > 0) {
+            $remainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
+            $hasRemainingBudget = true;
+            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day)';
+        } elseif ($spendCap > 0) {
+            $remainingBudget = 0.00;
+            $hasRemainingBudget = true;
+            $remainingSource = 'Fund exhausted in Meta ad account • Please add funds (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit reached)';
+        } elseif ($campaigns->isNotEmpty() && $activeCampaigns->isEmpty()) {
+            $remainingBudget = 0.00;
+            $hasRemainingBudget = false;
+            $remainingSource = 'All campaigns paused • No active daily budget';
+        } else {
+            $remainingBudget = 0.00;
+            $hasRemainingBudget = false;
+            $remainingSource = 'No spend limit configured in Meta billing';
+        }
+
+        $availableBalance = ($accountBalance > 0) ? $accountBalance : (($spendCap > 0 && $spendCap >= $totalBudgetSpend) ? ($spendCap - $totalBudgetSpend) : 0.00);
+
         return response()->json([
             'ok' => true,
             'kpis' => [
@@ -941,6 +985,15 @@ class AnalyticsController extends Controller
                 'approved_members' => number_format($approvedMembers),
                 'pending_requests' => number_format($pendingRequests),
                 'backouts' => number_format($backouts),
+            ],
+            'budget' => [
+                'today_spending' => ($adAccount?->currency_symbol ?? '₹') . number_format($todaySpending, 2),
+                'total_budget_spend' => ($adAccount?->currency_symbol ?? '₹') . number_format($totalBudgetSpend, 2),
+                'remaining_budget' => $hasRemainingBudget ? (($adAccount?->currency_symbol ?? '₹') . number_format($remainingBudget, 2)) : 'No limit set',
+                'remaining_source' => $remainingSource,
+                'account_balance' => ($adAccount?->currency_symbol ?? '₹') . number_format($availableBalance, 2),
+                'account_spend_limit' => $spendCap > 0 ? (($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2)) : 'No limit set',
+                'active_daily_budget' => ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . ' / day',
             ],
             'events' => $latestEvents,
             'total_events' => $totalEventsCount,

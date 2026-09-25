@@ -236,15 +236,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 border-b border-slate-100 p-5 gap-4">
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">LIFETIME SPEND</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($budget['total_budget_spend'], 2) }}</span>
+                        <span id="ad-account-lifetime-spend" class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($budget['total_budget_spend'], 2) }}</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACCOUNT SPEND LIMIT</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ ($adAccount?->spend_limit ?? 0) > 0 ? ($adAccount?->currency_symbol ?? '₹') . number_format($adAccount->spend_limit, 2) : 'No limit set' }}</span>
+                        <span id="ad-account-spend-limit" class="text-slate-900 font-bold text-sm mt-0.5 block">{{ ($adAccount?->spend_limit ?? 0) > 0 ? ($adAccount?->currency_symbol ?? '₹') . number_format($adAccount->spend_limit, 2) : 'No limit set' }}</span>
                     </div>
                     <div>
-                        <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACCOUNT BALANCE</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($adAccount->balance ?? 0, 2) }}</span>
+                        <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACCOUNT BALANCE / REMAINING FUND</span>
+                        <span id="ad-account-balance" class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($budget['account_balance'] ?? ($adAccount?->balance ?? 0), 2) }}</span>
                     </div>
                 </div>
 
@@ -256,7 +256,7 @@
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">ACTIVE DAILY BUDGET</span>
-                        <span class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($activeDailyBudgetSum ?? 0, 2) }} / day</span>
+                        <span id="ad-account-active-daily-budget" class="text-slate-900 font-bold text-sm mt-0.5 block">{{ $adAccount?->currency_symbol ?? '₹' }}{{ number_format($activeDailyBudgetSum ?? 0, 2) }} / day</span>
                     </div>
                     <div>
                         <span class="text-slate-400 uppercase text-[10px] font-bold tracking-wider block">LIFETIME BUDGETS</span>
@@ -784,6 +784,20 @@
                         updateKpi('kpi-cost-per-sub', data.kpis.cost_per_subscriber);
                         updateKpi('kpi-pending-requests', data.kpis.pending_requests);
                         updateKpi('kpi-backouts', data.kpis.backouts);
+
+                        if (data.budget) {
+                            updateKpi('budget-spending', data.budget.today_spending);
+                            updateKpi('budget-total', data.budget.total_budget_spend);
+                            updateKpi('budget-remaining', data.budget.remaining_budget);
+                            if (data.budget.remaining_source) {
+                                const remSubEl = document.getElementById('budget-remaining-source');
+                                if (remSubEl) remSubEl.textContent = data.budget.remaining_source;
+                            }
+                            updateKpi('ad-account-lifetime-spend', data.budget.total_budget_spend);
+                            updateKpi('ad-account-spend-limit', data.budget.account_spend_limit);
+                            updateKpi('ad-account-balance', data.budget.account_balance);
+                            updateKpi('ad-account-active-daily-budget', data.budget.active_daily_budget);
+                        }
 
                         if (data.events && Array.isArray(data.events)) {
                             updateJoinHistoryTable(data.events, data.total_events);

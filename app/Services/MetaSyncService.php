@@ -628,8 +628,9 @@ class MetaSyncService
             if ($accRes->successful() && !empty($accRes->json())) {
                 $accData = $accRes->json();
                 $spendLimit = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : 0.00);
-                $balance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : 0.00;
+                $rawBalance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : 0.00;
                 $lifetimeSpend = isset($accData['amount_spent']) ? ((float) $accData['amount_spent'] / 100) : (float) ($adAccount->lifetime_spend ?? 0.00);
+                $availableBalance = ($rawBalance > 0) ? $rawBalance : (($spendLimit > 0 && $spendLimit >= $lifetimeSpend) ? ($spendLimit - $lifetimeSpend) : 0.00);
 
                 $metaBusinessId = $adAccount->meta_business_id;
                 if (!empty($accData['business']['id']) && !empty($accData['business']['name'])) {
@@ -647,14 +648,14 @@ class MetaSyncService
                 $adAccount->update([
                     'meta_business_id' => $metaBusinessId,
                     'spend_limit' => $spendLimit,
-                    'balance' => $balance,
+                    'balance' => $availableBalance,
                     'lifetime_spend' => $lifetimeSpend,
                     'currency' => $accData['currency'] ?? $adAccount->currency,
                     'last_synced_at' => now(),
                 ]);
                 $adAccount->meta_business_id = $metaBusinessId;
                 $adAccount->spend_limit = $spendLimit;
-                $adAccount->balance = $balance;
+                $adAccount->balance = $availableBalance;
                 $adAccount->lifetime_spend = $lifetimeSpend;
             }
 
@@ -821,7 +822,8 @@ class MetaSyncService
                         $currencySymbol = $adAccount->currency_symbol;
                     }
                     $spendCap = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : (float) ($adAccount->spend_limit ?? 0));
-                    $balance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : (float) ($adAccount->balance ?? 0);
+                    $rawBalance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : 0.00;
+                    $availableBalance = ($rawBalance > 0) ? $rawBalance : (($spendCap > 0 && $spendCap >= $spendTotal) ? ($spendCap - $spendTotal) : 0.00);
 
                     $metaBusinessId = $adAccount->meta_business_id;
                     if (!empty($accData['business']['id']) && !empty($accData['business']['name'])) {
@@ -839,14 +841,14 @@ class MetaSyncService
                     $adAccount->update([
                         'meta_business_id' => $metaBusinessId,
                         'spend_limit' => $spendCap,
-                        'balance' => $balance,
+                        'balance' => $availableBalance,
                         'lifetime_spend' => $spendTotal,
                         'currency' => $currency,
                         'last_synced_at' => now(),
                     ]);
                     $adAccount->meta_business_id = $metaBusinessId;
                     $adAccount->spend_limit = $spendCap;
-                    $adAccount->balance = $balance;
+                    $adAccount->balance = $availableBalance;
                     $adAccount->lifetime_spend = $spendTotal;
                 } else {
                     Log::warning("Meta Graph API error fetching ad account metadata for act_{$rawAccId}: " . ($accRes->body() ?: 'Empty response'));
@@ -1055,12 +1057,13 @@ class MetaSyncService
             'cpm' => $cpm,
             'spend_limit' => (float) ($adAccount->spend_limit ?? 0.00),
             'balance' => (float) ($adAccount->balance ?? 0.00),
+            'remaining_fund' => (float) ($adAccount->balance ?? 0.00),
             'campaigns_count' => $campaignsCount,
         ];
 
-        Cache::put($cacheKey, $metrics, 60);
+        Cache::put($cacheKey, $metrics, 10);
         if ($dateRange === 'lifetime') {
-            Cache::put($fallbackKey, $metrics, 60);
+            Cache::put($fallbackKey, $metrics, 10);
         }
 
         return $metrics;
