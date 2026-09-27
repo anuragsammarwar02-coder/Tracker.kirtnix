@@ -488,26 +488,21 @@ class AnalyticsController extends Controller
             ? round(($tgClicks / $totalLpViews) * 100, 1) . '%' 
             : ($uniqueVisitors > 0 ? round(($tgClicks / $uniqueVisitors) * 100, 1) . '%' : '0.0%');
 
-        // Cost per Click (CPC from Meta Ads for selected date range)
-        // Primary: Meta Ad Clicks from Meta Graph API (e.g. ₹1,694.91 / 498 clicks = ₹3.40)
-        // Fallback: If no Meta clicks, fall back to Telegram CTA clicks ($campaignSpend / $tgClicks)
+        // Cost per Click (CPC from Meta Ads for selected date range after 18% GST)
+        // Primary: Meta Ad Clicks from Meta Graph API with 18% GST-adjusted net spend
+        $netSpend = $campaignSpend * 0.82;
         $metaClicks = $metaMetrics ? (int) ($metaMetrics['clicks'] ?? 0) : 0;
         if ($metaClicks > 0 && $campaignSpend > 0) {
-            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $metaClicks, 2);
+            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($netSpend / $metaClicks, 2);
             $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
-        } elseif ($metaMetrics && isset($metaMetrics['cpc']) && (float) $metaMetrics['cpc'] > 0 && $campaignSpend > 0) {
-            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format((float) $metaMetrics['cpc'], 2);
-            $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
-        } elseif ($tgClicks > 0 && $campaignSpend > 0) {
-            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2);
-            $cpcSubtitle = 'Spend / Telegram CTA clicks (CPC)';
         } else {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . '0.00';
             $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
         }
 
+        // Cost per Subscriber (net spend after 18% GST / confirmed Telegram subscribers)
         $costPerSub = $subscribers > 0 
-            ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $subscribers, 2)
+            ? ($adAccount?->currency_symbol ?? '₹') . number_format($netSpend / $subscribers, 2)
             : ($adAccount?->currency_symbol ?? '₹') . '0.00';
 
         // Performance KPI Grid (No duplicate subscriber card)
@@ -540,57 +535,58 @@ class AnalyticsController extends Controller
         $todaySpending = (float) ($metaMetrics['spend_today'] ?? 0.00);
         $todaySpendingSubtitle = 'Actual spending for today';
 
-        // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation from Meta)
+        // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation from Meta - without GST)
         $totalBudgetSpend = (float) ($metaMetrics['spend_total'] ?? ($metaMetrics['lifetime_spend'] ?? ($adAccount?->lifetime_spend ?: $campaigns->sum('spend'))));
 
-        // 3. Box 3: Remaining Budget (Reflects live remaining fund in Meta ad account billing)
-        $remainingBudget = 0.00;
+        // 3. Box 3: Remaining Budget (Reflects live remaining fund in Meta ad account billing after 18% GST)
+        $grossRemainingBudget = 0.00;
         $hasRemainingBudget = false;
         $remainingSource = 'No spend limit configured in Meta billing';
 
         // Priority 1: Real Prepaid Account Balance in Meta billing
         if ($accountBalance > 0) {
-            $remainingBudget = $accountBalance;
+            $grossRemainingBudget = $accountBalance;
             $hasRemainingBudget = true;
-            $remainingSource = 'Live fund balance in Meta billing (without GST)';
+            $remainingSource = 'Remaining fund in Meta ad account (after 18% GST)';
         }
         // Priority 2: Meta Ad Account Live Remaining Fund (Spend limit / Prepaid Fund - Lifetime Spend)
         elseif ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
-            $remainingBudget = $spendCap - $totalBudgetSpend;
+            $grossRemainingBudget = $spendCap - $totalBudgetSpend;
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining fund in Meta ad account (without GST)';
+            $remainingSource = 'Remaining fund in Meta ad account (after 18% GST)';
         }
         // Priority 3: Campaign Lifetime Budget (Fixed budget set on campaign level)
         elseif ($campaignLifetimeBudgetSum > 0 && $campaignLifetimeBudgetSum > $totalBudgetSpend) {
-            $remainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
+            $grossRemainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining campaign lifetime budget (without GST)';
+            $remainingSource = 'Remaining campaign lifetime budget (after 18% GST)';
         }
         // Priority 4: Active Daily Budget (For active campaigns running on daily budget when no spend limit is set)
         elseif ($activeDailyBudgetSum > 0) {
-            $remainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
+            $grossRemainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day)';
+            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day, after 18% GST)';
         }
         // Priority 5: Meta Account Spend Limit reached / Fund exhausted
         elseif ($spendCap > 0) {
-            $remainingBudget = 0.00;
+            $grossRemainingBudget = 0.00;
             $hasRemainingBudget = true;
             $remainingSource = 'Fund exhausted in Meta ad account • Please add funds (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit reached)';
         }
         // Priority 6: All campaigns paused without spend limit
         elseif ($campaigns->isNotEmpty() && $activeCampaigns->isEmpty()) {
-            $remainingBudget = 0.00;
+            $grossRemainingBudget = 0.00;
             $hasRemainingBudget = false;
             $remainingSource = 'All campaigns paused • No active daily budget';
         }
         // Priority 7: No limit / No active budget
         else {
-            $remainingBudget = 0.00;
+            $grossRemainingBudget = 0.00;
             $hasRemainingBudget = false;
             $remainingSource = 'No spend limit configured in Meta billing';
         }
 
+        $remainingBudget = $hasRemainingBudget ? round($grossRemainingBudget * 0.82, 2) : 0.00;
         $availableBalance = ($accountBalance > 0) ? $accountBalance : (($spendCap > 0 && $spendCap >= $totalBudgetSpend) ? ($spendCap - $totalBudgetSpend) : 0.00);
 
         $budget = [
@@ -599,6 +595,7 @@ class AnalyticsController extends Controller
             'total_budget_spend' => $totalBudgetSpend,
             'total_spending' => $todaySpending, // legacy fallback
             'total_budget' => $totalBudgetSpend, // legacy fallback for existing tests
+            'gross_remaining_budget' => $grossRemainingBudget,
             'remaining_budget' => $remainingBudget,
             'has_remaining_budget' => $hasRemainingBudget,
             'account_balance' => $availableBalance,
@@ -776,26 +773,21 @@ class AnalyticsController extends Controller
             }
         }
 
-        // Cost per Click (CPC from Meta Ads for selected date range)
-        // Primary: Meta Ad Clicks from Meta Graph API (e.g. ₹1,694.91 / 498 clicks = ₹3.40)
-        // Fallback: If no Meta clicks, fall back to Telegram CTA clicks ($campaignSpend / $tgClicks)
+        // Cost per Click (CPC from Meta Ads for selected date range after 18% GST)
+        // Primary: Meta Ad Clicks from Meta Graph API with 18% GST-adjusted net spend
+        $netSpend = $campaignSpend * 0.82;
         $metaClicks = $metaMetrics ? (int) ($metaMetrics['clicks'] ?? 0) : 0;
         if ($metaClicks > 0 && $campaignSpend > 0) {
-            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $metaClicks, 2);
+            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($netSpend / $metaClicks, 2);
             $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
-        } elseif ($metaMetrics && isset($metaMetrics['cpc']) && (float) $metaMetrics['cpc'] > 0 && $campaignSpend > 0) {
-            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format((float) $metaMetrics['cpc'], 2);
-            $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
-        } elseif ($tgClicks > 0 && $campaignSpend > 0) {
-            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $tgClicks, 2);
-            $cpcSubtitle = 'Spend / Telegram CTA clicks (CPC)';
         } else {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . '0.00';
             $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
         }
 
+        // Cost per Subscriber (net spend after 18% GST / confirmed Telegram subscribers)
         $costPerSub = $subscribers > 0 
-            ? ($adAccount?->currency_symbol ?? '₹') . number_format($campaignSpend / $subscribers, 2)
+            ? ($adAccount?->currency_symbol ?? '₹') . number_format($netSpend / $subscribers, 2)
             : ($adAccount?->currency_symbol ?? '₹') . '0.00';
 
         $convRate = $totalLpViews > 0 
@@ -932,40 +924,41 @@ class AnalyticsController extends Controller
         $todaySpending = (float) ($metaMetrics['spend_today'] ?? 0.00);
         $totalBudgetSpend = (float) ($metaMetrics['spend_total'] ?? ($metaMetrics['lifetime_spend'] ?? ($adAccount?->lifetime_spend ?: $campaigns->sum('spend'))));
 
-        $remainingBudget = 0.00;
+        $grossRemainingBudget = 0.00;
         $hasRemainingBudget = false;
         $remainingSource = 'No spend limit configured in Meta billing';
 
         if ($accountBalance > 0) {
-            $remainingBudget = $accountBalance;
+            $grossRemainingBudget = $accountBalance;
             $hasRemainingBudget = true;
-            $remainingSource = 'Live fund balance in Meta billing (without GST)';
+            $remainingSource = 'Remaining fund in Meta ad account (after 18% GST)';
         } elseif ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
-            $remainingBudget = $spendCap - $totalBudgetSpend;
+            $grossRemainingBudget = $spendCap - $totalBudgetSpend;
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining fund in Meta ad account (without GST)';
+            $remainingSource = 'Remaining fund in Meta ad account (after 18% GST)';
         } elseif ($campaignLifetimeBudgetSum > 0 && $campaignLifetimeBudgetSum > $totalBudgetSpend) {
-            $remainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
+            $grossRemainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining campaign lifetime budget (without GST)';
+            $remainingSource = 'Remaining campaign lifetime budget (after 18% GST)';
         } elseif ($activeDailyBudgetSum > 0) {
-            $remainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
+            $grossRemainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
             $hasRemainingBudget = true;
-            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day)';
+            $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day, after 18% GST)';
         } elseif ($spendCap > 0) {
-            $remainingBudget = 0.00;
+            $grossRemainingBudget = 0.00;
             $hasRemainingBudget = true;
             $remainingSource = 'Fund exhausted in Meta ad account • Please add funds (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit reached)';
         } elseif ($campaigns->isNotEmpty() && $activeCampaigns->isEmpty()) {
-            $remainingBudget = 0.00;
+            $grossRemainingBudget = 0.00;
             $hasRemainingBudget = false;
             $remainingSource = 'All campaigns paused • No active daily budget';
         } else {
-            $remainingBudget = 0.00;
+            $grossRemainingBudget = 0.00;
             $hasRemainingBudget = false;
             $remainingSource = 'No spend limit configured in Meta billing';
         }
 
+        $remainingBudget = $hasRemainingBudget ? round($grossRemainingBudget * 0.82, 2) : 0.00;
         $availableBalance = ($accountBalance > 0) ? $accountBalance : (($spendCap > 0 && $spendCap >= $totalBudgetSpend) ? ($spendCap - $totalBudgetSpend) : 0.00);
 
         return response()->json([

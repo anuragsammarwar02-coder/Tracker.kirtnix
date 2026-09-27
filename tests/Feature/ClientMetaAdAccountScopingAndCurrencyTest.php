@@ -371,14 +371,36 @@ class ClientMetaAdAccountScopingAndCurrencyTest extends TestCase
             $res->assertOk();
         }
 
-        $response = $this->actingAs($this->user)->get("/analytics/{$lp->slug}/live-metrics");
+        // Mock Meta API metrics with 200 clicks for selected date range
+        $mockMetrics = [
+            'connected' => true,
+            'account_name' => 'Live Polling Account',
+            'account_id' => $adAccount->account_id,
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'date_range' => 'lifetime',
+            'spend_scoped' => 1000.00,
+            'spend_total' => 1000.00,
+            'spend_today' => 1000.00,
+            'clicks' => 200,
+            'impressions' => 10000,
+            'reach' => 5000,
+            'spend_limit' => 5000.00,
+            'balance' => 4000.00,
+            'campaigns_count' => 1,
+        ];
+        \Illuminate\Support\Facades\Cache::put("meta_analytics:client_{$client->id}:acc_{$adAccount->id}", $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put("meta_analytics:client_{$client->id}:acc_{$adAccount->id}:range_lifetime", $mockMetrics, 60);
+        \Illuminate\Support\Facades\Cache::put("meta_analytics:client_{$client->id}:acc_{$adAccount->id}:range_today", $mockMetrics, 60);
+
+        $response = $this->actingAs($this->user)->get("/analytics/{$lp->slug}/live-metrics?date_range=today");
         $response->assertOk();
         $response->assertJson([
             'ok' => true,
             'kpis' => [
                 'lp_views' => '10',
                 'tg_clicks' => '2',
-                'cost_per_click' => '₹500.00',
+                'cost_per_click' => '₹4.10', // (1000 * 0.82) / 200 = 820 / 200 = 4.10
             ],
         ]);
     }

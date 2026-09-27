@@ -419,8 +419,8 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         $response = $this->actingAs($this->user)->get(route('analytics.detail', [$lp->slug, 'date_range' => 'lifetime']));
         $response->assertOk();
 
-        // Must display CPC = ₹3.40 (1694.91 / 498 clicks)
-        $response->assertSee('₹3.40');
+        // Must display CPC = ₹2.79 ((1694.91 * 0.82) / 498 clicks = 1389.83 / 498)
+        $response->assertSee('₹2.79');
         $response->assertSee('id="kpi-cost-per-click"', false);
         $response->assertSee('Spend / Meta ad clicks (CPC)');
 
@@ -428,7 +428,7 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         $liveResponse = $this->actingAs($this->user)->get("/analytics/{$lp->slug}/live-metrics?date_range=lifetime");
         $liveResponse->assertOk();
         $liveData = $liveResponse->json();
-        $this->assertEquals('₹3.40', $liveData['kpis']['cost_per_click']);
+        $this->assertEquals('₹2.79', $liveData['kpis']['cost_per_click']);
     }
 
     public function test_total_budget_comes_from_real_meta_budget_field_and_is_not_derived_from_lifetime_spend(): void
@@ -668,6 +668,6 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         $resLifetime->assertSee('<span id="budget-total" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹1,694.91</span>', false);
         $resLifetime->assertSee('<span id="kpi-reach" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">7,056</span>', false);
         $resLifetime->assertSee('<span id="kpi-impressions" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">8,239</span>', false);
-        $resLifetime->assertSee('₹3.40');
+        $resLifetime->assertSee('₹2.79');
     }
 }
