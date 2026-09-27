@@ -469,7 +469,7 @@ class ClientMetaAnalyticsScopingTest extends TestCase
         // Total Spending is 1694.91
         $resA->assertSee('₹1,694.91');
         // Total Budget must NOT be 1694.91, it must be 0.00
-        $resA->assertSee('No spend limit configured in Meta');
+        $resA->assertSee('No available funds in Meta billing');
 
         // Case B: When Meta has a real spend limit (spend_cap) e.g. 5000.00
         $this->adAccountA->update(['spend_limit' => 5000.00]);

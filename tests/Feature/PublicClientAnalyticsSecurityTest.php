@@ -346,7 +346,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'reach' => 800,
             'leads' => 5,
             'spend_limit' => 15000.00,
-            'balance' => 0.00,
+            'balance' => 16184.61,
             'campaigns_count' => 1,
         ];
         \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
@@ -365,7 +365,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         $res->assertSee('₹1,728.62');
         $res->assertSee('Actual spending since account creation');
 
-        // 3. Box 3: Remaining Budget shows 15000 - 1728.62 = 13,271.38 (from Meta spend limit)
+        // 3. Box 3: Remaining Budget shows 16,184.61 * 0.82 = 13,271.38 (from Meta available funds after 18% GST)
         $res->assertSee('Remaining Budget');
         $res->assertSee('₹13,271.38');
     }
@@ -414,7 +414,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
 
         // Must display "No limit set" and NOT a fake calculated number
         $res->assertSee('No limit set');
-        $res->assertSee('No spend limit configured in Meta billing');
+        $res->assertSee('No available funds in Meta billing');
     }
 
     /**
@@ -422,11 +422,12 @@ class PublicClientAnalyticsSecurityTest extends TestCase
      * Account Spend Limit = ₹1,000
      * Lifetime Actual Spend = ₹500
      * Today's Spend = ₹100
+     * Available Funds in Meta = ₹609.76
      *
      * Expected Analytics:
      * Today's Spending: ₹100.00
      * Total Budget Spend: ₹500.00
-     * Remaining Budget: ₹500.00
+     * Remaining Budget: ₹500.00 (609.76 * 0.82)
      */
     public function test_budget_cards_scenario_1_spend_limit_1000_lifetime_500_today_100(): void
     {
@@ -434,6 +435,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'client_id' => $this->clientChannel->id,
             'currency' => 'INR',
             'spend_limit' => 1000.00,
+            'balance' => 609.76,
             'lifetime_spend' => 500.00,
         ]);
 
@@ -459,7 +461,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'reach' => 150,
             'leads' => 2,
             'spend_limit' => 1000.00,
-            'balance' => 0.00,
+            'balance' => 609.76,
             'campaigns_count' => 1,
         ];
         \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
@@ -476,7 +478,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         $res->assertSee('Total Budget Spend');
         $res->assertSee('₹500.00');
 
-        // Card 3: Remaining Budget = ₹500.00 (1000 - 500)
+        // Card 3: Remaining Budget = ₹500.00 (609.76 * 0.82)
         $res->assertSee('Remaining Budget');
         $res->assertSee('₹500.00');
     }
@@ -486,11 +488,12 @@ class PublicClientAnalyticsSecurityTest extends TestCase
      * Account Spend Limit = ₹1,000
      * Lifetime Actual Spend = ₹0
      * Today's Spend = ₹0
+     * Available Funds in Meta = ₹1,219.51
      *
      * Expected Analytics:
      * Today's Spending: ₹0.00
      * Total Budget Spend: ₹0.00
-     * Remaining Budget: ₹1,000.00
+     * Remaining Budget: ₹1,000.00 (1219.51 * 0.82)
      */
     public function test_budget_cards_scenario_2_spend_limit_1000_lifetime_0_today_0(): void
     {
@@ -498,6 +501,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'client_id' => $this->clientChannel->id,
             'currency' => 'INR',
             'spend_limit' => 1000.00,
+            'balance' => 1219.51,
             'lifetime_spend' => 0.00,
         ]);
 
@@ -523,7 +527,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'reach' => 0,
             'leads' => 0,
             'spend_limit' => 1000.00,
-            'balance' => 0.00,
+            'balance' => 1219.51,
             'campaigns_count' => 0,
         ];
         \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
@@ -539,7 +543,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         // Card 2: Total Budget Spend = ₹0.00
         $res->assertSee('Total Budget Spend');
 
-        // Card 3: Remaining Budget = ₹1,000.00 (1000 - 0)
+        // Card 3: Remaining Budget = ₹1,000.00 (1219.51 * 0.82)
         $res->assertSee('Remaining Budget');
         $res->assertSee('₹1,000.00');
     }
@@ -549,11 +553,12 @@ class PublicClientAnalyticsSecurityTest extends TestCase
      * Account Spend Limit = ₹1,000
      * Lifetime Spend = ₹250
      * Today's Spend = ₹50
+     * Available Funds in Meta = ₹914.63
      *
      * Expected Analytics:
      * Today's Spending: ₹50.00
      * Total Budget Spend: ₹250.00
-     * Remaining Budget: ₹750.00
+     * Remaining Budget: ₹750.00 (914.63 * 0.82)
      */
     public function test_budget_cards_scenario_3_spend_limit_1000_lifetime_250_today_50(): void
     {
@@ -561,6 +566,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'client_id' => $this->clientChannel->id,
             'currency' => 'INR',
             'spend_limit' => 1000.00,
+            'balance' => 914.63,
             'lifetime_spend' => 250.00,
         ]);
 
@@ -586,7 +592,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'reach' => 80,
             'leads' => 1,
             'spend_limit' => 1000.00,
-            'balance' => 0.00,
+            'balance' => 914.63,
             'campaigns_count' => 1,
         ];
         \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
@@ -602,6 +608,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         $res->assertSee('₹250.00');
 
         // Card 3: Remaining Budget = ₹750.00
+        $res->assertSee('Remaining Budget');
         $res->assertSee('₹750.00');
     }
 
@@ -611,11 +618,12 @@ class PublicClientAnalyticsSecurityTest extends TestCase
      * Account Spend Limit = $2,000
      * Lifetime Spend = $800
      * Today's Spend = $150
+     * Available Funds in Meta = $1,463.41
      *
      * Expected Analytics:
      * Today's Spending: $150.00
      * Total Budget Spend: $800.00
-     * Remaining Budget: $1,200.00
+     * Remaining Budget: $1,200.00 (1463.41 * 0.82)
      */
     public function test_budget_cards_usd_currency_support(): void
     {
@@ -623,6 +631,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'client_id' => $this->clientChannel->id,
             'currency' => 'USD',
             'spend_limit' => 2000.00,
+            'balance' => 1463.41,
             'lifetime_spend' => 800.00,
         ]);
 
@@ -648,7 +657,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
             'reach' => 400,
             'leads' => 4,
             'spend_limit' => 2000.00,
-            'balance' => 0.00,
+            'balance' => 1463.41,
             'campaigns_count' => 1,
         ];
         \Illuminate\Support\Facades\Cache::put($cacheKey, $mockMetrics, 60);
@@ -663,7 +672,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         // Card 2: Total Budget Spend = $800.00
         $res->assertSee('$800.00');
 
-        // Card 3: Remaining Budget = $1,200.00 (2000 - 800)
+        // Card 3: Remaining Budget = $1,200.00 (1463.41 * 0.82)
         $res->assertSee('$1,200.00');
     }
 }

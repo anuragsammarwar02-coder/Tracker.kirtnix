@@ -541,53 +541,41 @@ class AnalyticsController extends Controller
         // 3. Box 3: Remaining Budget (Reflects live remaining fund in Meta ad account billing after 18% GST)
         $grossRemainingBudget = 0.00;
         $hasRemainingBudget = false;
-        $remainingSource = 'No spend limit configured in Meta billing';
+        $remainingSource = 'No available funds in Meta billing';
 
-        // Priority 1: Real Prepaid Account Balance in Meta billing
+        // Priority 1: Real Available Funds / Balance in Meta billing
         if ($accountBalance > 0) {
             $grossRemainingBudget = $accountBalance;
             $hasRemainingBudget = true;
             $remainingSource = 'Remaining fund in Meta ad account (after 18% GST)';
         }
-        // Priority 2: Meta Ad Account Live Remaining Fund (Spend limit / Prepaid Fund - Lifetime Spend)
-        elseif ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
-            $grossRemainingBudget = $spendCap - $totalBudgetSpend;
-            $hasRemainingBudget = true;
-            $remainingSource = 'Remaining fund in Meta ad account (after 18% GST)';
-        }
-        // Priority 3: Campaign Lifetime Budget (Fixed budget set on campaign level)
+        // Priority 2: Campaign Lifetime Budget (Fixed budget set on campaign level)
         elseif ($campaignLifetimeBudgetSum > 0 && $campaignLifetimeBudgetSum > $totalBudgetSpend) {
             $grossRemainingBudget = $campaignLifetimeBudgetSum - $totalBudgetSpend;
             $hasRemainingBudget = true;
             $remainingSource = 'Remaining campaign lifetime budget (after 18% GST)';
         }
-        // Priority 4: Active Daily Budget (For active campaigns running on daily budget when no spend limit is set)
+        // Priority 3: Active Daily Budget (For active campaigns running on daily budget when no available funds or spend limit is set)
         elseif ($activeDailyBudgetSum > 0) {
             $grossRemainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
             $hasRemainingBudget = true;
             $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day, after 18% GST)';
         }
-        // Priority 5: Meta Account Spend Limit reached / Fund exhausted
-        elseif ($spendCap > 0) {
-            $grossRemainingBudget = 0.00;
-            $hasRemainingBudget = true;
-            $remainingSource = 'Fund exhausted in Meta ad account • Please add funds (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit reached)';
-        }
-        // Priority 6: All campaigns paused without spend limit
+        // Priority 4: All campaigns paused without active budget
         elseif ($campaigns->isNotEmpty() && $activeCampaigns->isEmpty()) {
             $grossRemainingBudget = 0.00;
             $hasRemainingBudget = false;
             $remainingSource = 'All campaigns paused • No active daily budget';
         }
-        // Priority 7: No limit / No active budget
+        // Priority 5: No available funds in Meta billing
         else {
             $grossRemainingBudget = 0.00;
             $hasRemainingBudget = false;
-            $remainingSource = 'No spend limit configured in Meta billing';
+            $remainingSource = 'No available funds in Meta billing';
         }
 
         $remainingBudget = $hasRemainingBudget ? round($grossRemainingBudget * 0.82, 2) : 0.00;
-        $availableBalance = ($accountBalance > 0) ? $accountBalance : (($spendCap > 0 && $spendCap >= $totalBudgetSpend) ? ($spendCap - $totalBudgetSpend) : 0.00);
+        $availableBalance = $accountBalance;
 
         $budget = [
             'today_spending' => $todaySpending,
@@ -926,14 +914,10 @@ class AnalyticsController extends Controller
 
         $grossRemainingBudget = 0.00;
         $hasRemainingBudget = false;
-        $remainingSource = 'No spend limit configured in Meta billing';
+        $remainingSource = 'No available funds in Meta billing';
 
         if ($accountBalance > 0) {
             $grossRemainingBudget = $accountBalance;
-            $hasRemainingBudget = true;
-            $remainingSource = 'Remaining fund in Meta ad account (after 18% GST)';
-        } elseif ($spendCap > 0 && $spendCap > $totalBudgetSpend) {
-            $grossRemainingBudget = $spendCap - $totalBudgetSpend;
             $hasRemainingBudget = true;
             $remainingSource = 'Remaining fund in Meta ad account (after 18% GST)';
         } elseif ($campaignLifetimeBudgetSum > 0 && $campaignLifetimeBudgetSum > $totalBudgetSpend) {
@@ -944,10 +928,6 @@ class AnalyticsController extends Controller
             $grossRemainingBudget = max(0, $activeDailyBudgetSum - $todaySpending);
             $hasRemainingBudget = true;
             $remainingSource = 'Remaining daily budget for today (Active daily budget: ' . ($adAccount?->currency_symbol ?? '₹') . number_format($activeDailyBudgetSum, 2) . '/day, after 18% GST)';
-        } elseif ($spendCap > 0) {
-            $grossRemainingBudget = 0.00;
-            $hasRemainingBudget = true;
-            $remainingSource = 'Fund exhausted in Meta ad account • Please add funds (' . ($adAccount?->currency_symbol ?? '₹') . number_format($spendCap, 2) . ' limit reached)';
         } elseif ($campaigns->isNotEmpty() && $activeCampaigns->isEmpty()) {
             $grossRemainingBudget = 0.00;
             $hasRemainingBudget = false;
@@ -955,11 +935,11 @@ class AnalyticsController extends Controller
         } else {
             $grossRemainingBudget = 0.00;
             $hasRemainingBudget = false;
-            $remainingSource = 'No spend limit configured in Meta billing';
+            $remainingSource = 'No available funds in Meta billing';
         }
 
         $remainingBudget = $hasRemainingBudget ? round($grossRemainingBudget * 0.82, 2) : 0.00;
-        $availableBalance = ($accountBalance > 0) ? $accountBalance : (($spendCap > 0 && $spendCap >= $totalBudgetSpend) ? ($spendCap - $totalBudgetSpend) : 0.00);
+        $availableBalance = $accountBalance;
 
         return response()->json([
             'ok' => true,

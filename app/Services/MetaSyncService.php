@@ -356,7 +356,9 @@ class MetaSyncService
             $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
 
             $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : (isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00);
-            $balance = isset($acc['balance']) ? ((float) $acc['balance'] / 100) : 0.00;
+            $balance = isset($acc['balance']) ? (abs((float) $acc['balance']) / 100) : (
+                isset($acc['funding_source_details']['amount']) ? (abs((float) $acc['funding_source_details']['amount']) / 100) : 0.00
+            );
             $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
 
             // Authoritative Meta Business resolution:
@@ -398,7 +400,7 @@ class MetaSyncService
         // 1. Direct Ad Accounts (/me/adaccounts with full multi-page traversal)
         $directAccounts = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/adaccounts", [
             'access_token' => $token,
-            'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+            'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,is_prepay_account,funding_source_details,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
             'limit' => 100,
         ], 25);
 
@@ -409,7 +411,7 @@ class MetaSyncService
         // 2. Assigned Ad Accounts (/me/assigned_ad_accounts with multi-page traversal)
         $assignedAccounts = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/me/assigned_ad_accounts", [
             'access_token' => $token,
-            'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+            'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,is_prepay_account,funding_source_details,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
             'limit' => 100,
         ], 25);
 
@@ -423,7 +425,7 @@ class MetaSyncService
             foreach (['adaccounts', 'client_ad_accounts', 'owned_ad_accounts'] as $edge) {
                 $bizAccounts = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/{$biz->business_id}/{$edge}", [
                     'access_token' => $token,
-                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,is_prepay_account,funding_source_details,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
                     'limit' => 100,
                 ], 25);
 
@@ -530,7 +532,7 @@ class MetaSyncService
             try {
                 $res = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$version}/{$actId}", [
                     'access_token' => $token,
-                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,is_prepay_account,funding_source_details,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
                 ]);
 
                 if ($res->successful() && !empty($res->json())) {
@@ -538,7 +540,9 @@ class MetaSyncService
                     $statusNum = $acc['account_status'] ?? 1;
                     $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
                     $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : (isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00);
-                    $balance = isset($acc['balance']) ? ((float) $acc['balance'] / 100) : 0.00;
+                    $balance = isset($acc['balance']) ? (abs((float) $acc['balance']) / 100) : (
+                        isset($acc['funding_source_details']['amount']) ? (abs((float) $acc['funding_source_details']['amount']) / 100) : 0.00
+                    );
                     $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
 
                     $metaBusinessId = null;
@@ -622,15 +626,17 @@ class MetaSyncService
             // 1. Sync live ad account metadata from Meta
             $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}", [
                 'access_token' => $token,
-                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+                'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,is_prepay_account,funding_source_details,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
             ]);
 
             if ($accRes->successful() && !empty($accRes->json())) {
                 $accData = $accRes->json();
                 $spendLimit = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : 0.00);
-                $rawBalance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : 0.00;
+                $rawBalance = isset($accData['balance']) ? (abs((float) $accData['balance']) / 100) : (
+                    isset($accData['funding_source_details']['amount']) ? (abs((float) $accData['funding_source_details']['amount']) / 100) : 0.00
+                );
                 $lifetimeSpend = isset($accData['amount_spent']) ? ((float) $accData['amount_spent'] / 100) : (float) ($adAccount->lifetime_spend ?? 0.00);
-                $availableBalance = ($rawBalance > 0) ? $rawBalance : (($spendLimit > 0 && $spendLimit >= $lifetimeSpend) ? ($spendLimit - $lifetimeSpend) : 0.00);
+                $availableBalance = $rawBalance;
 
                 $metaBusinessId = $adAccount->meta_business_id;
                 if (!empty($accData['business']['id']) && !empty($accData['business']['name'])) {
@@ -805,7 +811,7 @@ class MetaSyncService
                 // 1. Account Metadata & Lifetime Spend
                 $accRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}", [
                     'access_token' => $token,
-                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
+                    'fields' => 'id,account_id,name,currency,account_status,spend_cap,balance,amount_spent,is_prepay_account,funding_source_details,timezone_name,timezone_offset_hours_utc,business{id,name,verification_status}',
                 ]);
 
                 if ($accRes->successful() && !empty($accRes->json())) {
@@ -822,8 +828,10 @@ class MetaSyncService
                         $currencySymbol = $adAccount->currency_symbol;
                     }
                     $spendCap = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : (float) ($adAccount->spend_limit ?? 0));
-                    $rawBalance = isset($accData['balance']) ? ((float) $accData['balance'] / 100) : 0.00;
-                    $availableBalance = ($rawBalance > 0) ? $rawBalance : (($spendCap > 0 && $spendCap >= $spendTotal) ? ($spendCap - $spendTotal) : 0.00);
+                    $rawBalance = isset($accData['balance']) ? (abs((float) $accData['balance']) / 100) : (
+                        isset($accData['funding_source_details']['amount']) ? (abs((float) $accData['funding_source_details']['amount']) / 100) : (float) ($adAccount->balance ?? 0.00)
+                    );
+                    $availableBalance = $rawBalance;
 
                     $metaBusinessId = $adAccount->meta_business_id;
                     if (!empty($accData['business']['id']) && !empty($accData['business']['name'])) {

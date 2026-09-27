@@ -136,13 +136,21 @@ class BudgetGstCalculationTest extends TestCase
     }
 
     /**
-     * Requirement A & B:
-     * - Meta remaining fund = ₹1,000 -> Expected Remaining Budget = ₹820.00 (1000 * 0.82)
-     * - Meta remaining fund = ₹21,063.04 -> Expected Remaining Budget = ₹17,271.69 (21063.04 * 0.82)
-     * - Meta lifetime spend = ₹2,242.06 -> Expected Total Budget Spend = ₹2,242.06 (actual lifetime spend without GST)
+     * Requirement 1 & Production Verification:
+     * - Meta available funds = ₹1,142.87
+     * - Lifetime spend = ₹2,310.55
+     * - Account spend limit = ₹23,305.10
+     * - Expected Remaining Budget = ₹936.15 (1,142.87 * 0.82) - NOT ₹17,215.53
+     * - Expected Total Budget Spend = ₹2,310.55 (raw lifetime spend without GST)
      */
-    public function test_remaining_budget_applies_18_percent_gst_and_total_budget_spend_remains_raw_lifetime_spend(): void
+    public function test_remaining_budget_uses_actual_meta_available_funds_1142_87_and_applies_18_percent_gst(): void
     {
+        $this->adAccountA->update([
+            'balance' => 1142.87,
+            'lifetime_spend' => 2310.55,
+            'spend_limit' => 23305.10,
+        ]);
+
         $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}:range_today";
         Cache::put($cacheKey, [
             'connected' => true,
@@ -151,48 +159,54 @@ class BudgetGstCalculationTest extends TestCase
             'currency' => 'INR',
             'currency_symbol' => '₹',
             'date_range' => 'today',
-            'spend_scoped' => 2205.43,
-            'spend_total' => 2242.06,
-            'lifetime_spend' => 2242.06,
-            'spend_today' => 2205.43,
+            'spend_scoped' => 2310.55,
+            'spend_total' => 2310.55,
+            'lifetime_spend' => 2310.55,
+            'spend_today' => 2310.55,
             'clicks' => 500,
             'impressions' => 10000,
             'reach' => 8000,
             'leads' => 0,
             'ctr' => 5.0,
-            'cpc' => 4.41,
-            'cpm' => 220.54,
+            'cpc' => 4.62,
+            'cpm' => 231.05,
             'spend_limit' => 23305.10,
-            'balance' => 21063.04,
+            'balance' => 1142.87,
             'campaigns_count' => 13,
         ], 60);
 
         $response = $this->actingAs($this->user)->get(route('analytics.detail', [$this->landingPageA->slug, 'date_range' => 'today']));
         $response->assertOk();
 
-        // 1. Total Budget Spend must show exact Meta lifetime spend: ₹2,242.06
-        $response->assertSee('₹2,242.06');
+        // 1. Total Budget Spend must show exact Meta lifetime spend: ₹2,310.55
+        $response->assertSee('₹2,310.55');
         $response->assertSee('id="budget-total"', false);
 
-        // 2. Remaining Budget must show ₹21,063.04 * 0.82 = ₹17,271.69
-        $response->assertSee('₹17,271.69');
+        // 2. Remaining Budget must show ₹1,142.87 * 0.82 = ₹937.15 (NOT ₹17,215.53)
+        $response->assertSee('₹937.15');
+        $response->assertDontSee('₹17,215.53');
         $response->assertSee('id="budget-remaining"', false);
 
-        // 3. Live Metrics Endpoint
+        // 3. Middle row: Account balance must show real available funds ₹1,142.87 (NOT ₹20,994.55)
+        $response->assertSee('₹1,142.87');
+        $response->assertDontSee('₹20,994.55');
+
+        // 4. Live Metrics Endpoint
         $liveResponse = $this->actingAs($this->user)->get("/analytics/{$this->landingPageA->slug}/live-metrics?date_range=today");
         $liveResponse->assertOk();
         $liveData = $liveResponse->json('budget');
 
-        $this->assertEquals('₹2,242.06', $liveData['total_budget_spend']);
-        $this->assertEquals('₹17,271.69', $liveData['remaining_budget']);
+        $this->assertEquals('₹2,310.55', $liveData['total_budget_spend']);
+        $this->assertEquals('₹937.15', $liveData['remaining_budget']);
+        $this->assertEquals('₹1,142.87', $liveData['account_balance']);
     }
 
     /**
-     * Requirement A2 & B2 with simple ₹1,000 fund and ₹2,000 lifetime spend:
-     * - Remaining fund = ₹1,000 -> Displayed Remaining Budget = ₹820.00
+     * Requirement 2:
+     * - Meta available funds = ₹1,000 -> Expected Remaining Budget = ₹820.00 (1000 * 0.82)
      * - Lifetime spend = ₹2,000 -> Displayed Total Budget Spend = ₹2,000.00
      */
-    public function test_simple_1000_fund_and_2000_lifetime_spend_expectations(): void
+    public function test_meta_available_funds_1000_produces_820_remaining_budget(): void
     {
         $this->adAccountA->update([
             'balance' => 1000.00,
@@ -226,6 +240,96 @@ class BudgetGstCalculationTest extends TestCase
 
         $this->assertEquals('₹2,000.00', $liveData['total_budget_spend']);
         $this->assertEquals('₹820.00', $liveData['remaining_budget']);
+        $this->assertEquals('₹1,000.00', $liveData['account_balance']);
+    }
+
+    /**
+     * Requirement 3:
+     * - Meta available funds = ₹500 -> Expected Remaining Budget = ₹410.00 (500 * 0.82)
+     */
+    public function test_meta_available_funds_500_produces_410_remaining_budget(): void
+    {
+        $this->adAccountA->update([
+            'balance' => 500.00,
+            'lifetime_spend' => 1500.00,
+            'spend_limit' => 5000.00,
+        ]);
+
+        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}:range_today";
+        Cache::put($cacheKey, [
+            'connected' => true,
+            'account_name' => 'Streets Account 2',
+            'account_id' => 'act_3825638100985838',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'date_range' => 'today',
+            'spend_scoped' => 200.00,
+            'spend_total' => 1500.00,
+            'lifetime_spend' => 1500.00,
+            'spend_today' => 200.00,
+            'clicks' => 50,
+            'impressions' => 1000,
+            'reach' => 800,
+            'spend_limit' => 5000.00,
+            'balance' => 500.00,
+            'campaigns_count' => 1,
+        ], 60);
+
+        $liveResponse = $this->actingAs($this->user)->get("/analytics/{$this->landingPageA->slug}/live-metrics?date_range=today");
+        $liveResponse->assertOk();
+        $liveData = $liveResponse->json('budget');
+
+        $this->assertEquals('₹1,500.00', $liveData['total_budget_spend']);
+        $this->assertEquals('₹410.00', $liveData['remaining_budget']);
+        $this->assertEquals('₹500.00', $liveData['account_balance']);
+    }
+
+    /**
+     * Requirement 4, 5 & 8:
+     * - Verify spend_cap is NOT used as the remaining-funds source.
+     * - Verify lifetime amount_spent is NOT used as the remaining-funds source.
+     * - Verify unavailable Meta billing funds do NOT silently fall back to spend_cap - lifetime_spend.
+     */
+    public function test_unavailable_meta_billing_funds_do_not_silently_fallback_to_spend_cap_difference(): void
+    {
+        $this->adAccountA->update([
+            'balance' => 0.00,
+            'lifetime_spend' => 2310.55,
+            'spend_limit' => 23305.10,
+        ]);
+
+        $cacheKey = "meta_analytics:client_{$this->clientA->id}:acc_{$this->adAccountA->id}:range_today";
+        Cache::put($cacheKey, [
+            'connected' => true,
+            'account_name' => 'Streets Account 2',
+            'account_id' => 'act_3825638100985838',
+            'currency' => 'INR',
+            'currency_symbol' => '₹',
+            'date_range' => 'today',
+            'spend_scoped' => 0.00,
+            'spend_total' => 2310.55,
+            'lifetime_spend' => 2310.55,
+            'spend_today' => 0.00,
+            'clicks' => 0,
+            'impressions' => 0,
+            'reach' => 0,
+            'spend_limit' => 23305.10,
+            'balance' => 0.00,
+            'campaigns_count' => 0,
+        ], 60);
+
+        $response = $this->actingAs($this->user)->get(route('analytics.detail', [$this->landingPageA->slug, 'date_range' => 'today']));
+        $response->assertOk();
+
+        // Must NOT show fake calculation 23305.10 - 2310.55 = 20,994.55 or * 0.82 = 17,215.53
+        $response->assertDontSee('₹17,215.53');
+        $response->assertDontSee('₹20,994.55');
+        $response->assertSee('No limit set');
+
+        $liveResponse = $this->actingAs($this->user)->get("/analytics/{$this->landingPageA->slug}/live-metrics?date_range=today");
+        $liveResponse->assertOk();
+        $this->assertEquals('No limit set', $liveResponse->json('budget.remaining_budget'));
+        $this->assertEquals('₹0.00', $liveResponse->json('budget.account_balance'));
     }
 
     /**
