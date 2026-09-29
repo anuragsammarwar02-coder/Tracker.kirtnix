@@ -16,7 +16,14 @@ class ReportController extends Controller
 {
     public function index(Request $request)
     {
-        $clients = Client::with(['adAccount', 'campaigns', 'views', 'clicks', 'telegramEvents'])->get();
+        $clients = Client::with([
+            'adAccount',
+            'campaigns' => fn($q) => $q->select('id', 'client_id', 'ad_account_id', 'spend', 'reach', 'status'),
+        ])->withCount([
+            'views',
+            'telegramEvents as joins_count' => fn($q) => $q->where('event_type', 'join'),
+            'telegramEvents as exits_count' => fn($q) => $q->where('event_type', 'leave'),
+        ])->get();
         $selectedClientId = $request->input('client_id');
         $dateRange = $request->input('date_range', 'Last 7 Days');
 
@@ -71,9 +78,9 @@ class ReportController extends Controller
                 $spend = (float) $adAccount->lifetime_spend;
             }
             $reach = (int) $cCampaigns->sum('reach');
-            $views = $c->views->count();
-            $joins = $c->telegramEvents->where('event_type', 'join')->count();
-            $exits = $c->telegramEvents->where('event_type', 'leave')->count();
+            $views = (int) ($c->views_count ?? $c->views()->count());
+            $joins = (int) ($c->joins_count ?? $c->telegramEvents()->where('event_type', 'join')->count());
+            $exits = (int) ($c->exits_count ?? $c->telegramEvents()->where('event_type', 'leave')->count());
             $costJoin = $joins > 0 ? round($spend / $joins, 2) : 0.00;
 
             return [
@@ -166,7 +173,14 @@ class ReportController extends Controller
 
     public function exportCsv()
     {
-        $clients = Client::all();
+        $clients = Client::with([
+            'adAccount',
+            'campaigns' => fn($q) => $q->select('id', 'client_id', 'spend', 'reach'),
+        ])->withCount([
+            'views',
+            'telegramEvents as joins_count' => fn($q) => $q->whereIn('event_type', ['join', 'join_request']),
+        ])->get();
+
         $headers = [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => 'attachment; filename="kirtnix_client_report_' . date('Y-m-d') . '.csv"',
@@ -179,8 +193,8 @@ class ReportController extends Controller
             foreach ($clients as $c) {
                 $cSpend = $c->adAccount ? (float) ($c->adAccount->lifetime_spend ?: $c->campaigns->sum('spend')) : (float) $c->campaigns->sum('spend');
                 $cReach = (int) $c->campaigns->sum('reach');
-                $cViews = (int) $c->views->count();
-                $cJoins = (int) $c->telegramEvents->whereIn('event_type', ['join', 'join_request'])->count();
+                $cViews = (int) ($c->views_count ?? $c->views()->count());
+                $cJoins = (int) ($c->joins_count ?? $c->telegramEvents()->whereIn('event_type', ['join', 'join_request'])->count());
                 $cCost = $cJoins > 0 ? round($cSpend / $cJoins, 2) : 0.00;
 
                 fputcsv($file, [

@@ -104,7 +104,15 @@ class DashboardController extends Controller
 
         // Client Performance Breakdown
         $allClients = Client::with('adAccount')->get();
-        $clientsQuery = Client::with(['adAccount', 'campaigns', 'views', 'clicks', 'telegramEvents', 'conversions']);
+        $clientsQuery = Client::with([
+            'adAccount',
+            'campaigns' => fn($q) => $q->select('id', 'client_id', 'ad_account_id', 'spend', 'reach', 'status'),
+        ])->withCount([
+            'views',
+            'clicks',
+            'conversions as verified_conversions_count' => fn($q) => $q->where('status', 'verified'),
+            'telegramEvents as joins_count' => fn($q) => $q->where('event_type', 'join'),
+        ]);
         if ($clientId) {
             $clientsQuery->where('id', $clientId);
         }
@@ -122,9 +130,9 @@ class DashboardController extends Controller
                 $spend = (float) $adAccount->lifetime_spend;
             }
             $reach = (int) $cCampaigns->sum('reach');
-            $views = $c->views->count();
-            $clicks = $c->clicks->count();
-            $joins = $c->conversions->where('status', 'verified')->count() ?: $c->telegramEvents->where('event_type', 'join')->count();
+            $views = (int) ($c->views_count ?? $c->views()->count());
+            $clicks = (int) ($c->clicks_count ?? $c->clicks()->count());
+            $joins = (int) ($c->verified_conversions_count ?: ($c->joins_count ?? $c->telegramEvents()->where('event_type', 'join')->count()));
             $cpj = $joins > 0 ? round($spend / $joins, 2) : 0.00;
 
             return [

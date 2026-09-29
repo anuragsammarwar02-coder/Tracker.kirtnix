@@ -67,6 +67,9 @@ return [
             })(),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+            'options' => [
+                PDO::ATTR_TIMEOUT => 60,
+            ],
         ],
 
         'mysql' => [

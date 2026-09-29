@@ -6,6 +6,9 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Database\Events\ConnectionEstablished;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -36,6 +39,25 @@ class AppServiceProvider extends ServiceProvider
         if (str_starts_with((string) config('app.url'), 'https://') || app()->isProduction()) {
             \Illuminate\Support\Facades\URL::forceScheme('https');
         }
+
+        // Configure all SQLite connections for high performance & concurrency (WAL mode + 60s busy timeout)
+        Event::listen(ConnectionEstablished::class, function ($event) {
+            if ($event->connectionName === 'sqlite' || $event->connection->getDriverName() === 'sqlite') {
+                try {
+                    $pdo = $event->connection->getPdo();
+                    if ($pdo) {
+                        $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 60);
+                        $pdo->exec("PRAGMA journal_mode = WAL;");
+                        $pdo->exec("PRAGMA synchronous = NORMAL;");
+                        $pdo->exec("PRAGMA busy_timeout = 60000;");
+                        $pdo->exec("PRAGMA cache_size = -64000;");
+                        $pdo->exec("PRAGMA temp_store = MEMORY;");
+                    }
+                } catch (\Throwable $e) {
+                    // Ignore if memory or read-only
+                }
+            }
+        });
 
         // Automatically clear stale config and route cache if present
         if (file_exists(base_path('bootstrap/cache/config.php'))) {
@@ -93,15 +115,26 @@ class AppServiceProvider extends ServiceProvider
                         }
                     }
 
-                    // Ensure telegram_bots.client_id is nullable for global bots
+                    // Apply WAL mode and ensure table schema & performance indexes exist
                     if (file_exists($dbPath) && filesize($dbPath) > 0) {
                         try {
-                            $cols = \Illuminate\Support\Facades\DB::select("PRAGMA table_info(telegram_bots)");
+                            DB::statement("PRAGMA journal_mode = WAL;");
+                            DB::statement("PRAGMA synchronous = NORMAL;");
+                            DB::statement("PRAGMA busy_timeout = 60000;");
+                            DB::statement("PRAGMA cache_size = -64000;");
+                            DB::statement("PRAGMA temp_store = MEMORY;");
+                        } catch (\Throwable $pe) {
+                            // ignore
+                        }
+
+                        // Ensure telegram_bots.client_id is nullable for global bots
+                        try {
+                            $cols = DB::select("PRAGMA table_info(telegram_bots)");
                             $clientCol = collect($cols)->firstWhere('name', 'client_id');
                             if ($clientCol && (int)$clientCol->notnull === 1) {
-                                \Illuminate\Support\Facades\DB::statement("PRAGMA foreign_keys=OFF;");
-                                \Illuminate\Support\Facades\DB::beginTransaction();
-                                \Illuminate\Support\Facades\DB::statement('
+                                DB::statement("PRAGMA foreign_keys=OFF;");
+                                DB::beginTransaction();
+                                DB::statement('
                                     CREATE TABLE IF NOT EXISTS "telegram_bots_temp" (
                                         "id" integer primary key autoincrement not null, 
                                         "client_id" integer, 
@@ -121,31 +154,80 @@ class AppServiceProvider extends ServiceProvider
                                         foreign key("client_id") references "clients"("id") on delete set null
                                     );
                                 ');
-                                \Illuminate\Support\Facades\DB::statement('INSERT INTO "telegram_bots_temp" SELECT * FROM "telegram_bots";');
-                                \Illuminate\Support\Facades\DB::statement('DROP TABLE "telegram_bots";');
-                                \Illuminate\Support\Facades\DB::statement('ALTER TABLE "telegram_bots_temp" RENAME TO "telegram_bots";');
-                                \Illuminate\Support\Facades\DB::commit();
-                                \Illuminate\Support\Facades\DB::statement("PRAGMA foreign_keys=ON;");
+                                DB::statement('INSERT INTO "telegram_bots_temp" SELECT * FROM "telegram_bots";');
+                                DB::statement('DROP TABLE "telegram_bots";');
+                                DB::statement('ALTER TABLE "telegram_bots_temp" RENAME TO "telegram_bots";');
+                                DB::commit();
+                                DB::statement("PRAGMA foreign_keys=ON;");
                             }
                         } catch (\Throwable $te) {
                             @error_log('AppServiceProvider telegram_bots schema check: ' . $te->getMessage());
                         }
 
-                        // Ensure clients.ad_account_id column exists
+                        // Ensure clients.ad_account_id & category columns exist
                         try {
-                            $clientCols = \Illuminate\Support\Facades\DB::select("PRAGMA table_info(clients)");
+                            $clientCols = DB::select("PRAGMA table_info(clients)");
                             $hasAdAccountCol = collect($clientCols)->firstWhere('name', 'ad_account_id') !== null;
                             if (!$hasAdAccountCol && count($clientCols) > 0) {
-                                \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN ad_account_id INTEGER NULL;");
+                                DB::statement("ALTER TABLE clients ADD COLUMN ad_account_id INTEGER NULL;");
                             }
 
                             $hasCategoryCol = collect($clientCols)->firstWhere('name', 'category') !== null;
                             if (!$hasCategoryCol && count($clientCols) > 0) {
-                                \Illuminate\Support\Facades\DB::statement("ALTER TABLE clients ADD COLUMN category VARCHAR(100) NULL DEFAULT 'Stock Market & Options Trading';");
-                                \Illuminate\Support\Facades\DB::statement("UPDATE clients SET category = industry WHERE (category IS NULL OR category = '') AND industry IS NOT NULL AND industry != '';");
+                                DB::statement("ALTER TABLE clients ADD COLUMN category VARCHAR(100) NULL DEFAULT 'Stock Market & Options Trading';");
+                                DB::statement("UPDATE clients SET category = industry WHERE (category IS NULL OR category = '') AND industry IS NOT NULL AND industry != '';");
                             }
                         } catch (\Throwable $ce) {
                             @error_log('AppServiceProvider clients column check: ' . $ce->getMessage());
+                        }
+
+                        // Auto-ensure performance indexes on high-traffic tracking and relational tables
+                        try {
+                            $indexes = [
+                                'CREATE INDEX IF NOT EXISTS idx_lp_views_client_id ON landing_page_views (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_lp_views_lp_id ON landing_page_views (landing_page_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_lp_views_client_lp ON landing_page_views (client_id, landing_page_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_lp_views_viewed_at ON landing_page_views (viewed_at);',
+                                'CREATE INDEX IF NOT EXISTS idx_cta_clicks_client_id ON cta_clicks (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_cta_clicks_lp_id ON cta_clicks (landing_page_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_cta_clicks_cta_id ON cta_clicks (cta_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_cta_clicks_client_lp ON cta_clicks (client_id, landing_page_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_events_client_id ON telegram_events (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_events_bot_id ON telegram_events (telegram_bot_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_events_campaign_id ON telegram_events (campaign_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_events_event_type ON telegram_events (event_type);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_events_client_event ON telegram_events (client_id, event_type);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_events_event_time ON telegram_events (event_time);',
+                                'CREATE INDEX IF NOT EXISTS idx_trk_sess_client_id ON tracking_sessions (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_trk_sess_lp_id ON tracking_sessions (landing_page_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_trk_sess_campaign_id ON tracking_sessions (campaign_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_inv_client_id ON telegram_invites (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_inv_lp_id ON telegram_invites (landing_page_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_inv_status ON telegram_invites (status);',
+                                'CREATE INDEX IF NOT EXISTS idx_conv_client_id ON conversions (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_conv_lp_id ON conversions (landing_page_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_conv_campaign_id ON conversions (campaign_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_conv_status ON conversions (status);',
+                                'CREATE INDEX IF NOT EXISTS idx_conv_event_type ON conversions (event_type);',
+                                'CREATE INDEX IF NOT EXISTS idx_conv_client_status ON conversions (client_id, status);',
+                                'CREATE INDEX IF NOT EXISTS idx_ctas_client_id ON ctas (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_ctas_lp_id ON ctas (landing_page_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_lp_client_id ON landing_pages (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_camp_client_id ON campaigns (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_camp_ad_account_id ON campaigns (ad_account_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_ci_campaign_id ON campaign_insights (campaign_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_ad_accounts_client_id ON ad_accounts (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_bots_client_id ON telegram_bots (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_tg_channels_client_id ON telegram_channels (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_reports_client_id ON reports (client_id);',
+                                'CREATE INDEX IF NOT EXISTS idx_notif_client_id ON notifications (client_id);',
+                            ];
+
+                            foreach ($indexes as $sql) {
+                                DB::statement($sql);
+                            }
+                        } catch (\Throwable $ie) {
+                            @error_log('AppServiceProvider index check: ' . $ie->getMessage());
                         }
                     }
                 }

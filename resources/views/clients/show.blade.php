@@ -375,7 +375,7 @@
             </tr>
           </thead>
           <tbody>
-            @forelse($client->telegramEvents as $te)
+            @forelse($recentTelegramEvents ?? $client->telegramEvents()->latest('event_time')->take(50)->get() as $te)
             <tr>
               <td>{{ $te->event_time->diffForHumans() }}</td>
               <td><strong>{{ $te->telegram_username ? '@' . $te->telegram_username : 'User ' . $te->telegram_user_id }}</strong></td>

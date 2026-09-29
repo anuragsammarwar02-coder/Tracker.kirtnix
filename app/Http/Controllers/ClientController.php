@@ -15,7 +15,17 @@ class ClientController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Client::with(['adAccount.metaBusiness'])->withCount(['landingPages', 'campaigns', 'views', 'clicks']);
+        $query = Client::with(['adAccount.metaBusiness', 'campaigns' => function ($q) {
+            $q->select('id', 'client_id', 'spend', 'status');
+        }])->withCount([
+            'landingPages',
+            'campaigns',
+            'views',
+            'clicks',
+            'telegramEvents as joins_count' => function ($q) {
+                $q->where('event_type', 'join');
+            },
+        ]);
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -137,20 +147,16 @@ class ClientController extends Controller
             'adAccount.metaBusiness',
             'adAccount.campaigns.insights',
             'landingPages.ctas',
-            'landingPages.views',
-            'landingPages.clicks',
             'campaigns',
             'telegramBots',
             'reports',
-            'clicks',
-            'telegramEvents',
-            'views',
         ]);
 
         $viewsCount = $client->views()->count();
         $clicksCount = $client->clicks()->count();
         $joinsCount = $client->telegramEvents()->whereIn('event_type', ['join', 'join_request'])->count();
         $leavesCount = $client->telegramEvents()->where('event_type', 'leave')->count();
+        $recentTelegramEvents = $client->telegramEvents()->latest('event_time')->take(50)->get();
 
         // Scoped Meta Ads Account Details and Real Data Metrics
         $assignedAdAccount = $client->adAccount;
@@ -195,6 +201,7 @@ class ClientController extends Controller
             'clicksCount',
             'joinsCount',
             'leavesCount',
+            'recentTelegramEvents',
             'ctr',
             'joinRate',
             'costPerJoin',
@@ -326,43 +333,77 @@ class ClientController extends Controller
 
     public function destroy(Client $client)
     {
+        @set_time_limit(120);
         $name = $client->company_name;
         $clientId = $client->id;
 
-        DB::transaction(function () use ($client, $clientId) {
-            // 1. Delete associated Landing Pages and their CTAs, Views, Clicks, Invites
-            $landingPageIds = \App\Models\LandingPage::where('client_id', $clientId)->pluck('id');
-            \App\Models\LandingPageView::whereIn('landing_page_id', $landingPageIds)->orWhere('client_id', $clientId)->delete();
-            \App\Models\CtaClick::whereIn('landing_page_id', $landingPageIds)->orWhere('client_id', $clientId)->delete();
-            \App\Models\Cta::whereIn('landing_page_id', $landingPageIds)->orWhere('client_id', $clientId)->delete();
-            \App\Models\TelegramInvite::whereIn('landing_page_id', $landingPageIds)->orWhere('client_id', $clientId)->delete();
-            \App\Models\LandingPage::where('client_id', $clientId)->delete();
+        try {
+            if (config('database.default') === 'sqlite') {
+                try {
+                    DB::statement("PRAGMA busy_timeout = 60000;");
+                } catch (\Throwable $te) {
+                    // ignore
+                }
+            }
 
-            // 2. Delete Campaigns and Insights
-            $campaignIds = Campaign::where('client_id', $clientId)->pluck('id');
-            CampaignInsight::whereIn('campaign_id', $campaignIds)->delete();
-            Campaign::where('client_id', $clientId)->delete();
+            DB::transaction(function () use ($client, $clientId) {
+                $landingPageIds = \App\Models\LandingPage::where('client_id', $clientId)->pluck('id')->all();
+                $campaignIds = Campaign::where('client_id', $clientId)->pluck('id')->all();
 
-            // 3. Delete Telegram Bots, Channels, Events & Conversions
-            \App\Models\TelegramEvent::where('client_id', $clientId)->delete();
-            \App\Models\Conversion::where('client_id', $clientId)->delete();
-            \App\Models\TelegramChannel::where('client_id', $clientId)->delete();
-            \App\Models\TelegramBot::where('client_id', $clientId)->delete();
+                // 1. Delete associated Landing Page Views, Clicks, CTAs, Invites
+                \App\Models\LandingPageView::where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    \App\Models\LandingPageView::whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-            // 4. Delete Tracking Sessions, Reports, Notifications
-            \App\Models\TrackingSession::where('client_id', $clientId)->delete();
-            \App\Models\Report::where('client_id', $clientId)->delete();
-            \App\Models\Notification::where('client_id', $clientId)->delete();
+                \App\Models\CtaClick::where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    \App\Models\CtaClick::whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-            // 5. Unassign Ad Accounts
-            AdAccount::where('client_id', $clientId)->update(['client_id' => null]);
+                \App\Models\Cta::where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    \App\Models\Cta::whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-            // 6. Delete the client permanently
-            $client->forceDelete();
-        });
+                \App\Models\TelegramInvite::where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    \App\Models\TelegramInvite::whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-        return redirect()->route('clients.index')
-            ->with('success', "Client '{$name}' and all associated tracking data, campaigns & landing pages removed successfully.");
+                \App\Models\LandingPage::where('client_id', $clientId)->delete();
+
+                // 2. Delete Campaigns and Insights
+                if (!empty($campaignIds)) {
+                    CampaignInsight::whereIn('campaign_id', $campaignIds)->delete();
+                }
+                Campaign::where('client_id', $clientId)->delete();
+
+                // 3. Delete Telegram Bots, Channels, Events & Conversions
+                \App\Models\TelegramEvent::where('client_id', $clientId)->delete();
+                \App\Models\Conversion::where('client_id', $clientId)->delete();
+                \App\Models\TelegramChannel::where('client_id', $clientId)->delete();
+                \App\Models\TelegramBot::where('client_id', $clientId)->delete();
+
+                // 4. Delete Tracking Sessions, Reports, Notifications
+                \App\Models\TrackingSession::where('client_id', $clientId)->delete();
+                \App\Models\Report::where('client_id', $clientId)->delete();
+                \App\Models\Notification::where('client_id', $clientId)->delete();
+
+                // 5. Unassign Ad Accounts
+                AdAccount::where('client_id', $clientId)->update(['client_id' => null]);
+
+                // 6. Delete the client permanently
+                $client->forceDelete();
+            });
+
+            return redirect()->route('clients.index')
+                ->with('success', "Client '{$name}' and all associated tracking data, campaigns & landing pages removed successfully.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to delete client {$clientId}: " . $e->getMessage());
+            return redirect()->route('clients.index')
+                ->with('error', "Could not delete client: " . $e->getMessage());
+        }
     }
 }
 

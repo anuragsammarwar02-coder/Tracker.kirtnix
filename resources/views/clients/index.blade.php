@@ -86,7 +86,7 @@
           if ($cSpend <= 0 && $client->adAccount && $client->adAccount->lifetime_spend > 0) {
               $cSpend = (float) $client->adAccount->lifetime_spend;
           }
-          $cJoins = $client->telegramEvents->where('event_type', 'join')->count();
+          $cJoins = (int) ($client->joins_count ?? $client->telegramEvents()->where('event_type', 'join')->count());
           $cCpj = $cJoins > 0 ? round($cSpend / $cJoins, 2) : 0.00;
         @endphp
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-bottom: 14px;">
