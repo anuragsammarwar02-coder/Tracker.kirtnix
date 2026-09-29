@@ -41,6 +41,22 @@ class AppServiceProvider extends ServiceProvider
         }
 
         // Configure all SQLite connections for high performance & concurrency (WAL mode + 60s busy timeout)
+        try {
+            if (config('database.default') === 'sqlite') {
+                $pdo = DB::connection()->getPdo();
+                if ($pdo) {
+                    $pdo->setAttribute(\PDO::ATTR_TIMEOUT, 60);
+                    $pdo->exec("PRAGMA journal_mode = WAL;");
+                    $pdo->exec("PRAGMA synchronous = NORMAL;");
+                    $pdo->exec("PRAGMA busy_timeout = 60000;");
+                    $pdo->exec("PRAGMA cache_size = -64000;");
+                    $pdo->exec("PRAGMA temp_store = MEMORY;");
+                }
+            }
+        } catch (\Throwable $e) {
+            // Ignore if connection not ready
+        }
+
         Event::listen(ConnectionEstablished::class, function ($event) {
             if ($event->connectionName === 'sqlite' || $event->connection->getDriverName() === 'sqlite') {
                 try {

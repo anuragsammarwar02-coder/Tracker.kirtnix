@@ -227,4 +227,44 @@ class ClientDeletionAndPerformanceTest extends TestCase
         $response->assertSee('Kirtnix Official');
         $response->assertSee('KX-001');
     }
+
+    public function test_can_chunk_delete_thousands_of_records(): void
+    {
+        $client = Client::create([
+            'company_name' => 'Bulk Data Client',
+            'client_name' => 'Bulk User',
+            'kx_code' => 'KX-999',
+            'industry' => 'Stock Market',
+        ]);
+
+        $lp = LandingPage::create([
+            'client_id' => $client->id,
+            'title' => 'Bulk LP',
+            'slug' => 'bulk-lp',
+        ]);
+
+        $now = now();
+        $records = [];
+        for ($i = 0; $i < 4500; $i++) {
+            $records[] = [
+                'landing_page_id' => $lp->id,
+                'client_id' => $client->id,
+                'visitor_id' => "v_{$i}",
+                'is_unique' => true,
+                'viewed_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        foreach (array_chunk($records, 500) as $chunk) {
+            LandingPageView::insert($chunk);
+        }
+
+        $this->assertEquals(4500, LandingPageView::where('client_id', $client->id)->count());
+
+        $response = $this->actingAs($this->user)->delete(route('clients.destroy', $client));
+        $response->assertRedirect(route('clients.index'));
+        $this->assertEquals(0, LandingPageView::where('client_id', $client->id)->count());
+        $this->assertDatabaseMissing('clients', ['id' => $client->id]);
+    }
 }
