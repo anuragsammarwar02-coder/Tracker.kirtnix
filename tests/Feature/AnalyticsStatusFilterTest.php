@@ -124,4 +124,83 @@ class AnalyticsStatusFilterTest extends TestCase
             ->assertJsonPath('total_events', 1)
             ->assertJsonPath('events.0.username', 'approved_user');
     }
+
+    public function test_all_subscribers_and_join_history_events_render_without_suppression()
+    {
+        $client = Client::create([
+            'company_name' => 'Haji Salman Memon',
+            'client_name' => 'Haji Salman',
+            'kx_code' => 'KX-HSM01',
+            'currency_symbol' => '₹',
+        ]);
+
+        $landingPage = LandingPage::create([
+            'client_id' => $client->id,
+            'title' => 'Haji Salman Official Channel',
+            'slug' => 'hajisalmem',
+            'is_published' => true,
+        ]);
+
+        // Create 7 confirmed subscribers
+        for ($i = 1; $i <= 7; $i++) {
+            TelegramEvent::create([
+                'client_id' => $client->id,
+                'telegram_user_id' => (string) (70000 + $i),
+                'telegram_username' => 'subscriber_' . $i,
+                'first_name' => 'Subscriber ' . $i,
+                'event_type' => 'join',
+                'status_after' => 'member',
+                'source' => ($i % 2 === 0) ? 'ads' : 'direct',
+                'event_time' => now()->subMinutes(10 - $i),
+            ]);
+        }
+
+        // 1 pending request
+        TelegramEvent::create([
+            'client_id' => $client->id,
+            'telegram_user_id' => '80001',
+            'telegram_username' => 'pending_request_user',
+            'first_name' => 'Pending Person',
+            'event_type' => 'join_request',
+            'status_after' => 'pending',
+            'source' => 'ads',
+            'event_time' => now()->subMinutes(1),
+        ]);
+
+        // 1 channel leave
+        TelegramEvent::create([
+            'client_id' => $client->id,
+            'telegram_user_id' => '90001',
+            'telegram_username' => 'leave_person',
+            'first_name' => 'Leave Person',
+            'event_type' => 'leave',
+            'status_after' => 'left',
+            'source' => 'direct',
+            'event_time' => now(),
+        ]);
+
+        // Detail page query
+        $response = $this->get('/analytics/detail/hajisalmem');
+        $response->assertStatus(200);
+
+        // Check that KPIs match
+        $response->assertSee('7'); // 7 Subscribers
+        $response->assertSee('9 events'); // All 9 events displayed in counter
+
+        // Check that all 7 subscribers + 1 pending + 1 leave are present in HTML
+        for ($i = 1; $i <= 7; $i++) {
+            $response->assertSee('@subscriber_' . $i);
+        }
+        $response->assertSee('@pending_request_user');
+        $response->assertSee('@leave_person');
+
+        // Check live-metrics JSON endpoint
+        $liveResponse = $this->getJson('/analytics/detail/hajisalmem/live-metrics');
+        $liveResponse->assertStatus(200)
+            ->assertJson(['ok' => true])
+            ->assertJsonPath('total_events', 9)
+            ->assertJsonPath('kpis.subscribers', '8')
+            ->assertJsonPath('kpis.pending_requests', '1')
+            ->assertJsonPath('kpis.backouts', '1');
+    }
 }

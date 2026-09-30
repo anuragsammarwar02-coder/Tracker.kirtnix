@@ -601,7 +601,7 @@ class AnalyticsController extends Controller
         $search = $request->input('search');
 
         $joinHistoryQuery = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
-            ->whereIn('event_type', ['join', 'join_request', 'leave'])
+            ->whereIn('event_type', ['join', 'join_request', 'leave', 'approved'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
             ->whereBetween('event_time', [$startDate, $endDate])
             ->when($eventFilter, fn($q) => $q->where('event_type', $eventFilter))
@@ -643,13 +643,6 @@ class AnalyticsController extends Controller
         }
 
         $joinHistory = $joinHistoryQuery
-            ->whereNotExists(function ($sub) {
-                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                    ->from('telegram_events as te2')
-                    ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
-                    ->whereColumn('te2.id', '>', 'telegram_events.id')
-                    ->whereIn('te2.event_type', ['join', 'join_request', 'leave']);
-            })
             ->latest('event_time')
             ->paginate(15)
             ->withQueryString();
@@ -789,7 +782,7 @@ class AnalyticsController extends Controller
         $search = $request->input('search');
 
         $latestEventsQuery = TelegramEvent::with(['channel', 'campaign', 'click.session.campaign'])
-            ->whereIn('event_type', ['join', 'join_request', 'leave'])
+            ->whereIn('event_type', ['join', 'join_request', 'leave', 'approved'])
             ->when($client, fn($q) => $q->where('client_id', $client->id))
             ->whereBetween('event_time', [$startDate, $endDate])
             ->when($search, function ($q) use ($search) {
@@ -827,24 +820,9 @@ class AnalyticsController extends Controller
             });
         }
 
-        $totalEventsCount = (clone $latestEventsQuery)
-            ->whereNotExists(function ($sub) {
-                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                    ->from('telegram_events as te2')
-                    ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
-                    ->whereColumn('te2.id', '>', 'telegram_events.id')
-                    ->whereIn('te2.event_type', ['join', 'join_request', 'leave']);
-            })
-            ->count();
+        $totalEventsCount = (clone $latestEventsQuery)->count();
 
         $latestEvents = $latestEventsQuery
-            ->whereNotExists(function ($sub) {
-                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                    ->from('telegram_events as te2')
-                    ->whereColumn('te2.telegram_user_id', 'telegram_events.telegram_user_id')
-                    ->whereColumn('te2.id', '>', 'telegram_events.id')
-                    ->whereIn('te2.event_type', ['join', 'join_request', 'leave']);
-            })
             ->latest('event_time')
             ->limit(15)
             ->get()
