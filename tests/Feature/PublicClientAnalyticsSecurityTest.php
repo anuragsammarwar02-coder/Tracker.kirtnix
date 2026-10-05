@@ -365,9 +365,9 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         $res->assertSee('₹1,728.62');
         $res->assertSee('Actual spending since account creation');
 
-        // 3. Box 3: Remaining Budget shows 16,184.61 * 0.82 = 13,271.38 (from Meta available funds after 18% GST)
+        // 3. Box 3: Remaining Budget shows 16,184.61 (from Meta available funds matching account balance)
         $res->assertSee('Remaining Budget');
-        $res->assertSee('₹13,271.38');
+        $res->assertSee('₹16,184.61');
     }
 
     /**
@@ -478,9 +478,9 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         $res->assertSee('Total Budget Spend');
         $res->assertSee('₹500.00');
 
-        // Card 3: Remaining Budget = ₹500.00 (609.76 * 0.82)
+        // Card 3: Remaining Budget = ₹609.76
         $res->assertSee('Remaining Budget');
-        $res->assertSee('₹500.00');
+        $res->assertSee('₹609.76');
     }
 
     /**
@@ -543,9 +543,9 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         // Card 2: Total Budget Spend = ₹0.00
         $res->assertSee('Total Budget Spend');
 
-        // Card 3: Remaining Budget = ₹1,000.00 (1219.51 * 0.82)
+        // Card 3: Remaining Budget = ₹1,219.51
         $res->assertSee('Remaining Budget');
-        $res->assertSee('₹1,000.00');
+        $res->assertSee('₹1,219.51');
     }
 
     /**
@@ -607,9 +607,9 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         // Card 2: Total Budget Spend = ₹250.00
         $res->assertSee('₹250.00');
 
-        // Card 3: Remaining Budget = ₹750.00
+        // Card 3: Remaining Budget = ₹914.63
         $res->assertSee('Remaining Budget');
-        $res->assertSee('₹750.00');
+        $res->assertSee('₹914.63');
     }
 
     /**
@@ -672,7 +672,7 @@ class PublicClientAnalyticsSecurityTest extends TestCase
         // Card 2: Total Budget Spend = $800.00
         $res->assertSee('$800.00');
 
-        // Card 3: Remaining Budget = $1,200.00 (1463.41 * 0.82)
-        $res->assertSee('$1,200.00');
+        // Card 3: Remaining Budget = $1,463.41
+        $res->assertSee('$1,463.41');
     }
 }

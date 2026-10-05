@@ -182,8 +182,8 @@ class BudgetGstCalculationTest extends TestCase
         $response->assertSee('₹2,310.55');
         $response->assertSee('id="budget-total"', false);
 
-        // 2. Remaining Budget must show ₹1,142.87 * 0.82 = ₹937.15 (NOT ₹17,215.53)
-        $response->assertSee('₹937.15');
+        // 2. Remaining Budget must show exact available funds ₹1,142.87 (matching account balance)
+        $response->assertSee('₹1,142.87');
         $response->assertDontSee('₹17,215.53');
         $response->assertSee('id="budget-remaining"', false);
 
@@ -197,13 +197,13 @@ class BudgetGstCalculationTest extends TestCase
         $liveData = $liveResponse->json('budget');
 
         $this->assertEquals('₹2,310.55', $liveData['total_budget_spend']);
-        $this->assertEquals('₹937.15', $liveData['remaining_budget']);
+        $this->assertEquals('₹1,142.87', $liveData['remaining_budget']);
         $this->assertEquals('₹1,142.87', $liveData['account_balance']);
     }
 
     /**
      * Requirement 2:
-     * - Meta available funds = ₹1,000 -> Expected Remaining Budget = ₹820.00 (1000 * 0.82)
+     * - Meta available funds = ₹1,000 -> Expected Remaining Budget = ₹1,000.00
      * - Lifetime spend = ₹2,000 -> Displayed Total Budget Spend = ₹2,000.00
      */
     public function test_meta_available_funds_1000_produces_820_remaining_budget(): void
@@ -239,13 +239,13 @@ class BudgetGstCalculationTest extends TestCase
         $liveData = $liveResponse->json('budget');
 
         $this->assertEquals('₹2,000.00', $liveData['total_budget_spend']);
-        $this->assertEquals('₹820.00', $liveData['remaining_budget']);
+        $this->assertEquals('₹1,000.00', $liveData['remaining_budget']);
         $this->assertEquals('₹1,000.00', $liveData['account_balance']);
     }
 
     /**
      * Requirement 3:
-     * - Meta available funds = ₹500 -> Expected Remaining Budget = ₹410.00 (500 * 0.82)
+     * - Meta available funds = ₹500 -> Expected Remaining Budget = ₹500.00
      */
     public function test_meta_available_funds_500_produces_410_remaining_budget(): void
     {
@@ -280,7 +280,7 @@ class BudgetGstCalculationTest extends TestCase
         $liveData = $liveResponse->json('budget');
 
         $this->assertEquals('₹1,500.00', $liveData['total_budget_spend']);
-        $this->assertEquals('₹410.00', $liveData['remaining_budget']);
+        $this->assertEquals('₹500.00', $liveData['remaining_budget']);
         $this->assertEquals('₹500.00', $liveData['account_balance']);
     }
 
@@ -558,13 +558,13 @@ class BudgetGstCalculationTest extends TestCase
         $resA = $this->actingAs($this->user)->get("/analytics/{$this->landingPageA->slug}/live-metrics?date_range=today");
         $resA->assertOk();
         $this->assertEquals('₹2,500.00', $resA->json('budget.total_budget_spend'));
-        $this->assertEquals('₹4,100.00', $resA->json('budget.remaining_budget'));
+        $this->assertEquals('₹5,000.00', $resA->json('budget.remaining_budget'));
         $this->assertEquals('₹8.20', $resA->json('kpis.cost_per_click'));
 
         $resB = $this->actingAs($this->user)->get("/analytics/{$this->landingPageB->slug}/live-metrics?date_range=today");
         $resB->assertOk();
         $this->assertEquals('$1,200.00', $resB->json('budget.total_budget_spend'));
-        $this->assertEquals('$820.00', $resB->json('budget.remaining_budget'));
+        $this->assertEquals('$1,000.00', $resB->json('budget.remaining_budget'));
         $this->assertEquals('$3.28', $resB->json('kpis.cost_per_click')); // (200 * 0.82) / 50 = 164 / 50 = 3.28
     }
 
