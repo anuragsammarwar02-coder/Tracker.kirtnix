@@ -30,8 +30,8 @@ class MetaIntegrationController extends Controller
      */
     public function oauthRedirect(Request $request): RedirectResponse
     {
-        $appId = Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '2089627038309067'));
-        $appSecret = Setting::get('meta_app_secret') ?: config('services.meta.app_secret', env('META_APP_SECRET'));
+        $appId = Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '1427417489333099'));
+        $appSecret = Setting::get('meta_app_secret') ?: config('services.meta.app_secret', env('META_APP_SECRET', '345d6529f4891af099e8116fe350b03d'));
 
         $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
         if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
@@ -85,8 +85,8 @@ class MetaIntegrationController extends Controller
                 ->with('error', 'Facebook connection failed. No authorization code received.');
         }
 
-        $appId = Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '2089627038309067'));
-        $appSecret = Setting::get('meta_app_secret') ?: config('services.meta.app_secret', env('META_APP_SECRET'));
+        $appId = Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '1427417489333099'));
+        $appSecret = Setting::get('meta_app_secret') ?: config('services.meta.app_secret', env('META_APP_SECRET', '345d6529f4891af099e8116fe350b03d'));
         $redirectUri = url()->secure(route('meta.oauth.callback', [], false));
         if (!str_starts_with($redirectUri, 'https://') && (request()->secure() || request()->header('X-Forwarded-Proto') === 'https')) {
             $redirectUri = 'https://' . request()->getHttpHost() . '/meta/oauth/callback';
