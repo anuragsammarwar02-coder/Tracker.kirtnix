@@ -567,4 +567,40 @@ class BudgetGstCalculationTest extends TestCase
         $this->assertEquals('$820.00', $resB->json('budget.remaining_budget'));
         $this->assertEquals('$3.28', $resB->json('kpis.cost_per_click')); // (200 * 0.82) / 50 = 164 / 50 = 3.28
     }
+
+    public function test_extract_available_funds_prioritizes_funding_source_details_over_unsettled_balance(): void
+    {
+        $syncService = app(\App\Services\MetaSyncService::class);
+
+        // Case 1: Funding source details has exact prepaid available balance (e.g. 999.07), while balance is 1345.34
+        $accData1 = [
+            'balance' => 134534, // Unsettled bill amount due
+            'funding_source_details' => [
+                'amount' => '99907', // Real prepaid available funds in cents
+            ],
+            'amount_spent' => 574858,
+        ];
+        $this->assertEquals(999.07, $syncService->extractAvailableFunds($accData1));
+
+        // Case 2: Nested funding source details with 116.44 available funds
+        $accData2 = [
+            'balance' => 127199,
+            'funding_source_details' => [
+                'details' => [
+                    'amount' => 11644,
+                ],
+            ],
+            'amount_spent' => 542437,
+        ];
+        $this->assertEquals(116.44, $syncService->extractAvailableFunds($accData2));
+
+        // Case 3: Spend cap minus amount spent
+        $accData3 = [
+            'spend_cap' => 600000,
+            'amount_spent' => 450000,
+            'is_prepay_account' => true,
+        ];
+        $this->assertEquals(1500.00, $syncService->extractAvailableFunds($accData3));
+    }
 }
+

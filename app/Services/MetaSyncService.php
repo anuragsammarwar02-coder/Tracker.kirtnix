@@ -356,9 +356,7 @@ class MetaSyncService
             $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
 
             $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : (isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00);
-            $balance = isset($acc['balance']) ? (abs((float) $acc['balance']) / 100) : (
-                isset($acc['funding_source_details']['amount']) ? (abs((float) $acc['funding_source_details']['amount']) / 100) : 0.00
-            );
+            $balance = $this->extractAvailableFunds($acc, 0.00);
             $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
 
             // Authoritative Meta Business resolution:
@@ -540,9 +538,7 @@ class MetaSyncService
                     $statusNum = $acc['account_status'] ?? 1;
                     $status = ($statusNum === 1) ? 'Active' : (($statusNum === 2) ? 'Disabled' : 'Unsettled');
                     $spendLimit = isset($acc['spend_cap']) ? ((float) $acc['spend_cap'] / 100) : (isset($acc['spend_limit']) ? ((float) $acc['spend_limit'] / 100) : 0.00);
-                    $balance = isset($acc['balance']) ? (abs((float) $acc['balance']) / 100) : (
-                        isset($acc['funding_source_details']['amount']) ? (abs((float) $acc['funding_source_details']['amount']) / 100) : 0.00
-                    );
+                    $balance = $this->extractAvailableFunds($acc, 0.00);
                     $lifetimeSpend = isset($acc['amount_spent']) ? ((float) $acc['amount_spent'] / 100) : 0.00;
 
                     $metaBusinessId = null;
@@ -632,11 +628,8 @@ class MetaSyncService
             if ($accRes->successful() && !empty($accRes->json())) {
                 $accData = $accRes->json();
                 $spendLimit = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : 0.00);
-                $rawBalance = isset($accData['balance']) ? (abs((float) $accData['balance']) / 100) : (
-                    isset($accData['funding_source_details']['amount']) ? (abs((float) $accData['funding_source_details']['amount']) / 100) : 0.00
-                );
+                $availableBalance = $this->extractAvailableFunds($accData, (float) ($adAccount->balance ?? 0.00));
                 $lifetimeSpend = isset($accData['amount_spent']) ? ((float) $accData['amount_spent'] / 100) : (float) ($adAccount->lifetime_spend ?? 0.00);
-                $availableBalance = $rawBalance;
 
                 $metaBusinessId = $adAccount->meta_business_id;
                 if (!empty($accData['business']['id']) && !empty($accData['business']['name'])) {
@@ -828,10 +821,7 @@ class MetaSyncService
                         $currencySymbol = $adAccount->currency_symbol;
                     }
                     $spendCap = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : (float) ($adAccount->spend_limit ?? 0));
-                    $rawBalance = isset($accData['balance']) ? (abs((float) $accData['balance']) / 100) : (
-                        isset($accData['funding_source_details']['amount']) ? (abs((float) $accData['funding_source_details']['amount']) / 100) : (float) ($adAccount->balance ?? 0.00)
-                    );
-                    $availableBalance = $rawBalance;
+                    $availableBalance = $this->extractAvailableFunds($accData, (float) ($adAccount->balance ?? 0.00));
 
                     $metaBusinessId = $adAccount->meta_business_id;
                     if (!empty($accData['business']['id']) && !empty($accData['business']['name'])) {
@@ -1095,5 +1085,71 @@ class MetaSyncService
         foreach ($priorityAccounts as $adAccount) {
             $this->syncSingleAdAccount($adAccount);
         }
+    }
+
+    /**
+     * Extract actual available funds / balance from Meta Ad Account data.
+     * Prioritizes funding_source_details (prepaid stored balance) over unsettled bill amount.
+     */
+    public function extractAvailableFunds(array $accData, float $fallback = 0.00): float
+    {
+        // 1. Check funding_source_details for explicit prepaid stored balance / amount
+        if (!empty($accData['funding_source_details'])) {
+            $fsd = $accData['funding_source_details'];
+            
+            // Single object with 'amount'
+            if (isset($fsd['amount']) && is_numeric($fsd['amount'])) {
+                $amt = abs((float) $fsd['amount']) / 100;
+                if ($amt > 0) return round($amt, 2);
+            }
+
+            // Nested details with 'amount'
+            if (isset($fsd['details']['amount']) && is_numeric($fsd['details']['amount'])) {
+                $amt = abs((float) $fsd['details']['amount']) / 100;
+                if ($amt > 0) return round($amt, 2);
+            }
+
+            // Array of funding sources (e.g. STORED_BALANCE, coupons)
+            if (is_array($fsd)) {
+                $totalFunds = 0.0;
+                $foundPrepay = false;
+                foreach ($fsd as $item) {
+                    if (is_array($item)) {
+                        if (isset($item['amount']) && is_numeric($item['amount'])) {
+                            $totalFunds += abs((float) $item['amount']) / 100;
+                            $foundPrepay = true;
+                        } elseif (isset($item['details']['amount']) && is_numeric($item['details']['amount'])) {
+                            $totalFunds += abs((float) $item['details']['amount']) / 100;
+                            $foundPrepay = true;
+                        }
+                    }
+                }
+                if ($foundPrepay && $totalFunds > 0) {
+                    return round($totalFunds, 2);
+                }
+            }
+        }
+
+        // 2. Check spend_cap vs amount_spent if spend_cap is set
+        $spendCap = isset($accData['spend_cap']) ? ((float) $accData['spend_cap'] / 100) : (isset($accData['spend_limit']) ? ((float) $accData['spend_limit'] / 100) : 0.00);
+        $amountSpent = isset($accData['amount_spent']) ? ((float) $accData['amount_spent'] / 100) : 0.00;
+
+        $isPrepay = !empty($accData['is_prepay_account']) || ($accData['is_prepay_account'] ?? false) === true;
+        if ($spendCap > 0 && $spendCap >= $amountSpent) {
+            $diff = $spendCap - $amountSpent;
+            if ($diff > 0) {
+                return round($diff, 2);
+            }
+        }
+
+        // 3. Fallback to balance field from Meta API if non-zero
+        if (isset($accData['balance']) && is_numeric($accData['balance'])) {
+            $rawBal = abs((float) $accData['balance']) / 100;
+            if ($rawBal > 0) {
+                return round($rawBal, 2);
+            }
+        }
+
+        return round($fallback, 2);
     }
 }
