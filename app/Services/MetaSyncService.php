@@ -872,6 +872,7 @@ class MetaSyncService
                     'lifetime' => 'maximum',
                 ];
                 $metaPreset = $presetMap[$dateRange] ?? 'last_30d';
+                $todayDateStr = \Carbon\Carbon::now($timezone)->toDateString();
 
                 $scopedRes = Http::withoutVerifying()->timeout(12)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
                     'access_token' => $token,
@@ -906,6 +907,24 @@ class MetaSyncService
                     Log::warning("Meta Graph API error fetching scoped insights for act_{$rawAccId} [{$metaPreset}]: " . ($scopedRes->body() ?: 'Empty response'));
                 }
 
+                // If dateRange is 'today' and returned 0, try explicit time_range in account timezone
+                if ($dateRange === 'today' && $scopedSpend == 0.00) {
+                    $trRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                        'access_token' => $token,
+                        'time_range' => json_encode(['since' => $todayDateStr, 'until' => $todayDateStr]),
+                        'fields' => 'spend,impressions,reach,clicks,cpc,cpm,ctr,actions',
+                    ]);
+                    if ($trRes->successful() && !empty($trRes->json('data'))) {
+                        $trData = $trRes->json('data')[0] ?? [];
+                        if (isset($trData['spend']) && (float) $trData['spend'] > 0) {
+                            $scopedSpend = (float) $trData['spend'];
+                            $scopedImpressions = (int) ($trData['impressions'] ?? 0);
+                            $scopedReach = (int) ($trData['reach'] ?? 0);
+                            $scopedClicks = (int) ($trData['clicks'] ?? 0);
+                        }
+                    }
+                }
+
                 // 3. TODAY's Insights in the account's configured timezone
                 if ($dateRange === 'today') {
                     $spendToday = $scopedSpend;
@@ -916,15 +935,22 @@ class MetaSyncService
                         'fields' => 'spend,impressions,reach,clicks,actions',
                     ]);
 
-                    if ($todayRes->successful()) {
-                        $todayData = $todayRes->json('data')[0] ?? null;
-                        if ($todayData) {
-                            $spendToday = (float) ($todayData['spend'] ?? 0.00);
+                    if ($todayRes->successful() && !empty($todayRes->json('data'))) {
+                        $todayData = $todayRes->json('data')[0] ?? [];
+                        $spendToday = (float) ($todayData['spend'] ?? 0.00);
+                    } else {
+                        // Fallback with explicit today time_range
+                        $trTodayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                            'access_token' => $token,
+                            'time_range' => json_encode(['since' => $todayDateStr, 'until' => $todayDateStr]),
+                            'fields' => 'spend,impressions,reach,clicks,actions',
+                        ]);
+                        if ($trTodayRes->successful() && !empty($trTodayRes->json('data'))) {
+                            $trData = $trTodayRes->json('data')[0] ?? [];
+                            $spendToday = (float) ($trData['spend'] ?? 0.00);
                         } else {
                             $spendToday = 0.00;
                         }
-                    } else {
-                        $spendToday = 0.00;
                     }
                 }
 
@@ -959,7 +985,7 @@ class MetaSyncService
                 $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
                 $params = [
                     'access_token' => $token,
-                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
+                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions},insights.date_preset(today).as(today_insights){reach,impressions,spend,clicks,actions}',
                     'effective_status' => '["ACTIVE","PAUSED","IN_PROCESS","WITH_ISSUES"]',
                     'limit' => 100,
                 ];
@@ -984,6 +1010,11 @@ class MetaSyncService
                     }
                 }
 
+                $campTodaySpendSum = 0.00;
+                $campTodayImpressionsSum = 0;
+                $campTodayReachSum = 0;
+                $campTodayClicksSum = 0;
+
                 if (!empty($allCampaigns)) {
                     $campaignsCount = count($allCampaigns);
                     foreach ($allCampaigns as $c) {
@@ -1001,6 +1032,16 @@ class MetaSyncService
                         $cLifetimeBudget = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
                         $cBudgetRemaining = isset($c['budget_remaining']) ? ((float) $c['budget_remaining'] / 100) : 0.00;
 
+                        // Check today's campaign-level insights
+                        $campTodayInsights = $c['insights.date_preset(today)']['data'][0] ?? ($c['today_insights']['data'][0] ?? []);
+                        if (!empty($campTodayInsights['spend'])) {
+                            $campTodaySpend = (float) $campTodayInsights['spend'];
+                            $campTodaySpendSum += $campTodaySpend;
+                            $campTodayImpressionsSum += (int) ($campTodayInsights['impressions'] ?? 0);
+                            $campTodayReachSum += (int) ($campTodayInsights['reach'] ?? 0);
+                            $campTodayClicksSum += (int) ($campTodayInsights['clicks'] ?? 0);
+                        }
+
                         $campModel = Campaign::updateOrCreate(
                             ['campaign_id' => $rawCampId],
                             [
@@ -1017,6 +1058,19 @@ class MetaSyncService
                                 'active_daily_budget' => in_array($cStatus, ['active', '1']) ? $cDailyBudget : 0.00,
                             ]
                         );
+                    }
+                }
+
+                // If account-level insights lagged behind but individual campaigns have real-time today spend:
+                if ($campTodaySpendSum > $spendToday) {
+                    $spendToday = $campTodaySpendSum;
+                }
+                if ($dateRange === 'today') {
+                    if ($campTodaySpendSum > $scopedSpend) {
+                        $scopedSpend = $campTodaySpendSum;
+                        if ($campTodayImpressionsSum > 0) $scopedImpressions = $campTodayImpressionsSum;
+                        if ($campTodayReachSum > 0) $scopedReach = $campTodayReachSum;
+                        if ($campTodayClicksSum > 0) $scopedClicks = $campTodayClicksSum;
                     }
                 }
             } catch (\Throwable $e) {
