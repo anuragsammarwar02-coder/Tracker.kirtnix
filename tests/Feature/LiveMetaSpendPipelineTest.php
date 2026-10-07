@@ -477,8 +477,6 @@ class LiveMetaSpendPipelineTest extends TestCase
                             'effective_status' => 'ACTIVE',
                             'objective' => 'OUTCOME_LEADS',
                             'daily_budget' => '59900',
-                            'insights.date_preset(today)' => ['data' => [['spend' => '216.37', 'impressions' => '713', 'reach' => '650', 'clicks' => '25']]],
-                            'insights.date_preset(maximum)' => ['data' => [['spend' => '216.37', 'impressions' => '713', 'reach' => '650', 'clicks' => '25']]],
                         ],
                         [
                             'id' => '120215000000000002',
@@ -487,8 +485,6 @@ class LiveMetaSpendPipelineTest extends TestCase
                             'effective_status' => 'ACTIVE',
                             'objective' => 'OUTCOME_LEADS',
                             'daily_budget' => '59900',
-                            'insights.date_preset(today)' => ['data' => [['spend' => '230.87', 'impressions' => '823', 'reach' => '780', 'clicks' => '28']]],
-                            'insights.date_preset(maximum)' => ['data' => [['spend' => '230.87', 'impressions' => '823', 'reach' => '780', 'clicks' => '28']]],
                         ],
                         [
                             'id' => '120215000000000003',
@@ -497,8 +493,6 @@ class LiveMetaSpendPipelineTest extends TestCase
                             'effective_status' => 'ACTIVE',
                             'objective' => 'OUTCOME_LEADS',
                             'daily_budget' => '59900',
-                            'insights.date_preset(today)' => ['data' => [['spend' => '227.45', 'impressions' => '1438', 'reach' => '1300', 'clicks' => '30']]],
-                            'insights.date_preset(maximum)' => ['data' => [['spend' => '227.45', 'impressions' => '1438', 'reach' => '1300', 'clicks' => '30']]],
                         ],
                         [
                             'id' => '120215000000000004',
@@ -507,8 +501,6 @@ class LiveMetaSpendPipelineTest extends TestCase
                             'effective_status' => 'ACTIVE',
                             'objective' => 'OUTCOME_ENGAGEMENT',
                             'daily_budget' => '69900',
-                            'insights.date_preset(today)' => ['data' => [['spend' => '363.16', 'impressions' => '1329', 'reach' => '1200', 'clicks' => '35']]],
-                            'insights.date_preset(maximum)' => ['data' => [['spend' => '1500.00', 'impressions' => '5500', 'reach' => '5000', 'clicks' => '150']]],
                         ],
                         [
                             'id' => '120215000000000005',
@@ -517,8 +509,6 @@ class LiveMetaSpendPipelineTest extends TestCase
                             'effective_status' => 'PAUSED',
                             'objective' => 'OUTCOME_ENGAGEMENT',
                             'daily_budget' => '29900',
-                            'insights.date_preset(today)' => ['data' => [['spend' => '35.42', 'impressions' => '265', 'reach' => '250', 'clicks' => '4']]],
-                            'insights.date_preset(maximum)' => ['data' => [['spend' => '350.00', 'impressions' => '1200', 'reach' => '1100', 'clicks' => '30']]],
                         ],
                         [
                             'id' => '120215000000000006',
@@ -527,8 +517,6 @@ class LiveMetaSpendPipelineTest extends TestCase
                             'effective_status' => 'PAUSED',
                             'objective' => 'OUTCOME_ENGAGEMENT',
                             'daily_budget' => '28500',
-                            'insights.date_preset(today)' => ['data' => [['spend' => '0.00', 'impressions' => '0', 'reach' => '0', 'clicks' => '0']]],
-                            'insights.date_preset(maximum)' => ['data' => [['spend' => '285.00', 'impressions' => '900', 'reach' => '850', 'clicks' => '20']]],
                         ],
                         [
                             'id' => '120215000000000007',
@@ -537,8 +525,6 @@ class LiveMetaSpendPipelineTest extends TestCase
                             'effective_status' => 'PAUSED',
                             'objective' => 'OUTCOME_ENGAGEMENT',
                             'daily_budget' => '69900',
-                            'insights.date_preset(today)' => ['data' => [['spend' => '0.00', 'impressions' => '0', 'reach' => '0', 'clicks' => '0']]],
-                            'insights.date_preset(maximum)' => ['data' => [['spend' => '699.00', 'impressions' => '2500', 'reach' => '2300', 'clicks' => '60']]],
                         ],
                         [
                             'id' => '120215000000000008',
@@ -547,20 +533,48 @@ class LiveMetaSpendPipelineTest extends TestCase
                             'effective_status' => 'PAUSED',
                             'objective' => 'OUTCOME_ENGAGEMENT',
                             'daily_budget' => '69900',
-                            'insights.date_preset(today)' => ['data' => [['spend' => '146.94', 'impressions' => '281', 'reach' => '270', 'clicks' => '12']]],
-                            'insights.date_preset(maximum)' => ['data' => [['spend' => '1047.81', 'impressions' => '3800', 'reach' => '3500', 'clicks' => '90']]],
                         ],
                     ]
                 ], 200);
             }
             if (str_contains($url, 'insights')) {
+                if (str_contains($url, 'level=campaign')) {
+                    if (str_contains($url, 'date_preset=maximum')) {
+                        return Http::response([
+                            'data' => [
+                                ['campaign_id' => '120215000000000001', 'spend' => '216.37', 'impressions' => '713', 'reach' => '650', 'clicks' => '25'],
+                                ['campaign_id' => '120215000000000002', 'spend' => '230.87', 'impressions' => '823', 'reach' => '780', 'clicks' => '28'],
+                                ['campaign_id' => '120215000000000003', 'spend' => '227.45', 'impressions' => '1438', 'reach' => '1300', 'clicks' => '30'],
+                                ['campaign_id' => '120215000000000004', 'spend' => '1500.00', 'impressions' => '5500', 'reach' => '5000', 'clicks' => '150'],
+                                ['campaign_id' => '120215000000000005', 'spend' => '350.00', 'impressions' => '1200', 'reach' => '1100', 'clicks' => '30'],
+                                ['campaign_id' => '120215000000000006', 'spend' => '285.00', 'impressions' => '900', 'reach' => '850', 'clicks' => '20'],
+                                ['campaign_id' => '120215000000000007', 'spend' => '699.00', 'impressions' => '2500', 'reach' => '2300', 'clicks' => '60'],
+                                ['campaign_id' => '120215000000000008', 'spend' => '1047.81', 'impressions' => '3800', 'reach' => '3500', 'clicks' => '90'],
+                            ]
+                        ], 200);
+                    }
+                    // date_preset=today
+                    return Http::response([
+                        'data' => [
+                            ['campaign_id' => '120215000000000001', 'spend' => '216.37', 'impressions' => '713', 'reach' => '650', 'clicks' => '25'],
+                            ['campaign_id' => '120215000000000002', 'spend' => '230.87', 'impressions' => '823', 'reach' => '780', 'clicks' => '28'],
+                            ['campaign_id' => '120215000000000003', 'spend' => '227.45', 'impressions' => '1438', 'reach' => '1300', 'clicks' => '30'],
+                            ['campaign_id' => '120215000000000004', 'spend' => '363.16', 'impressions' => '1329', 'reach' => '1200', 'clicks' => '35'],
+                            ['campaign_id' => '120215000000000005', 'spend' => '35.42', 'impressions' => '265', 'reach' => '250', 'clicks' => '4'],
+                            ['campaign_id' => '120215000000000006', 'spend' => '0.00', 'impressions' => '0', 'reach' => '0', 'clicks' => '0'],
+                            ['campaign_id' => '120215000000000007', 'spend' => '0.00', 'impressions' => '0', 'reach' => '0', 'clicks' => '0'],
+                            ['campaign_id' => '120215000000000008', 'spend' => '146.94', 'impressions' => '281', 'reach' => '270', 'clicks' => '12'],
+                        ]
+                    ], 200);
+                }
+
                 return Http::response([
                     'data' => [
                         [
                             'spend' => '1225.23',
                             'impressions' => '4870',
                             'reach' => '4200',
-                            'clicks' => '120',
+                            'clicks' => '134',
                         ]
                     ]
                 ], 200);

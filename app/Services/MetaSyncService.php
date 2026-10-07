@@ -503,6 +503,38 @@ class MetaSyncService
     }
 
     /**
+     * Resolve the most reliable active Meta access token
+     */
+    public function getActiveAccessToken(?AdAccount $adAccount = null): ?string
+    {
+        if ($adAccount && $adAccount->metaConnection && !empty($adAccount->metaConnection->access_token)) {
+            return $adAccount->metaConnection->access_token;
+        }
+
+        $activeConn = MetaConnection::where('status', 'active')->whereNotNull('access_token')->latest('id')->first();
+        if ($activeConn && !empty($activeConn->access_token)) {
+            return $activeConn->access_token;
+        }
+
+        $anyConn = MetaConnection::whereNotNull('access_token')->latest('id')->first();
+        if ($anyConn && !empty($anyConn->access_token)) {
+            return $anyConn->access_token;
+        }
+
+        $systemToken = Setting::get('meta_system_user_token');
+        if (!empty($systemToken)) {
+            return $systemToken;
+        }
+
+        $accessToken = Setting::get('meta_access_token');
+        if (!empty($accessToken)) {
+            return $accessToken;
+        }
+
+        return env('META_SYSTEM_USER_TOKEN') ?: env('META_ACCESS_TOKEN');
+    }
+
+    /**
      * Fetch a specific single Ad Account by raw ID (e.g. act_123456789 or 123456789) directly from Meta Graph API
      */
     public function fetchAndSaveSingleAdAccount(string $rawId, ?MetaConnection $connection = null): ?AdAccount
@@ -524,7 +556,7 @@ class MetaSyncService
             ?: MetaConnection::where('status', 'active')->latest('id')->first()
             ?: MetaConnection::first();
 
-        $token = $conn?->access_token ?: Setting::get('meta_system_user_token');
+        $token = $this->getActiveAccessToken($conn ? new AdAccount(['meta_connection_id' => $conn->id]) : null);
         $version = $this->getGraphApiVersion();
 
         if ($token) {
@@ -603,12 +635,11 @@ class MetaSyncService
 
     /**
      * Sync single Ad Account's campaigns and insights from Meta Graph API
-     * Fetches ALL campaigns (ACTIVE, PAUSED, ARCHIVED, etc.) with pagination support
+     * Fetches ALL campaigns (ACTIVE, PAUSED, etc.) with pagination support
      */
     public function syncSingleAdAccount(AdAccount $adAccount): array
     {
-        $connection = $adAccount->metaConnection ?? MetaConnection::first();
-        $token = $connection?->access_token ?? \App\Models\Setting::get('meta_system_user_token');
+        $token = $this->getActiveAccessToken($adAccount);
 
         if (!$token) {
             return [];
@@ -659,41 +690,34 @@ class MetaSyncService
                 $adAccount->lifetime_spend = $lifetimeSpend;
             }
 
-            // 2. Sync campaigns and insights from Meta with pagination (Active and paused campaigns, exclude deleted/archived)
-            Campaign::where('ad_account_id', $adAccount->id)
-                ->whereIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
-                ->delete();
-
-            $allCampaignData = [];
-            $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
-            $params = [
+            // 2. Fetch all campaigns cleanly (without duplicate nested insights parameter)
+            $allCampaignData = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns", [
                 'access_token' => $token,
-                'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights.date_preset(today){spend,impressions,reach,clicks,actions},insights.date_preset(maximum){spend,impressions,reach,clicks,actions},insights{spend,impressions,reach,clicks,actions}',
+                'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining',
                 'limit' => 100,
-            ];
+            ], 10);
 
-            $pages = 0;
-            while ($nextUrl && $pages < 10) {
-                $pages++;
-                $res = $pages === 1
-                    ? Http::withoutVerifying()->timeout(15)->get($nextUrl, $params)
-                    : Http::withoutVerifying()->timeout(15)->get($nextUrl);
-
-                if ($res->successful() && !empty($res->json('data'))) {
-                    foreach ($res->json('data') as $c) {
-                        $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? ''));
-                        if (!in_array($rawStatus, ['deleted', 'archived'])) {
-                            $allCampaignData[] = $c;
-                        }
-                    }
-                    $nextUrl = $res->json('paging.next');
-                    $params = [];
-                } else {
-                    break;
+            // 3. Fetch lifetime and today campaign-level insights
+            $campMaxInsights = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                'access_token' => $token,
+                'date_preset' => 'maximum',
+                'level' => 'campaign',
+                'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
+                'limit' => 500,
+            ], 5);
+            $maxInsightsByCamp = [];
+            foreach ($campMaxInsights as $row) {
+                if (!empty($row['campaign_id'])) {
+                    $maxInsightsByCamp[(string) $row['campaign_id']] = $row;
                 }
             }
 
             if (!empty($allCampaignData)) {
+                // Delete deleted/archived campaigns from local db
+                Campaign::where('ad_account_id', $adAccount->id)
+                    ->whereIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
+                    ->delete();
+
                 foreach ($allCampaignData as $c) {
                     $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'active'));
                     if (in_array($rawStatus, ['deleted', 'archived'])) {
@@ -703,10 +727,10 @@ class MetaSyncService
                     $rawCampId = (string) $c['id'];
                     $campKey = 'cmp_' . $rawCampId;
 
-                    $maxInsights = $c['insights.date_preset(maximum)']['data'][0] ?? ($c['insights']['data'][0] ?? []);
-                    $spend = isset($maxInsights['spend']) ? (float) $maxInsights['spend'] : 0.00;
-                    $reach = isset($maxInsights['reach']) ? (int) $maxInsights['reach'] : 0;
-                    $impressions = isset($maxInsights['impressions']) ? (int) $maxInsights['impressions'] : 0;
+                    $maxRow = $maxInsightsByCamp[$rawCampId] ?? [];
+                    $spend = isset($maxRow['spend']) ? (float) $maxRow['spend'] : 0.00;
+                    $reach = isset($maxRow['reach']) ? (int) $maxRow['reach'] : 0;
+                    $impressions = isset($maxRow['impressions']) ? (int) $maxRow['impressions'] : 0;
 
                     $dailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
                     $lifetimeBudget = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
@@ -730,7 +754,7 @@ class MetaSyncService
                             'client_id' => $adAccount->client_id,
                             'ad_account_id' => $adAccount->id,
                             'name' => $c['name'] ?? ("Campaign " . $rawCampId),
-                            'slug' => \Illuminate\Support\Str::slug($c['name'] ?? ("campaign-" . $rawCampId)),
+                            'slug' => Str::slug($c['name'] ?? ("campaign-" . $rawCampId)),
                             'outcome' => in_array($c['objective'] ?? '', ['OUTCOME_LEADS', 'LEADS', 'CONVERSIONS', 'MESSAGES']) ? 'Subscribers' : 'Engagement',
                             'objective' => $c['objective'] ?? 'OUTCOME_LEADS',
                             'optimization_goal' => 'OFFSITE_CONVERSIONS',
@@ -780,8 +804,7 @@ class MetaSyncService
             }
         }
 
-        $connection = $adAccount->metaConnection ?? MetaConnection::first();
-        $token = $connection?->access_token ?? \App\Models\Setting::get('meta_system_user_token');
+        $token = $this->getActiveAccessToken($adAccount);
 
         // Baseline / Database values for this exact account
         $campaigns = Campaign::where('ad_account_id', $adAccount->id)
@@ -989,35 +1012,55 @@ class MetaSyncService
                     $adAccount->lifetime_spend = $spendTotal;
                 }
 
-                // 5. Dynamic Campaigns with Pagination & Direct Nested Date Insights
-                $allCampaigns = [];
-                $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
-                $params = [
+                // 5. Fetch ALL Campaigns cleanly with Pagination (Clean fields without duplicate insights parameter)
+                $allCampaigns = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns", [
                     'access_token' => $token,
-                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights.date_preset(' . $metaPreset . '){spend,impressions,reach,clicks,actions},insights.date_preset(today){spend,impressions,reach,clicks,actions},insights.date_preset(maximum){spend,impressions,reach,clicks,actions},insights{spend,impressions,reach,clicks,actions}',
+                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining',
                     'limit' => 100,
-                ];
+                ], 10);
 
-                $pageCount = 0;
-                while ($nextUrl && $pageCount < 10) {
-                    $pageCount++;
-                    $cRes = ($pageCount === 1)
-                        ? Http::withoutVerifying()->timeout(15)->get($nextUrl, $params)
-                        : Http::withoutVerifying()->timeout(15)->get($nextUrl);
+                // 6. Fetch campaign-level insights for today, maximum (lifetime), and scoped date range
+                $campTodayInsights = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                    'access_token' => $token,
+                    'date_preset' => 'today',
+                    'level' => 'campaign',
+                    'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
+                    'limit' => 500,
+                ], 5);
+                $todayInsightsByCamp = [];
+                foreach ($campTodayInsights as $row) {
+                    if (!empty($row['campaign_id'])) {
+                        $todayInsightsByCamp[(string) $row['campaign_id']] = $row;
+                    }
+                }
 
-                    if ($cRes->successful() && !empty($cRes->json('data'))) {
-                        $cData = $cRes->json('data');
-                        foreach ($cData as $c) {
-                            $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? ''));
-                            if (!in_array($rawStatus, ['deleted', 'archived'])) {
-                                $allCampaigns[] = $c;
-                            }
+                $campMaxInsights = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                    'access_token' => $token,
+                    'date_preset' => 'maximum',
+                    'level' => 'campaign',
+                    'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
+                    'limit' => 500,
+                ], 5);
+                $maxInsightsByCamp = [];
+                foreach ($campMaxInsights as $row) {
+                    if (!empty($row['campaign_id'])) {
+                        $maxInsightsByCamp[(string) $row['campaign_id']] = $row;
+                    }
+                }
+
+                $scopedInsightsByCamp = [];
+                if ($metaPreset !== 'today' && $metaPreset !== 'maximum') {
+                    $campScopedInsights = $this->fetchPagedGraphApi("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                        'access_token' => $token,
+                        'date_preset' => $metaPreset,
+                        'level' => 'campaign',
+                        'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
+                        'limit' => 500,
+                    ], 5);
+                    foreach ($campScopedInsights as $row) {
+                        if (!empty($row['campaign_id'])) {
+                            $scopedInsightsByCamp[(string) $row['campaign_id']] = $row;
                         }
-                        $paging = $cRes->json('paging');
-                        $nextUrl = $paging['next'] ?? null;
-                        $params = [];
-                    } else {
-                        break;
                     }
                 }
 
@@ -1034,31 +1077,35 @@ class MetaSyncService
                 $sumCampLifetimeSpend = 0.00;
 
                 if (!empty($allCampaigns)) {
-                    $campaignsCount = count($allCampaigns);
+                    $validCampaigns = [];
                     foreach ($allCampaigns as $c) {
-                        $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'paused'));
-                        if (in_array($rawStatus, ['deleted', 'archived'])) {
-                            continue;
+                        $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? ''));
+                        if (!in_array($rawStatus, ['deleted', 'archived'])) {
+                            $validCampaigns[] = $c;
                         }
+                    }
 
+                    $campaignsCount = count($validCampaigns);
+                    foreach ($validCampaigns as $c) {
+                        $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'paused'));
                         $rawCampId = (string) $c['id'];
                         $campKey = 'cmp_' . $rawCampId;
 
-                        // Lifetime metrics
-                        $campMax = $c['insights.date_preset(maximum)']['data'][0] ?? ($c['insights']['data'][0] ?? []);
+                        // Lifetime metrics from maximum insights
+                        $campMax = $maxInsightsByCamp[$rawCampId] ?? [];
                         $cLifetimeSpend = isset($campMax['spend']) ? (float) $campMax['spend'] : 0.00;
                         $cReach = isset($campMax['reach']) ? (int) $campMax['reach'] : 0;
                         $cImpressions = isset($campMax['impressions']) ? (int) $campMax['impressions'] : 0;
 
-                        // Today metrics
-                        $campToday = $c['insights.date_preset(today)']['data'][0] ?? [];
+                        // Today metrics from today insights
+                        $campToday = $todayInsightsByCamp[$rawCampId] ?? [];
                         $cTodaySpend = isset($campToday['spend']) ? (float) $campToday['spend'] : 0.00;
                         $cTodayImpressions = isset($campToday['impressions']) ? (int) $campToday['impressions'] : 0;
                         $cTodayReach = isset($campToday['reach']) ? (int) $campToday['reach'] : 0;
                         $cTodayClicks = isset($campToday['clicks']) ? (int) $campToday['clicks'] : 0;
 
                         // Scoped metrics for requested date range
-                        $campScoped = $c["insights.date_preset({$metaPreset})"]['data'][0] ?? ($metaPreset === 'today' ? $campToday : ($metaPreset === 'maximum' ? $campMax : []));
+                        $campScoped = ($metaPreset === 'today') ? $campToday : (($metaPreset === 'maximum') ? $campMax : ($scopedInsightsByCamp[$rawCampId] ?? []));
                         $cScopedSpend = isset($campScoped['spend']) ? (float) $campScoped['spend'] : ($metaPreset === 'today' ? $cTodaySpend : 0.00);
                         $cScopedImpressions = isset($campScoped['impressions']) ? (int) $campScoped['impressions'] : ($metaPreset === 'today' ? $cTodayImpressions : 0);
                         $cScopedReach = isset($campScoped['reach']) ? (int) $campScoped['reach'] : ($metaPreset === 'today' ? $cTodayReach : 0);
@@ -1119,53 +1166,29 @@ class MetaSyncService
                     }
                 }
 
-                // 6. Campaign-Level & AdSet-Level Live Insights Query Fallback (if direct campaign nested insights were delayed)
-                $campTodaySpendSum = 0.00;
-                $campTodayImpressionsSum = 0;
-                $campTodayReachSum = 0;
-                $campTodayClicksSum = 0;
-
-                if ($sumCampTodaySpend == 0.00) {
-                    $campTodayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
-                        'access_token' => $token,
-                        'date_preset' => 'today',
-                        'level' => 'campaign',
-                        'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
-                    ]);
-
-                    if ($campTodayRes->successful() && !empty($campTodayRes->json('data'))) {
-                        foreach ($campTodayRes->json('data') as $cRow) {
-                            $campTodaySpendSum += (float) ($cRow['spend'] ?? 0.00);
-                            $campTodayImpressionsSum += (int) ($cRow['impressions'] ?? 0);
-                            $campTodayReachSum += (int) ($cRow['reach'] ?? 0);
-                            $campTodayClicksSum += (int) ($cRow['clicks'] ?? 0);
-                        }
-                    }
-
-                    // If still 0, query direct campaign nodes for active campaigns
-                    if ($campTodaySpendSum == 0.00 && !empty($allCampaigns)) {
-                        $activeCamps = array_filter($allCampaigns, fn($ac) => in_array(strtolower($ac['effective_status'] ?? ($ac['status'] ?? '')), ['active', '1']));
-                        foreach (array_slice($activeCamps, 0, 10) as $ac) {
-                            $cId = $ac['id'] ?? '';
-                            if (!$cId) continue;
-                            $dcRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/{$cId}/insights", [
-                                'access_token' => $token,
-                                'date_preset' => 'today',
-                                'fields' => 'spend,impressions,reach,clicks,actions',
-                            ]);
-                            if ($dcRes->successful() && !empty($dcRes->json('data'))) {
-                                $dcRow = $dcRes->json('data')[0] ?? [];
-                                $campTodaySpendSum += (float) ($dcRow['spend'] ?? 0.00);
-                                $campTodayImpressionsSum += (int) ($dcRow['impressions'] ?? 0);
-                                $campTodayReachSum += (int) ($dcRow['reach'] ?? 0);
-                                $campTodayClicksSum += (int) ($dcRow['clicks'] ?? 0);
-                            }
+                // 7. Direct campaign node insights fallback (if campaign insights level had delay on active ads)
+                if ($sumCampTodaySpend == 0.00 && !empty($allCampaigns)) {
+                    $activeCamps = array_filter($allCampaigns, fn($ac) => in_array(strtolower($ac['effective_status'] ?? ($ac['status'] ?? '')), ['active', '1']));
+                    foreach (array_slice($activeCamps, 0, 10) as $ac) {
+                        $cId = $ac['id'] ?? '';
+                        if (!$cId) continue;
+                        $dcRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/{$cId}/insights", [
+                            'access_token' => $token,
+                            'date_preset' => 'today',
+                            'fields' => 'spend,impressions,reach,clicks,actions',
+                        ]);
+                        if ($dcRes->successful() && !empty($dcRes->json('data'))) {
+                            $dcRow = $dcRes->json('data')[0] ?? [];
+                            $sumCampTodaySpend += (float) ($dcRow['spend'] ?? 0.00);
+                            $sumCampTodayImpressions += (int) ($dcRow['impressions'] ?? 0);
+                            $sumCampTodayReach += (int) ($dcRow['reach'] ?? 0);
+                            $sumCampTodayClicks += (int) ($dcRow['clicks'] ?? 0);
                         }
                     }
                 }
 
                 // Reconcile spendToday
-                $spendToday = max($spendToday, $sumCampTodaySpend, $campTodaySpendSum);
+                $spendToday = max($spendToday, $sumCampTodaySpend);
 
                 // 7. Real-Time Billing Delta Tracking (Instant 0-delay capture from amount_spent on act_{id})
                 $todayBaselineKey = "meta_baseline_spend:acc_{$adAccount->id}:" . $todayDateStr;
