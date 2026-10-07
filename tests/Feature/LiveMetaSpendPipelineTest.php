@@ -51,6 +51,7 @@ class LiveMetaSpendPipelineTest extends TestCase
 
         // Client A - Gujarati Trader mapped to Gujarati 2 Backup
         $this->adAccountA = AdAccount::create([
+            'meta_connection_id' => $metaConnection->id,
             'meta_business_id' => $this->metaBusiness->id,
             'account_id' => 'act_1673560083719083',
             'name' => 'Gujrati 2 Backup',
@@ -456,5 +457,186 @@ class LiveMetaSpendPipelineTest extends TestCase
         // Verified subscriber joins must be 5
         $response->assertSee('id="kpi-subscribers"', false);
         $response->assertSee('id="kpi-pending-requests"', false);
+    }
+
+    /**
+     * Test 12: Exact live production scenario with 8 campaigns (including 3 new 7 Oct active campaigns)
+     * summing to ₹1,225.23 today spend, showing 4 active / 8 total, and calculating accurate CPC and Cost/Sub.
+     */
+    public function test_12_meta_eight_campaigns_and_live_today_spend_reconciliation(): void
+    {
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            $url = $request->url();
+            if (str_contains($url, 'campaigns')) {
+                return Http::response([
+                    'data' => [
+                        [
+                            'id' => '120215000000000001',
+                            'name' => 'New Subs ad || 7 Oct - 3',
+                            'status' => 'ACTIVE',
+                            'effective_status' => 'ACTIVE',
+                            'objective' => 'OUTCOME_LEADS',
+                            'daily_budget' => '59900',
+                            'insights.date_preset(today)' => ['data' => [['spend' => '216.37', 'impressions' => '713', 'reach' => '650', 'clicks' => '25']]],
+                            'insights.date_preset(maximum)' => ['data' => [['spend' => '216.37', 'impressions' => '713', 'reach' => '650', 'clicks' => '25']]],
+                        ],
+                        [
+                            'id' => '120215000000000002',
+                            'name' => 'New Subs ad || 7 Oct - 2',
+                            'status' => 'ACTIVE',
+                            'effective_status' => 'ACTIVE',
+                            'objective' => 'OUTCOME_LEADS',
+                            'daily_budget' => '59900',
+                            'insights.date_preset(today)' => ['data' => [['spend' => '230.87', 'impressions' => '823', 'reach' => '780', 'clicks' => '28']]],
+                            'insights.date_preset(maximum)' => ['data' => [['spend' => '230.87', 'impressions' => '823', 'reach' => '780', 'clicks' => '28']]],
+                        ],
+                        [
+                            'id' => '120215000000000003',
+                            'name' => 'New Subs ad || 7 Oct - 1',
+                            'status' => 'ACTIVE',
+                            'effective_status' => 'ACTIVE',
+                            'objective' => 'OUTCOME_LEADS',
+                            'daily_budget' => '59900',
+                            'insights.date_preset(today)' => ['data' => [['spend' => '227.45', 'impressions' => '1438', 'reach' => '1300', 'clicks' => '30']]],
+                            'insights.date_preset(maximum)' => ['data' => [['spend' => '227.45', 'impressions' => '1438', 'reach' => '1300', 'clicks' => '30']]],
+                        ],
+                        [
+                            'id' => '120215000000000004',
+                            'name' => 'New Conversion ad || 2 Oct - 1',
+                            'status' => 'ACTIVE',
+                            'effective_status' => 'ACTIVE',
+                            'objective' => 'OUTCOME_ENGAGEMENT',
+                            'daily_budget' => '69900',
+                            'insights.date_preset(today)' => ['data' => [['spend' => '363.16', 'impressions' => '1329', 'reach' => '1200', 'clicks' => '35']]],
+                            'insights.date_preset(maximum)' => ['data' => [['spend' => '1500.00', 'impressions' => '5500', 'reach' => '5000', 'clicks' => '150']]],
+                        ],
+                        [
+                            'id' => '120215000000000005',
+                            'name' => 'New Conversion ad || 5 Oct - 1',
+                            'status' => 'PAUSED',
+                            'effective_status' => 'PAUSED',
+                            'objective' => 'OUTCOME_ENGAGEMENT',
+                            'daily_budget' => '29900',
+                            'insights.date_preset(today)' => ['data' => [['spend' => '35.42', 'impressions' => '265', 'reach' => '250', 'clicks' => '4']]],
+                            'insights.date_preset(maximum)' => ['data' => [['spend' => '350.00', 'impressions' => '1200', 'reach' => '1100', 'clicks' => '30']]],
+                        ],
+                        [
+                            'id' => '120215000000000006',
+                            'name' => 'New Conversion ad || 5 Oct - 1 (Old)',
+                            'status' => 'PAUSED',
+                            'effective_status' => 'PAUSED',
+                            'objective' => 'OUTCOME_ENGAGEMENT',
+                            'daily_budget' => '28500',
+                            'insights.date_preset(today)' => ['data' => [['spend' => '0.00', 'impressions' => '0', 'reach' => '0', 'clicks' => '0']]],
+                            'insights.date_preset(maximum)' => ['data' => [['spend' => '285.00', 'impressions' => '900', 'reach' => '850', 'clicks' => '20']]],
+                        ],
+                        [
+                            'id' => '120215000000000007',
+                            'name' => 'New Conversion ad || 2 Oct - 2',
+                            'status' => 'PAUSED',
+                            'effective_status' => 'PAUSED',
+                            'objective' => 'OUTCOME_ENGAGEMENT',
+                            'daily_budget' => '69900',
+                            'insights.date_preset(today)' => ['data' => [['spend' => '0.00', 'impressions' => '0', 'reach' => '0', 'clicks' => '0']]],
+                            'insights.date_preset(maximum)' => ['data' => [['spend' => '699.00', 'impressions' => '2500', 'reach' => '2300', 'clicks' => '60']]],
+                        ],
+                        [
+                            'id' => '120215000000000008',
+                            'name' => 'New Conversion ad || 2 Oct - 3',
+                            'status' => 'PAUSED',
+                            'effective_status' => 'PAUSED',
+                            'objective' => 'OUTCOME_ENGAGEMENT',
+                            'daily_budget' => '69900',
+                            'insights.date_preset(today)' => ['data' => [['spend' => '146.94', 'impressions' => '281', 'reach' => '270', 'clicks' => '12']]],
+                            'insights.date_preset(maximum)' => ['data' => [['spend' => '1047.81', 'impressions' => '3800', 'reach' => '3500', 'clicks' => '90']]],
+                        ],
+                    ]
+                ], 200);
+            }
+            if (str_contains($url, 'insights')) {
+                return Http::response([
+                    'data' => [
+                        [
+                            'spend' => '1225.23',
+                            'impressions' => '4870',
+                            'reach' => '4200',
+                            'clicks' => '120',
+                        ]
+                    ]
+                ], 200);
+            }
+            if (str_contains($url, 'act_1673560083719083')) {
+                return Http::response([
+                    'id' => 'act_1673560083719083',
+                    'account_id' => '1673560083719083',
+                    'name' => 'Gujrati 2 Backup',
+                    'currency' => 'INR',
+                    'account_status' => 1,
+                    'spend_cap' => 949152,
+                    'balance' => 72470,
+                    'amount_spent' => 432145,
+                    'timezone_name' => 'Asia/Kolkata',
+                ], 200);
+            }
+            return Http::response([], 200);
+        });
+
+        // 25 confirmed subscribers today
+        for ($i = 1; $i <= 25; $i++) {
+            TelegramEvent::create([
+                'client_id' => $this->clientA->id,
+                'telegram_user_id' => 'user_today_' . $i,
+                'event_type' => 'join',
+                'status_after' => 'member',
+                'event_time' => now(),
+            ]);
+        }
+
+        $cta = \App\Models\Cta::create([
+            'landing_page_id' => $this->landingPageA->id,
+            'client_id' => $this->clientA->id,
+            'name' => 'Join Telegram CTA',
+            'tracking_token' => 'kx_test_7oct',
+            'telegram_destination' => 'https://t.me/gujaratitrader',
+        ]);
+
+        // 77 CTA clicks
+        for ($i = 1; $i <= 77; $i++) {
+            \App\Models\CtaClick::create([
+                'landing_page_id' => $this->landingPageA->id,
+                'client_id' => $this->clientA->id,
+                'cta_id' => $cta->id,
+                'tracking_token' => 'tok_' . $i,
+                'visitor_id' => 'vis_' . $i,
+                'destination_url' => 'https://t.me/gujaratitrader',
+                'clicked_at' => now(),
+            ]);
+        }
+
+        $response = $this->actingAs($this->user)->get(route('analytics.detail', [$this->landingPageA->slug, 'date_range' => 'today', 'sync' => '1']));
+        $response->assertOk();
+
+        // Today's spending = ₹1,225.23
+        $response->assertSee('<span id="budget-spending" class="text-3xl font-extrabold text-slate-900 tracking-tight">₹1,225.23</span>', false);
+
+        // All 8 campaigns present
+        $response->assertSee('New Subs ad || 7 Oct - 3');
+        $response->assertSee('New Subs ad || 7 Oct - 2');
+        $response->assertSee('New Subs ad || 7 Oct - 1');
+        $response->assertSee('New Conversion ad || 2 Oct - 1');
+        $response->assertSee('New Conversion ad || 5 Oct - 1');
+        $response->assertSee('New Conversion ad || 2 Oct - 2');
+        $response->assertSee('New Conversion ad || 2 Oct - 3');
+
+        // Net spend = 1225.23 * 0.82 = 1004.6886.
+        // CPC with 134 Meta clicks = 1004.6886 / 134 = ₹7.50
+        $response->assertSee('₹7.50');
+        $response->assertSee('Spend / Meta ad clicks (CPC)');
+
+        // Cost / Sub with 25 subs = 1004.6886 / 25 = ₹40.19
+        $response->assertSee('₹40.19');
+
+        // 4 active / 8 total
+        $response->assertSee('4 active / 8 total');
     }
 }

@@ -410,21 +410,32 @@ class AnalyticsController extends Controller
         // Connected Ad Account (Scoped strictly to this client)
         $adAccount = $client?->adAccount ?? ($client ? AdAccount::where('client_id', $client->id)->first() : null);
 
-        // Campaigns Live from Meta for this client's assigned ad account
+        // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account and date range
+        $metaMetrics = null;
+        if ($adAccount) {
+            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, $request->has('sync'), $dateRange);
+            $campaignSpend = (float) (isset($metaMetrics['spend_scoped']) ? $metaMetrics['spend_scoped'] : ($metaMetrics['spend_total'] ?? 0.00));
+            $campaignReach = (int) ($metaMetrics['reach'] ?? 0);
+            $campaignImpressions = (int) ($metaMetrics['impressions'] ?? 0);
+        } else {
+            if ($dateRange === 'lifetime') {
+                $campaignSpend = (float) Campaign::where('client_id', $client?->id)->sum('spend');
+                $campaignReach = (int) Campaign::where('client_id', $client?->id)->sum('reach');
+                $campaignImpressions = (int) Campaign::where('client_id', $client?->id)->sum('impressions');
+            } else {
+                $campaignSpend = 0.00;
+                $campaignReach = 0;
+                $campaignImpressions = 0;
+            }
+        }
+
+        // Campaigns Live from Meta for this client's assigned ad account (ordered by Active first, latest ID)
         if ($adAccount) {
             $campaigns = Campaign::where('ad_account_id', $adAccount->id)
                 ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
+                ->orderByRaw("CASE WHEN LOWER(status) IN ('active', '1') THEN 0 ELSE 1 END")
+                ->orderByDesc('id')
                 ->get();
-            if ($campaigns->isEmpty() || $request->has('sync')) {
-                try {
-                    app(\App\Services\MetaSyncService::class)->syncSingleAdAccount($adAccount);
-                    $campaigns = Campaign::where('ad_account_id', $adAccount->id)
-                        ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
-                        ->get();
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('Meta auto sync error: ' . $e->getMessage());
-                }
-            }
         } else {
             $campaigns = collect();
         }
@@ -464,23 +475,10 @@ class AnalyticsController extends Controller
             ->count('telegram_user_id');
         $backouts = (clone $eventsQuery)->where('event_type', 'leave')->count();
 
-        // 4. Meta Ads Metrics strictly scoped to assigned Meta Ad Account and date range
-        $metaMetrics = null;
-        if ($adAccount) {
-            $metaMetrics = app(\App\Services\MetaSyncService::class)->getAdAccountMetrics($adAccount, $request->has('sync'), $dateRange);
-            $campaignSpend = (float) (isset($metaMetrics['spend_scoped']) ? $metaMetrics['spend_scoped'] : ($metaMetrics['spend_total'] ?? 0.00));
-            $campaignReach = (int) ($metaMetrics['reach'] ?? 0);
-            $campaignImpressions = (int) ($metaMetrics['impressions'] ?? 0);
-        } else {
-            if ($dateRange === 'lifetime') {
-                $campaignSpend = (float) $campaigns->sum('spend');
-                $campaignReach = (int) $campaigns->sum('reach');
-                $campaignImpressions = (int) $campaigns->sum('impressions');
-            } else {
-                $campaignSpend = 0.00;
-                $campaignReach = 0;
-                $campaignImpressions = 0;
-            }
+        // Ensure dateRange = 'today' reconciles campaign spend with spend_today
+        $todaySpending = (float) ($metaMetrics['spend_today'] ?? 0.00);
+        if ($dateRange === 'today' && $todaySpending > $campaignSpend) {
+            $campaignSpend = $todaySpending;
         }
 
         // Derived Metrics
@@ -535,7 +533,6 @@ class AnalyticsController extends Controller
         $accountBalance = (float) ($metaMetrics['balance'] ?? ($adAccount?->balance ?? 0));
 
         // 1. Box 1: Today's Spending (Actual spending for today from selected Meta Ad Account)
-        $todaySpending = (float) ($metaMetrics['spend_today'] ?? 0.00);
         $todaySpendingSubtitle = 'Actual spending for today';
 
         // 2. Box 2: Total Budget Spend (Actual lifetime spend since account creation from Meta - without GST)

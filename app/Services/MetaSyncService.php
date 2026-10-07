@@ -12,6 +12,7 @@ use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class MetaSyncService
 {
@@ -658,22 +659,21 @@ class MetaSyncService
                 $adAccount->lifetime_spend = $lifetimeSpend;
             }
 
-            // 2. Sync campaigns and insights from Meta with pagination (Strictly active and paused campaigns, exclude archived)
+            // 2. Sync campaigns and insights from Meta with pagination (Active and paused campaigns, exclude deleted/archived)
             Campaign::where('ad_account_id', $adAccount->id)
-                ->whereIn('status', ['archived', 'ARCHIVED', 'Archived'])
+                ->whereIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
                 ->delete();
 
             $allCampaignData = [];
             $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
             $params = [
                 'access_token' => $token,
-                'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
-                'effective_status' => '["ACTIVE","PAUSED","IN_PROCESS","WITH_ISSUES"]',
+                'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights.date_preset(today){spend,impressions,reach,clicks,actions},insights.date_preset(maximum){spend,impressions,reach,clicks,actions},insights{spend,impressions,reach,clicks,actions}',
                 'limit' => 100,
             ];
 
             $pages = 0;
-            while ($nextUrl && $pages < 5) {
+            while ($nextUrl && $pages < 10) {
                 $pages++;
                 $res = $pages === 1
                     ? Http::withoutVerifying()->timeout(15)->get($nextUrl, $params)
@@ -682,11 +682,12 @@ class MetaSyncService
                 if ($res->successful() && !empty($res->json('data'))) {
                     foreach ($res->json('data') as $c) {
                         $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? ''));
-                        if (!in_array($rawStatus, ['archived', 'deleted'])) {
+                        if (!in_array($rawStatus, ['deleted', 'archived'])) {
                             $allCampaignData[] = $c;
                         }
                     }
                     $nextUrl = $res->json('paging.next');
+                    $params = [];
                 } else {
                     break;
                 }
@@ -695,33 +696,41 @@ class MetaSyncService
             if (!empty($allCampaignData)) {
                 foreach ($allCampaignData as $c) {
                     $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'active'));
-                    if (in_array($rawStatus, ['archived', 'deleted'])) {
+                    if (in_array($rawStatus, ['deleted', 'archived'])) {
                         continue;
                     }
 
-                    $insights = $c['insights']['data'][0] ?? [];
-                    $spend = (float) ($insights['spend'] ?? 0);
-                    $reach = (int) ($insights['reach'] ?? 0);
-                    $impressions = (int) ($insights['impressions'] ?? 0);
+                    $rawCampId = (string) $c['id'];
+                    $campKey = 'cmp_' . $rawCampId;
+
+                    $maxInsights = $c['insights.date_preset(maximum)']['data'][0] ?? ($c['insights']['data'][0] ?? []);
+                    $spend = isset($maxInsights['spend']) ? (float) $maxInsights['spend'] : 0.00;
+                    $reach = isset($maxInsights['reach']) ? (int) $maxInsights['reach'] : 0;
+                    $impressions = isset($maxInsights['impressions']) ? (int) $maxInsights['impressions'] : 0;
+
                     $dailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
                     $lifetimeBudget = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
 
-                    // Actual Telegram join is the single source of truth for subscribers (never Meta actions)
-                    $existingCamp = Campaign::where('campaign_id', 'cmp_' . $c['id'])->orWhere('campaign_id', $c['id'])->first();
+                    // Actual Telegram join is the single source of truth for subscribers
+                    $existingCamp = Campaign::where('ad_account_id', $adAccount->id)
+                        ->where(function($q) use ($campKey, $rawCampId) {
+                            $q->where('campaign_id', $campKey)->orWhere('campaign_id', $rawCampId);
+                        })->first();
+
                     $actualSubscribers = $existingCamp 
                         ? (\App\Models\Conversion::where('campaign_id', $existingCamp->id)->where('status', 'verified')->count() ?: $existingCamp->telegramEvents()->where('event_type', 'join')->count())
                         : 0;
-                    $costPerSub = $actualSubscribers > 0 ? round($spend / $actualSubscribers, 2) : 0.00;
+                    $costPerSub = $actualSubscribers > 0 ? round(($spend * 0.82) / $actualSubscribers, 2) : 0.00;
 
                     $status = ucfirst($rawStatus);
 
                     $campaign = Campaign::updateOrCreate(
-                        ['campaign_id' => 'cmp_' . $c['id']],
+                        ['campaign_id' => $campKey],
                         [
                             'client_id' => $adAccount->client_id,
                             'ad_account_id' => $adAccount->id,
-                            'name' => $c['name'],
-                            'slug' => \Illuminate\Support\Str::slug($c['name']),
+                            'name' => $c['name'] ?? ("Campaign " . $rawCampId),
+                            'slug' => \Illuminate\Support\Str::slug($c['name'] ?? ("campaign-" . $rawCampId)),
                             'outcome' => in_array($c['objective'] ?? '', ['OUTCOME_LEADS', 'LEADS', 'CONVERSIONS', 'MESSAGES']) ? 'Subscribers' : 'Engagement',
                             'objective' => $c['objective'] ?? 'OUTCOME_LEADS',
                             'optimization_goal' => 'OFFSITE_CONVERSIONS',
@@ -980,25 +989,27 @@ class MetaSyncService
                     $adAccount->lifetime_spend = $spendTotal;
                 }
 
-                // 5. Dynamic Campaigns with Pagination (Active & Paused campaigns only, exclude archived)
+                // 5. Dynamic Campaigns with Pagination & Direct Nested Date Insights
                 $allCampaigns = [];
                 $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
                 $params = [
                     'access_token' => $token,
-                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
-                    'effective_status' => '["ACTIVE","PAUSED","IN_PROCESS","WITH_ISSUES"]',
+                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights.date_preset(' . $metaPreset . '){spend,impressions,reach,clicks,actions},insights.date_preset(today){spend,impressions,reach,clicks,actions},insights.date_preset(maximum){spend,impressions,reach,clicks,actions},insights{spend,impressions,reach,clicks,actions}',
                     'limit' => 100,
                 ];
 
                 $pageCount = 0;
-                while ($nextUrl && $pageCount < 5) {
+                while ($nextUrl && $pageCount < 10) {
                     $pageCount++;
-                    $cRes = Http::withoutVerifying()->timeout(15)->get($nextUrl, $params);
+                    $cRes = ($pageCount === 1)
+                        ? Http::withoutVerifying()->timeout(15)->get($nextUrl, $params)
+                        : Http::withoutVerifying()->timeout(15)->get($nextUrl);
+
                     if ($cRes->successful() && !empty($cRes->json('data'))) {
                         $cData = $cRes->json('data');
                         foreach ($cData as $c) {
                             $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? ''));
-                            if (!in_array($rawStatus, ['archived', 'deleted'])) {
+                            if (!in_array($rawStatus, ['deleted', 'archived'])) {
                                 $allCampaigns[] = $c;
                             }
                         }
@@ -1010,106 +1021,151 @@ class MetaSyncService
                     }
                 }
 
+                $sumCampTodaySpend = 0.00;
+                $sumCampTodayImpressions = 0;
+                $sumCampTodayReach = 0;
+                $sumCampTodayClicks = 0;
+
+                $sumCampScopedSpend = 0.00;
+                $sumCampScopedImpressions = 0;
+                $sumCampScopedReach = 0;
+                $sumCampScopedClicks = 0;
+
+                $sumCampLifetimeSpend = 0.00;
+
                 if (!empty($allCampaigns)) {
                     $campaignsCount = count($allCampaigns);
                     foreach ($allCampaigns as $c) {
-                        $cStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'paused'));
-                        if (in_array($cStatus, ['archived', 'deleted'])) {
+                        $rawStatus = strtolower($c['effective_status'] ?? ($c['status'] ?? 'paused'));
+                        if (in_array($rawStatus, ['deleted', 'archived'])) {
                             continue;
                         }
 
-                        $rawCampId = $c['id'];
-                        $campInsights = $c['insights']['data'][0] ?? [];
-                        $cSpend = isset($campInsights['spend']) ? (float) $campInsights['spend'] : 0.00;
-                        $cReach = isset($campInsights['reach']) ? (int) $campInsights['reach'] : 0;
-                        $cImpressions = isset($campInsights['impressions']) ? (int) $campInsights['impressions'] : 0;
+                        $rawCampId = (string) $c['id'];
+                        $campKey = 'cmp_' . $rawCampId;
+
+                        // Lifetime metrics
+                        $campMax = $c['insights.date_preset(maximum)']['data'][0] ?? ($c['insights']['data'][0] ?? []);
+                        $cLifetimeSpend = isset($campMax['spend']) ? (float) $campMax['spend'] : 0.00;
+                        $cReach = isset($campMax['reach']) ? (int) $campMax['reach'] : 0;
+                        $cImpressions = isset($campMax['impressions']) ? (int) $campMax['impressions'] : 0;
+
+                        // Today metrics
+                        $campToday = $c['insights.date_preset(today)']['data'][0] ?? [];
+                        $cTodaySpend = isset($campToday['spend']) ? (float) $campToday['spend'] : 0.00;
+                        $cTodayImpressions = isset($campToday['impressions']) ? (int) $campToday['impressions'] : 0;
+                        $cTodayReach = isset($campToday['reach']) ? (int) $campToday['reach'] : 0;
+                        $cTodayClicks = isset($campToday['clicks']) ? (int) $campToday['clicks'] : 0;
+
+                        // Scoped metrics for requested date range
+                        $campScoped = $c["insights.date_preset({$metaPreset})"]['data'][0] ?? ($metaPreset === 'today' ? $campToday : ($metaPreset === 'maximum' ? $campMax : []));
+                        $cScopedSpend = isset($campScoped['spend']) ? (float) $campScoped['spend'] : ($metaPreset === 'today' ? $cTodaySpend : 0.00);
+                        $cScopedImpressions = isset($campScoped['impressions']) ? (int) $campScoped['impressions'] : ($metaPreset === 'today' ? $cTodayImpressions : 0);
+                        $cScopedReach = isset($campScoped['reach']) ? (int) $campScoped['reach'] : ($metaPreset === 'today' ? $cTodayReach : 0);
+                        $cScopedClicks = isset($campScoped['clicks']) ? (int) $campScoped['clicks'] : ($metaPreset === 'today' ? $cTodayClicks : 0);
+
                         $cDailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
                         $cLifetimeBudget = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
-                        $cBudgetRemaining = isset($c['budget_remaining']) ? ((float) $c['budget_remaining'] / 100) : 0.00;
 
-                        $campModel = Campaign::updateOrCreate(
-                            ['campaign_id' => $rawCampId],
+                        $status = ucfirst($rawStatus);
+
+                        // Update or create in Database
+                        $existingCamp = Campaign::where('ad_account_id', $adAccount->id)
+                            ->where(function($q) use ($campKey, $rawCampId) {
+                                $q->where('campaign_id', $campKey)->orWhere('campaign_id', $rawCampId);
+                            })->first();
+
+                        $actualSubscribers = $existingCamp 
+                            ? (\App\Models\Conversion::where('campaign_id', $existingCamp->id)->where('status', 'verified')->count() ?: $existingCamp->telegramEvents()->where('event_type', 'join')->count())
+                            : 0;
+                        $costPerSub = $actualSubscribers > 0 ? round(($cLifetimeSpend * 0.82) / $actualSubscribers, 2) : 0.00;
+
+                        Campaign::updateOrCreate(
+                            ['campaign_id' => $campKey],
                             [
                                 'client_id' => $adAccount->client_id,
                                 'ad_account_id' => $adAccount->id,
-                                'name' => $c['name'] ?? "Campaign {$rawCampId}",
-                                'slug' => Str::slug($c['name'] ?? "campaign-{$rawCampId}"),
+                                'name' => $c['name'] ?? ("Campaign " . $rawCampId),
+                                'slug' => Str::slug($c['name'] ?? ("campaign-" . $rawCampId)),
+                                'outcome' => in_array($c['objective'] ?? '', ['OUTCOME_LEADS', 'LEADS', 'CONVERSIONS', 'MESSAGES']) ? 'Subscribers' : 'Engagement',
                                 'objective' => $c['objective'] ?? 'OUTCOME_LEADS',
-                                'status' => $cStatus,
-                                'spend' => $cSpend,
+                                'optimization_goal' => 'OFFSITE_CONVERSIONS',
+                                'optimization_event' => 'Subscribe',
+                                'billing_event' => 'IMPRESSIONS',
+                                'conversion_location' => 'Telegram Channel',
+                                'status' => $status,
+                                'spend' => $cLifetimeSpend,
                                 'reach' => $cReach,
                                 'impressions' => $cImpressions,
                                 'budget' => $cLifetimeBudget,
-                                'active_daily_budget' => in_array($cStatus, ['active', '1']) ? $cDailyBudget : 0.00,
+                                'active_daily_budget' => in_array(strtolower($status), ['active', '1']) ? $cDailyBudget : 0.00,
+                                'subscribers' => $actualSubscribers,
+                                'cost_per_subscriber' => $costPerSub,
                             ]
                         );
+
+                        // Accumulate sums
+                        $sumCampTodaySpend += $cTodaySpend;
+                        $sumCampTodayImpressions += $cTodayImpressions;
+                        $sumCampTodayReach += $cTodayReach;
+                        $sumCampTodayClicks += $cTodayClicks;
+
+                        $sumCampScopedSpend += $cScopedSpend;
+                        $sumCampScopedImpressions += $cScopedImpressions;
+                        $sumCampScopedReach += $cScopedReach;
+                        $sumCampScopedClicks += $cScopedClicks;
+
+                        $sumCampLifetimeSpend += $cLifetimeSpend;
                     }
                 }
 
-                // 6. Campaign-Level & AdSet-Level Live Insights Query (Captures real-time today / date-scoped spend before account rollup)
+                // 6. Campaign-Level & AdSet-Level Live Insights Query Fallback (if direct campaign nested insights were delayed)
                 $campTodaySpendSum = 0.00;
                 $campTodayImpressionsSum = 0;
                 $campTodayReachSum = 0;
                 $campTodayClicksSum = 0;
 
-                $campTodayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
-                    'access_token' => $token,
-                    'date_preset' => 'today',
-                    'level' => 'campaign',
-                    'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
-                ]);
-
-                if ($campTodayRes->successful() && !empty($campTodayRes->json('data'))) {
-                    foreach ($campTodayRes->json('data') as $cRow) {
-                        $campTodaySpendSum += (float) ($cRow['spend'] ?? 0.00);
-                        $campTodayImpressionsSum += (int) ($cRow['impressions'] ?? 0);
-                        $campTodayReachSum += (int) ($cRow['reach'] ?? 0);
-                        $campTodayClicksSum += (int) ($cRow['clicks'] ?? 0);
-                    }
-                }
-
-                // If still 0, query direct campaign nodes for active campaigns
-                if ($campTodaySpendSum == 0.00 && !empty($allCampaigns)) {
-                    $activeCamps = array_filter($allCampaigns, fn($ac) => in_array(strtolower($ac['effective_status'] ?? ($ac['status'] ?? '')), ['active', '1']));
-                    foreach (array_slice($activeCamps, 0, 5) as $ac) {
-                        $cId = $ac['id'] ?? '';
-                        if (!$cId) continue;
-                        $dcRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/{$cId}/insights", [
-                            'access_token' => $token,
-                            'date_preset' => 'today',
-                            'fields' => 'spend,impressions,reach,clicks,actions',
-                        ]);
-                        if ($dcRes->successful() && !empty($dcRes->json('data'))) {
-                            $dcRow = $dcRes->json('data')[0] ?? [];
-                            $campTodaySpendSum += (float) ($dcRow['spend'] ?? 0.00);
-                            $campTodayImpressionsSum += (int) ($dcRow['impressions'] ?? 0);
-                            $campTodayReachSum += (int) ($dcRow['reach'] ?? 0);
-                            $campTodayClicksSum += (int) ($dcRow['clicks'] ?? 0);
-                        }
-                    }
-                }
-
-                // If still 0, query adset level
-                if ($campTodaySpendSum == 0.00) {
-                    $adsetTodayRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                if ($sumCampTodaySpend == 0.00) {
+                    $campTodayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
                         'access_token' => $token,
                         'date_preset' => 'today',
-                        'level' => 'adset',
-                        'fields' => 'spend,impressions,reach,clicks,actions',
+                        'level' => 'campaign',
+                        'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
                     ]);
-                    if ($adsetTodayRes->successful() && !empty($adsetTodayRes->json('data'))) {
-                        foreach ($adsetTodayRes->json('data') as $asRow) {
-                            $campTodaySpendSum += (float) ($asRow['spend'] ?? 0.00);
-                            $campTodayImpressionsSum += (int) ($asRow['impressions'] ?? 0);
-                            $campTodayReachSum += (int) ($asRow['reach'] ?? 0);
-                            $campTodayClicksSum += (int) ($asRow['clicks'] ?? 0);
+
+                    if ($campTodayRes->successful() && !empty($campTodayRes->json('data'))) {
+                        foreach ($campTodayRes->json('data') as $cRow) {
+                            $campTodaySpendSum += (float) ($cRow['spend'] ?? 0.00);
+                            $campTodayImpressionsSum += (int) ($cRow['impressions'] ?? 0);
+                            $campTodayReachSum += (int) ($cRow['reach'] ?? 0);
+                            $campTodayClicksSum += (int) ($cRow['clicks'] ?? 0);
+                        }
+                    }
+
+                    // If still 0, query direct campaign nodes for active campaigns
+                    if ($campTodaySpendSum == 0.00 && !empty($allCampaigns)) {
+                        $activeCamps = array_filter($allCampaigns, fn($ac) => in_array(strtolower($ac['effective_status'] ?? ($ac['status'] ?? '')), ['active', '1']));
+                        foreach (array_slice($activeCamps, 0, 10) as $ac) {
+                            $cId = $ac['id'] ?? '';
+                            if (!$cId) continue;
+                            $dcRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/{$cId}/insights", [
+                                'access_token' => $token,
+                                'date_preset' => 'today',
+                                'fields' => 'spend,impressions,reach,clicks,actions',
+                            ]);
+                            if ($dcRes->successful() && !empty($dcRes->json('data'))) {
+                                $dcRow = $dcRes->json('data')[0] ?? [];
+                                $campTodaySpendSum += (float) ($dcRow['spend'] ?? 0.00);
+                                $campTodayImpressionsSum += (int) ($dcRow['impressions'] ?? 0);
+                                $campTodayReachSum += (int) ($dcRow['reach'] ?? 0);
+                                $campTodayClicksSum += (int) ($dcRow['clicks'] ?? 0);
+                            }
                         }
                     }
                 }
 
-                if ($campTodaySpendSum > $spendToday) {
-                    $spendToday = $campTodaySpendSum;
-                }
+                // Reconcile spendToday
+                $spendToday = max($spendToday, $sumCampTodaySpend, $campTodaySpendSum);
 
                 // 7. Real-Time Billing Delta Tracking (Instant 0-delay capture from amount_spent on act_{id})
                 $todayBaselineKey = "meta_baseline_spend:acc_{$adAccount->id}:" . $todayDateStr;
@@ -1129,40 +1185,17 @@ class MetaSyncService
 
                 if ($dateRange === 'today') {
                     $scopedSpend = max($scopedSpend, $spendToday);
-                    if ($campTodayImpressionsSum > 0) $scopedImpressions = $campTodayImpressionsSum;
-                    if ($campTodayReachSum > 0) $scopedReach = $campTodayReachSum;
-                    if ($campTodayClicksSum > 0) $scopedClicks = $campTodayClicksSum;
-                }
-
-                // If non-today date range (e.g. yesterday, last_7_days, this_month) returned 0 at account level, query campaign-level
-                if ($scopedSpend == 0.00 && in_array($dateRange, ['yesterday', 'last_7_days', 'last_30_days', 'this_month'])) {
-                    $campScopedRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
-                        'access_token' => $token,
-                        'date_preset' => $metaPreset,
-                        'level' => 'campaign',
-                        'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
-                    ]);
-
-                    if ($campScopedRes->successful() && !empty($campScopedRes->json('data'))) {
-                        $campScopedSpendSum = 0.00;
-                        $campScopedImpSum = 0;
-                        $campScopedReachSum = 0;
-                        $campScopedClicksSum = 0;
-
-                        foreach ($campScopedRes->json('data') as $cRow) {
-                            $campScopedSpendSum += (float) ($cRow['spend'] ?? 0.00);
-                            $campScopedImpSum += (int) ($cRow['impressions'] ?? 0);
-                            $campScopedReachSum += (int) ($cRow['reach'] ?? 0);
-                            $campScopedClicksSum += (int) ($cRow['clicks'] ?? 0);
-                        }
-
-                        if ($campScopedSpendSum > $scopedSpend) {
-                            $scopedSpend = $campScopedSpendSum;
-                            if ($campScopedImpSum > 0) $scopedImpressions = $campScopedImpSum;
-                            if ($campScopedReachSum > 0) $scopedReach = $campScopedReachSum;
-                            if ($campScopedClicksSum > 0) $scopedClicks = $campScopedClicksSum;
-                        }
-                    }
+                    $scopedImpressions = max($scopedImpressions, $sumCampTodayImpressions, $campTodayImpressionsSum);
+                    $scopedReach = max($scopedReach, $sumCampTodayReach, $campTodayReachSum);
+                    $scopedClicks = max($scopedClicks, $sumCampTodayClicks, $campTodayClicksSum);
+                } elseif ($dateRange === 'lifetime') {
+                    $scopedSpend = max($scopedSpend, $spendTotal, $sumCampLifetimeSpend);
+                    $spendTotal = max($spendTotal, $scopedSpend);
+                } else {
+                    if ($sumCampScopedSpend > 0) $scopedSpend = max($scopedSpend, $sumCampScopedSpend);
+                    if ($sumCampScopedImpressions > 0) $scopedImpressions = max($scopedImpressions, $sumCampScopedImpressions);
+                    if ($sumCampScopedReach > 0) $scopedReach = max($scopedReach, $sumCampScopedReach);
+                    if ($sumCampScopedClicks > 0) $scopedClicks = max($scopedClicks, $sumCampScopedClicks);
                 }
 
                 // Fallback for lifetime / last 30 days if still 0
