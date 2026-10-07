@@ -189,4 +189,32 @@ class ClientAdAccountAssignmentTest extends TestCase
         // Does not show Client A's campaign metrics
         $responseB->assertDontSee('cmp_aaa111');
     }
+
+    public function test_can_update_client_with_assigned_ad_account(): void
+    {
+        $client = Client::create([
+            'kx_code' => 'KX-105',
+            'company_name' => 'Gamma Trader',
+            'client_name' => 'Mayank',
+            'category' => 'Stock Market & Options Trading',
+            'status' => 'active',
+        ]);
+
+        $this->assertNull($client->ad_account_id);
+
+        $response = $this->actingAs($this->user)->put(route('clients.update', $client), [
+            'kx_code' => 'KX-105',
+            'company_name' => 'Gamma Trader',
+            'client_name' => 'Mayank',
+            'category' => 'Stock Market & Options Trading',
+            'status' => 'active',
+            'ad_account_id' => $this->adAccountA->id,
+        ]);
+
+        $response->assertRedirect(route('clients.show', $client));
+        $client->refresh();
+        $this->assertEquals($this->adAccountA->id, $client->ad_account_id);
+        $this->assertTrue($client->meta_ads_connected);
+    }
 }
+

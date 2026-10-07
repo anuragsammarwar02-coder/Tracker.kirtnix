@@ -19,5 +19,16 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => 'Your session or security token was refreshed. Please try again.',
+                    'csrf_token' => csrf_token(),
+                ], 419);
+            }
+            return redirect()->back()
+                ->withInput($request->except('_token', '_method', 'password', 'password_confirmation'))
+                ->with('error', 'Your session was refreshed. Please click Save Changes again.');
+        });
     })->create();
+

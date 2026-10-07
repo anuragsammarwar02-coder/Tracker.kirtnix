@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>@yield('title', 'Dashboard') | Kirtnix — TG TRACKER</title>
   <link rel="icon" type="image/png" href="{{ asset('assets/branding/kirtnix_favicon.png') }}">
   <link rel="shortcut icon" href="{{ asset('favicon.png') }}" type="image/png">
@@ -1194,8 +1195,8 @@
             }
           });
 
-          // Periodic Session & CSRF Keepalive (Every 5 minutes to prevent 419 Page Expired)
-          setInterval(() => {
+          // Periodic Session & CSRF Keepalive (Every 60s and on tab focus)
+          const refreshCsrf = () => {
             fetch('/session-keepalive', {
               headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
             })
@@ -1212,7 +1213,24 @@
               }
             })
             .catch(() => {});
-          }, 300000);
+          };
+
+          setInterval(refreshCsrf, 60000);
+          window.addEventListener('focus', refreshCsrf);
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') refreshCsrf();
+          });
+
+          // Ensure any form submission uses the latest CSRF token
+          document.addEventListener('submit', (e) => {
+            const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            if (metaToken && e.target && e.target.tagName === 'FORM') {
+              let tokenInput = e.target.querySelector('input[name="_token"]');
+              if (tokenInput) {
+                tokenInput.value = metaToken;
+              }
+            }
+          }, true);
         },
         toggleTheme() {
           this.theme = this.theme === 'light' ? 'dark' : 'light';
