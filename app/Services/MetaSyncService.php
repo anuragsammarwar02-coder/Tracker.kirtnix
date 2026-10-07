@@ -788,11 +788,21 @@ class MetaSyncService
         $spendToday = 0.00; // Strictly ₹0 by default if no spend today
 
         // Initial baseline from database campaigns (used when no token / API query is present)
-        $scopedSpend = $campaignSpend;
-        $scopedImpressions = (int) $campaigns->sum('impressions');
-        $scopedReach = (int) $campaigns->sum('reach');
-        $scopedClicks = (int) CampaignInsight::whereIn('campaign_id', $campaignIds)->sum('clicks');
-        $scopedLeads = (int) $campaigns->sum('subscribers');
+        if ($dateRange === 'lifetime') {
+            $scopedSpend = $campaignSpend;
+            $scopedImpressions = (int) $campaigns->sum('impressions');
+            $scopedReach = (int) $campaigns->sum('reach');
+            $scopedClicks = (int) CampaignInsight::whereIn('campaign_id', $campaignIds)->sum('clicks');
+            $scopedLeads = (int) $campaigns->sum('subscribers');
+        } else {
+            // For date-scoped queries like today, yesterday, last_7_days, last_30_days, this_month:
+            // Default baseline is strictly 0.00 (not the entire lifetime spend of the account!)
+            $scopedSpend = 0.00;
+            $scopedImpressions = 0;
+            $scopedReach = 0;
+            $scopedClicks = 0;
+            $scopedLeads = 0;
+        }
         $campaignsCount = $campaigns->count();
 
         // Attempt Live Meta Graph API query
@@ -906,9 +916,13 @@ class MetaSyncService
                         'fields' => 'spend,impressions,reach,clicks,actions',
                     ]);
 
-                    if ($todayRes->successful() && !empty($todayRes->json('data'))) {
-                        $todayData = $todayRes->json('data')[0] ?? [];
-                        $spendToday = (float) ($todayData['spend'] ?? 0.00);
+                    if ($todayRes->successful()) {
+                        $todayData = $todayRes->json('data')[0] ?? null;
+                        if ($todayData) {
+                            $spendToday = (float) ($todayData['spend'] ?? 0.00);
+                        } else {
+                            $spendToday = 0.00;
+                        }
                     } else {
                         $spendToday = 0.00;
                     }
@@ -1003,22 +1017,6 @@ class MetaSyncService
                                 'active_daily_budget' => in_array($cStatus, ['active', '1']) ? $cDailyBudget : 0.00,
                             ]
                         );
-
-                        if ($campModel && ($cSpend > 0 || $cReach > 0)) {
-                            CampaignInsight::updateOrCreate(
-                                [
-                                    'campaign_id' => $campModel->id,
-                                    'date' => now()->toDateString(),
-                                ],
-                                [
-                                    'spend' => $cSpend,
-                                    'reach' => $cReach,
-                                    'impressions' => $cImpressions,
-                                    'clicks' => (int) ($campInsights['clicks'] ?? 0),
-                                    'actions' => json_encode($campInsights['actions'] ?? []),
-                                ]
-                            );
-                        }
                     }
                 }
             } catch (\Throwable $e) {
@@ -1083,7 +1081,7 @@ class MetaSyncService
         }
 
         foreach ($priorityAccounts as $adAccount) {
-            $this->syncSingleAdAccount($adAccount);
+            $this->getAdAccountMetrics($adAccount, true);
         }
     }
 
