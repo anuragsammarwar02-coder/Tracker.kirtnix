@@ -495,6 +495,9 @@ class AnalyticsController extends Controller
         if ($metaClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($netSpend / $metaClicks, 2);
             $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
+        } elseif ($tgClicks > 0 && $campaignSpend > 0) {
+            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($netSpend / $tgClicks, 2);
+            $cpcSubtitle = 'Spend / Telegram CTA clicks (CPC)';
         } else {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . '0.00';
             $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
@@ -761,6 +764,9 @@ class AnalyticsController extends Controller
         if ($metaClicks > 0 && $campaignSpend > 0) {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($netSpend / $metaClicks, 2);
             $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';
+        } elseif ($tgClicks > 0 && $campaignSpend > 0) {
+            $costPerClick = ($adAccount?->currency_symbol ?? '₹') . number_format($netSpend / $tgClicks, 2);
+            $cpcSubtitle = 'Spend / Telegram CTA clicks (CPC)';
         } else {
             $costPerClick = ($adAccount?->currency_symbol ?? '₹') . '0.00';
             $cpcSubtitle = 'Spend / Meta ad clicks (CPC)';

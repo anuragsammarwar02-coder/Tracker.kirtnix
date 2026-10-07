@@ -985,7 +985,7 @@ class MetaSyncService
                 $nextUrl = "{$this->baseUrl}/{$version}/act_{$rawAccId}/campaigns";
                 $params = [
                     'access_token' => $token,
-                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions},insights.date_preset(today).as(today_insights){reach,impressions,spend,clicks,actions}',
+                    'fields' => 'id,name,objective,status,effective_status,daily_budget,lifetime_budget,budget_remaining,insights{reach,impressions,spend,actions}',
                     'effective_status' => '["ACTIVE","PAUSED","IN_PROCESS","WITH_ISSUES"]',
                     'limit' => 100,
                 ];
@@ -1010,11 +1010,6 @@ class MetaSyncService
                     }
                 }
 
-                $campTodaySpendSum = 0.00;
-                $campTodayImpressionsSum = 0;
-                $campTodayReachSum = 0;
-                $campTodayClicksSum = 0;
-
                 if (!empty($allCampaigns)) {
                     $campaignsCount = count($allCampaigns);
                     foreach ($allCampaigns as $c) {
@@ -1031,16 +1026,6 @@ class MetaSyncService
                         $cDailyBudget = isset($c['daily_budget']) ? ((float) $c['daily_budget'] / 100) : 0.00;
                         $cLifetimeBudget = isset($c['lifetime_budget']) ? ((float) $c['lifetime_budget'] / 100) : 0.00;
                         $cBudgetRemaining = isset($c['budget_remaining']) ? ((float) $c['budget_remaining'] / 100) : 0.00;
-
-                        // Check today's campaign-level insights
-                        $campTodayInsights = $c['insights.date_preset(today)']['data'][0] ?? ($c['today_insights']['data'][0] ?? []);
-                        if (!empty($campTodayInsights['spend'])) {
-                            $campTodaySpend = (float) $campTodayInsights['spend'];
-                            $campTodaySpendSum += $campTodaySpend;
-                            $campTodayImpressionsSum += (int) ($campTodayInsights['impressions'] ?? 0);
-                            $campTodayReachSum += (int) ($campTodayInsights['reach'] ?? 0);
-                            $campTodayClicksSum += (int) ($campTodayInsights['clicks'] ?? 0);
-                        }
 
                         $campModel = Campaign::updateOrCreate(
                             ['campaign_id' => $rawCampId],
@@ -1061,16 +1046,67 @@ class MetaSyncService
                     }
                 }
 
-                // If account-level insights lagged behind but individual campaigns have real-time today spend:
-                if ($campTodaySpendSum > $spendToday) {
-                    $spendToday = $campTodaySpendSum;
-                }
-                if ($dateRange === 'today') {
-                    if ($campTodaySpendSum > $scopedSpend) {
+                // 6. Campaign-Level Live Insights Query (Captures real-time today / date-scoped spend before account rollup)
+                $campTodayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                    'access_token' => $token,
+                    'date_preset' => 'today',
+                    'level' => 'campaign',
+                    'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
+                ]);
+
+                if ($campTodayRes->successful() && !empty($campTodayRes->json('data'))) {
+                    $campTodaySpendSum = 0.00;
+                    $campTodayImpressionsSum = 0;
+                    $campTodayReachSum = 0;
+                    $campTodayClicksSum = 0;
+
+                    foreach ($campTodayRes->json('data') as $cRow) {
+                        $campTodaySpendSum += (float) ($cRow['spend'] ?? 0.00);
+                        $campTodayImpressionsSum += (int) ($cRow['impressions'] ?? 0);
+                        $campTodayReachSum += (int) ($cRow['reach'] ?? 0);
+                        $campTodayClicksSum += (int) ($cRow['clicks'] ?? 0);
+                    }
+
+                    if ($campTodaySpendSum > $spendToday) {
+                        $spendToday = $campTodaySpendSum;
+                    }
+
+                    if ($dateRange === 'today' && $campTodaySpendSum > $scopedSpend) {
                         $scopedSpend = $campTodaySpendSum;
                         if ($campTodayImpressionsSum > 0) $scopedImpressions = $campTodayImpressionsSum;
                         if ($campTodayReachSum > 0) $scopedReach = $campTodayReachSum;
                         if ($campTodayClicksSum > 0) $scopedClicks = $campTodayClicksSum;
+                    }
+                }
+
+                // If non-today date range (e.g. yesterday, last_7_days, this_month) returned 0 at account level, query campaign-level
+                if ($scopedSpend == 0.00 && in_array($dateRange, ['yesterday', 'last_7_days', 'last_30_days', 'this_month'])) {
+                    $campScopedRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                        'access_token' => $token,
+                        'date_preset' => $metaPreset,
+                        'level' => 'campaign',
+                        'fields' => 'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
+                    ]);
+
+                    if ($campScopedRes->successful() && !empty($campScopedRes->json('data'))) {
+                        $campScopedSpendSum = 0.00;
+                        $campScopedImpSum = 0;
+                        $campScopedReachSum = 0;
+                        $campScopedClicksSum = 0;
+
+                        foreach ($campScopedRes->json('data') as $cRow) {
+                            $campScopedSpendSum += (float) ($cRow['spend'] ?? 0.00);
+                            $campScopedImpSum += (int) ($cRow['impressions'] ?? 0);
+                            $campScopedReachSum += (int) ($cRow['reach'] ?? 0);
+                            $campScopedClicksSum += (int) ($cRow['clicks'] ?? 0);
+                        }
+
+                        if ($campScopedSpendSum > $scopedSpend) {
+                            $scopedSpend = $campScopedSpendSum;
+                            if ($campScopedImpSum > 0) $scopedImpressions = $campScopedImpSum;
+                            if ($campScopedReachSum > 0) $scopedReach = $campScopedReachSum;
+                            if ($campScopedClicksSum > 0) $scopedClicks = $campScopedClicksSum;
+                        }
                     }
                 }
             } catch (\Throwable $e) {
