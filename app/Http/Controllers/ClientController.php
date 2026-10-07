@@ -333,12 +333,15 @@ class ClientController extends Controller
 
     public function destroy(Client $client)
     {
-        @set_time_limit(120);
+        @set_time_limit(300);
         $name = $client->company_name;
         $clientId = $client->id;
 
         try {
-            if (config('database.default') === 'sqlite') {
+            $isMysql = config('database.default') === 'mysql';
+            $isSqlite = config('database.default') === 'sqlite';
+
+            if ($isSqlite) {
                 try {
                     $pdo = DB::connection()->getPdo();
                     if ($pdo) {
@@ -352,79 +355,71 @@ class ClientController extends Controller
                 }
             }
 
-            // Chunked deletion helper to avoid long-lived database locks on large datasets
-            $chunkDelete = function ($modelClass, $column, $value) {
-                do {
-                    $ids = retry(5, function () use ($modelClass, $column, $value) {
-                        return $modelClass::where($column, $value)->limit(2000)->pluck('id')->all();
-                    }, 100);
+            if ($isMysql) {
+                DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            }
 
-                    if (!empty($ids)) {
-                        retry(5, function () use ($modelClass, $ids) {
-                            $modelClass::whereIn('id', $ids)->delete();
-                        }, 100);
-                        usleep(5000); // 5ms micro-pause to let concurrent webhooks/readers pass smoothly
-                    }
-                } while (!empty($ids));
-            };
+            try {
+                $landingPageIds = DB::table('landing_pages')->where('client_id', $clientId)->pluck('id')->all();
+                $campaignIds = DB::table('campaigns')->where('client_id', $clientId)->pluck('id')->all();
 
-            $chunkDeleteIn = function ($modelClass, $column, array $values) {
-                if (empty($values)) return;
-                do {
-                    $ids = retry(5, function () use ($modelClass, $column, $values) {
-                        return $modelClass::whereIn($column, $values)->limit(2000)->pluck('id')->all();
-                    }, 100);
+                // 1. Delete associated Views, Clicks, and Sessions
+                DB::table('landing_page_views')->where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    DB::table('landing_page_views')->whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-                    if (!empty($ids)) {
-                        retry(5, function () use ($modelClass, $ids) {
-                            $modelClass::whereIn('id', $ids)->delete();
-                        }, 100);
-                        usleep(5000); // 5ms micro-pause
-                    }
-                } while (!empty($ids));
-            };
+                DB::table('cta_clicks')->where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    DB::table('cta_clicks')->whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-            $landingPageIds = \App\Models\LandingPage::where('client_id', $clientId)->pluck('id')->all();
-            $campaignIds = Campaign::where('client_id', $clientId)->pluck('id')->all();
+                DB::table('tracking_sessions')->where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    DB::table('tracking_sessions')->whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-            // 1. Delete associated Landing Page Views & Clicks
-            $chunkDelete(\App\Models\LandingPageView::class, 'client_id', $clientId);
-            $chunkDeleteIn(\App\Models\LandingPageView::class, 'landing_page_id', $landingPageIds);
+                // 2. Delete CTAs, Invites & Landing Pages
+                DB::table('ctas')->where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    DB::table('ctas')->whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-            $chunkDelete(\App\Models\CtaClick::class, 'client_id', $clientId);
-            $chunkDeleteIn(\App\Models\CtaClick::class, 'landing_page_id', $landingPageIds);
+                DB::table('telegram_invites')->where('client_id', $clientId)->delete();
+                if (!empty($landingPageIds)) {
+                    DB::table('telegram_invites')->whereIn('landing_page_id', $landingPageIds)->delete();
+                }
 
-            // 2. Delete CTAs, Invites & Landing Pages
-            $chunkDelete(\App\Models\Cta::class, 'client_id', $clientId);
-            $chunkDeleteIn(\App\Models\Cta::class, 'landing_page_id', $landingPageIds);
+                DB::table('landing_pages')->where('client_id', $clientId)->delete();
 
-            $chunkDelete(\App\Models\TelegramInvite::class, 'client_id', $clientId);
-            $chunkDeleteIn(\App\Models\TelegramInvite::class, 'landing_page_id', $landingPageIds);
+                // 3. Delete Campaign Insights & Campaigns
+                if (!empty($campaignIds)) {
+                    DB::table('campaign_insights')->whereIn('campaign_id', $campaignIds)->delete();
+                }
+                DB::table('campaigns')->where('client_id', $clientId)->delete();
 
-            \App\Models\LandingPage::where('client_id', $clientId)->delete();
+                // 4. Delete Telegram Events (e.g. 124k+ rows) & Conversions
+                DB::table('telegram_events')->where('client_id', $clientId)->delete();
+                DB::table('conversions')->where('client_id', $clientId)->delete();
 
-            // 3. Delete Campaign Insights & Campaigns
-            $chunkDeleteIn(CampaignInsight::class, 'campaign_id', $campaignIds);
-            Campaign::where('client_id', $clientId)->delete();
+                // 5. Delete Telegram Channels & Bots
+                DB::table('telegram_channels')->where('client_id', $clientId)->delete();
+                DB::table('telegram_bots')->where('client_id', $clientId)->delete();
 
-            // 4. Delete Telegram Events (e.g. 124k+ rows) & Conversions
-            $chunkDelete(\App\Models\TelegramEvent::class, 'client_id', $clientId);
-            $chunkDelete(\App\Models\Conversion::class, 'client_id', $clientId);
+                // 6. Delete Reports & Notifications
+                DB::table('reports')->where('client_id', $clientId)->delete();
+                DB::table('notifications')->where('client_id', $clientId)->delete();
 
-            // 5. Delete Telegram Channels & Bots
-            \App\Models\TelegramChannel::where('client_id', $clientId)->delete();
-            \App\Models\TelegramBot::where('client_id', $clientId)->delete();
+                // 7. Unassign Ad Accounts
+                DB::table('ad_accounts')->where('client_id', $clientId)->update(['client_id' => null]);
 
-            // 6. Delete Tracking Sessions (Can have 100k+ rows), Reports & Notifications
-            $chunkDelete(\App\Models\TrackingSession::class, 'client_id', $clientId);
-            \App\Models\Report::where('client_id', $clientId)->delete();
-            \App\Models\Notification::where('client_id', $clientId)->delete();
-
-            // 7. Unassign Ad Accounts
-            AdAccount::where('client_id', $clientId)->update(['client_id' => null]);
-
-            // 8. Delete the client permanently
-            $client->forceDelete();
+                // 8. Delete the client permanently
+                DB::table('clients')->where('id', $clientId)->delete();
+            } finally {
+                if ($isMysql) {
+                    DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+                }
+            }
 
             return redirect()->route('clients.index')
                 ->with('success', "Client '{$name}' and all associated tracking data, campaigns & landing pages removed successfully.");

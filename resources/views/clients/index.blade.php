@@ -113,7 +113,7 @@
         <div style="display: flex; gap: 6px; align-items: center;">
           <a href="{{ route('clients.show', $client) }}" class="btn btn-primary" style="padding: 4px 10px; font-size: 11.5px;">Overview ↗</a>
           <a href="{{ route('clients.edit', $client) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px;">Edit</a>
-          <button type="button" @click="clientToDelete = { id: {{ $client->id }}, name: '{{ addslashes($client->company_name) }}', kx_code: '{{ $client->kx_code ?? 'KX-00' . $client->id }}' }; deleteModal = true;" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px; color: var(--accent-red);" title="Delete Client">
+          <button type="button" @click="clientToDelete = { id: {{ $client->id }}, name: {{ json_encode($client->company_name) }}, kx_code: {{ json_encode($client->kx_code ?? 'KX-00' . $client->id) }} }; deleteModal = true;" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11.5px; color: var(--accent-red);" title="Delete Client">
             🗑
           </button>
         </div>
