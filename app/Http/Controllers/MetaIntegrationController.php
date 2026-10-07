@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Services\MetaSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -69,7 +70,7 @@ class MetaIntegrationController extends Controller
     /**
      * Handle incoming OAuth callback from Facebook.
      */
-    public function oauthCallback(Request $request): RedirectResponse
+    public function oauthCallback(Request $request): RedirectResponse|Response
     {
         if ($request->has('error')) {
             $err = $request->input('error_description', $request->input('error', 'Authentication cancelled.'));

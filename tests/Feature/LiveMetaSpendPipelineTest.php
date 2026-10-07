@@ -653,4 +653,48 @@ class LiveMetaSpendPipelineTest extends TestCase
         // 4 active / 8 total
         $response->assertSee('4 active / 8 total');
     }
+
+    /**
+     * Test 13: Meta OAuth callback returns successful Response / popup closure without TypeError
+     */
+    public function test_13_oauth_callback_returns_response_without_type_error(): void
+    {
+        Http::fake([
+            'https://graph.facebook.com/*/oauth/access_token*' => Http::response([
+                'access_token' => 'EAAB_VALID_OAUTH_TOKEN_TEST',
+                'token_type' => 'bearer',
+            ], 200),
+            'https://graph.facebook.com/*/me?*' => Http::response([
+                'id' => '100099887766554',
+                'name' => 'Kirtnix Agency Admin',
+                'email' => 'admin@kirtnix.in',
+            ], 200),
+            'https://graph.facebook.com/*/me/businesses*' => Http::response([
+                'data' => [
+                    ['id' => 'biz_998877', 'name' => 'Kirtnix Agency Portfolios', 'verification_status' => 'verified'],
+                ]
+            ], 200),
+            'https://graph.facebook.com/*/me/adaccounts*' => Http::response([
+                'data' => [
+                    [
+                        'id' => 'act_1673560083719083',
+                        'account_id' => '1673560083719083',
+                        'name' => 'Gujrati 2 Backup',
+                        'currency' => 'INR',
+                        'account_status' => 1,
+                        'amount_spent' => 432145,
+                    ]
+                ]
+            ], 200),
+            'https://graph.facebook.com/*' => Http::response(['data' => []], 200),
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('meta.oauth.callback', [
+            'code' => 'AQKmDY4KNvv5fsIHqRXaigAZmTolvo6UqxPiUvdo_test_code_123',
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Connected Successfully!');
+        $response->assertSee('window.opener.location.href');
+    }
 }
