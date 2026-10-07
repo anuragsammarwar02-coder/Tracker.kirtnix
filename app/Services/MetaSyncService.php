@@ -1046,7 +1046,12 @@ class MetaSyncService
                     }
                 }
 
-                // 6. Campaign-Level Live Insights Query (Captures real-time today / date-scoped spend before account rollup)
+                // 6. Campaign-Level & AdSet-Level Live Insights Query (Captures real-time today / date-scoped spend before account rollup)
+                $campTodaySpendSum = 0.00;
+                $campTodayImpressionsSum = 0;
+                $campTodayReachSum = 0;
+                $campTodayClicksSum = 0;
+
                 $campTodayRes = Http::withoutVerifying()->timeout(10)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
                     'access_token' => $token,
                     'date_preset' => 'today',
@@ -1055,28 +1060,78 @@ class MetaSyncService
                 ]);
 
                 if ($campTodayRes->successful() && !empty($campTodayRes->json('data'))) {
-                    $campTodaySpendSum = 0.00;
-                    $campTodayImpressionsSum = 0;
-                    $campTodayReachSum = 0;
-                    $campTodayClicksSum = 0;
-
                     foreach ($campTodayRes->json('data') as $cRow) {
                         $campTodaySpendSum += (float) ($cRow['spend'] ?? 0.00);
                         $campTodayImpressionsSum += (int) ($cRow['impressions'] ?? 0);
                         $campTodayReachSum += (int) ($cRow['reach'] ?? 0);
                         $campTodayClicksSum += (int) ($cRow['clicks'] ?? 0);
                     }
+                }
 
-                    if ($campTodaySpendSum > $spendToday) {
-                        $spendToday = $campTodaySpendSum;
+                // If still 0, query direct campaign nodes for active campaigns
+                if ($campTodaySpendSum == 0.00 && !empty($allCampaigns)) {
+                    $activeCamps = array_filter($allCampaigns, fn($ac) => in_array(strtolower($ac['effective_status'] ?? ($ac['status'] ?? '')), ['active', '1']));
+                    foreach (array_slice($activeCamps, 0, 5) as $ac) {
+                        $cId = $ac['id'] ?? '';
+                        if (!$cId) continue;
+                        $dcRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/{$cId}/insights", [
+                            'access_token' => $token,
+                            'date_preset' => 'today',
+                            'fields' => 'spend,impressions,reach,clicks,actions',
+                        ]);
+                        if ($dcRes->successful() && !empty($dcRes->json('data'))) {
+                            $dcRow = $dcRes->json('data')[0] ?? [];
+                            $campTodaySpendSum += (float) ($dcRow['spend'] ?? 0.00);
+                            $campTodayImpressionsSum += (int) ($dcRow['impressions'] ?? 0);
+                            $campTodayReachSum += (int) ($dcRow['reach'] ?? 0);
+                            $campTodayClicksSum += (int) ($dcRow['clicks'] ?? 0);
+                        }
                     }
+                }
 
-                    if ($dateRange === 'today' && $campTodaySpendSum > $scopedSpend) {
-                        $scopedSpend = $campTodaySpendSum;
-                        if ($campTodayImpressionsSum > 0) $scopedImpressions = $campTodayImpressionsSum;
-                        if ($campTodayReachSum > 0) $scopedReach = $campTodayReachSum;
-                        if ($campTodayClicksSum > 0) $scopedClicks = $campTodayClicksSum;
+                // If still 0, query adset level
+                if ($campTodaySpendSum == 0.00) {
+                    $adsetTodayRes = Http::withoutVerifying()->timeout(8)->get("{$this->baseUrl}/{$version}/act_{$rawAccId}/insights", [
+                        'access_token' => $token,
+                        'date_preset' => 'today',
+                        'level' => 'adset',
+                        'fields' => 'spend,impressions,reach,clicks,actions',
+                    ]);
+                    if ($adsetTodayRes->successful() && !empty($adsetTodayRes->json('data'))) {
+                        foreach ($adsetTodayRes->json('data') as $asRow) {
+                            $campTodaySpendSum += (float) ($asRow['spend'] ?? 0.00);
+                            $campTodayImpressionsSum += (int) ($asRow['impressions'] ?? 0);
+                            $campTodayReachSum += (int) ($asRow['reach'] ?? 0);
+                            $campTodayClicksSum += (int) ($asRow['clicks'] ?? 0);
+                        }
                     }
+                }
+
+                if ($campTodaySpendSum > $spendToday) {
+                    $spendToday = $campTodaySpendSum;
+                }
+
+                // 7. Real-Time Billing Delta Tracking (Instant 0-delay capture from amount_spent on act_{id})
+                $todayBaselineKey = "meta_baseline_spend:acc_{$adAccount->id}:" . $todayDateStr;
+                $baselineSpend = Cache::get($todayBaselineKey);
+                if ($baselineSpend === null) {
+                    $prevSpend = (float) ($adAccount->lifetime_spend ?? $spendTotal);
+                    Cache::put($todayBaselineKey, $prevSpend, now()->endOfDay()->addHours(2));
+                    $baselineSpend = $prevSpend;
+                }
+
+                if ($spendTotal > (float) $baselineSpend) {
+                    $realtimeDeltaSpend = round($spendTotal - (float) $baselineSpend, 2);
+                    if ($realtimeDeltaSpend > $spendToday) {
+                        $spendToday = $realtimeDeltaSpend;
+                    }
+                }
+
+                if ($dateRange === 'today') {
+                    $scopedSpend = max($scopedSpend, $spendToday);
+                    if ($campTodayImpressionsSum > 0) $scopedImpressions = $campTodayImpressionsSum;
+                    if ($campTodayReachSum > 0) $scopedReach = $campTodayReachSum;
+                    if ($campTodayClicksSum > 0) $scopedClicks = $campTodayClicksSum;
                 }
 
                 // If non-today date range (e.g. yesterday, last_7_days, this_month) returned 0 at account level, query campaign-level
@@ -1108,6 +1163,13 @@ class MetaSyncService
                             if ($campScopedClicksSum > 0) $scopedClicks = $campScopedClicksSum;
                         }
                     }
+                }
+
+                // Fallback for lifetime / last 30 days if still 0
+                if ($scopedSpend == 0.00 && in_array($dateRange, ['last_30_days', 'this_month', 'lifetime']) && $spendTotal > 0) {
+                    $scopedSpend = $spendTotal;
+                    if ($scopedImpressions == 0) $scopedImpressions = (int) $campaigns->sum('impressions');
+                    if ($scopedReach == 0) $scopedReach = (int) $campaigns->sum('reach');
                 }
             } catch (\Throwable $e) {
                 Log::warning("Meta Graph API live analytics error for account {$adAccount->account_id}: " . $e->getMessage());
