@@ -362,7 +362,7 @@ Route::get('/healthz', function () {
                     'connection' => $dbConnected ? \App\Models\MetaConnection::select('id', 'facebook_user_id', 'facebook_name', 'status', 'sync_status', 'last_sync_at')->first() : null,
                     'has_token_in_connection' => $dbConnected ? !empty(\App\Models\MetaConnection::first()?->access_token) : false,
                     'has_system_user_token_setting' => $dbConnected ? !empty(\App\Models\Setting::get('meta_system_user_token')) : false,
-                    'meta_app_id_effective' => $dbConnected ? (\App\Models\Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '1427417489333099'))) : config('services.meta.app_id', env('META_APP_ID', '1427417489333099')),
+                    'meta_app_id_effective' => $dbConnected ? (\App\Models\Setting::get('meta_app_id') ?: config('services.meta.app_id', env('META_APP_ID', '1812606023369831'))) : config('services.meta.app_id', env('META_APP_ID', '1812606023369831')),
                     'meta_app_id_setting' => $dbConnected ? \App\Models\Setting::get('meta_app_id') : null,
                     'meta_app_id_env' => env('META_APP_ID'),
                     'has_meta_app_secret' => $dbConnected ? (!empty(\App\Models\Setting::get('meta_app_secret')) || !empty(config('services.meta.app_secret')) || !empty(env('META_APP_SECRET'))) : (!empty(config('services.meta.app_secret')) || !empty(env('META_APP_SECRET'))),

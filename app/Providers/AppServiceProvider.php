@@ -245,6 +245,25 @@ class AppServiceProvider extends ServiceProvider
                         } catch (\Throwable $ie) {
                             @error_log('AppServiceProvider index check: ' . $ie->getMessage());
                         }
+
+                        // Auto-sync new Meta App credentials in settings table if not yet updated
+                        try {
+                            if (Schema::hasTable('settings')) {
+                                $currentAppId = DB::table('settings')->where('key', 'meta_app_id')->value('value');
+                                if (empty($currentAppId) || $currentAppId === '1427417489333099') {
+                                    DB::table('settings')->updateOrInsert(
+                                        ['key' => 'meta_app_id'],
+                                        ['value' => '1812606023369831', 'group' => 'meta', 'updated_at' => now()]
+                                    );
+                                    DB::table('settings')->updateOrInsert(
+                                        ['key' => 'meta_app_secret'],
+                                        ['value' => '12f7da9cb5e45f880f1e77bbb4ed2c66', 'group' => 'meta', 'updated_at' => now()]
+                                    );
+                                }
+                            }
+                        } catch (\Throwable $se) {
+                            @error_log('AppServiceProvider meta credentials sync: ' . $se->getMessage());
+                        }
                     }
                 }
             }
