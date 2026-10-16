@@ -385,17 +385,69 @@
               @endif
             </div>
           @endif
-          <div class="flex justify-center gap-3 text-xs font-medium {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} pt-1">
+          <div class="flex justify-center flex-wrap gap-2.5 text-[11px] font-medium {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} pt-1">
             <a href="{{ $ctaUrl }}" class="{{ $isLight ? 'hover:text-blue-600' : 'hover:text-yellow-400' }} transition" data-kx-cta="1">Telegram</a>
             <span>•</span>
-            <a href="#disclaimer" class="{{ $isLight ? 'hover:text-blue-600' : 'hover:text-yellow-400' }} transition" onclick="window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}); return false;">Disclaimer</a>
+            <a href="#privacy" class="hover:underline transition" onclick="openPolicyModal('privacy'); return false;">Privacy Policy</a>
+            <span>•</span>
+            <a href="#terms" class="hover:underline transition" onclick="openPolicyModal('terms'); return false;">Terms & Conditions</a>
+            <span>•</span>
+            <a href="#disclaimer" class="hover:underline transition" onclick="window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}); return false;">Risk Disclaimer</a>
           </div>
+          <p class="text-[9.5px] opacity-70 max-w-sm mx-auto pt-2 leading-relaxed">
+            Meta Notice: This site is independent and not affiliated with Facebook, Instagram, or Meta Platforms, Inc.
+          </p>
         </footer>
       @endif
 
     @endforeach
 
   </main>
+
+  <!-- Compliance Policy Modal (Passes Meta Destination Policy Crawler) -->
+  <div id="policyModal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #12141a; border: 1px solid #2a2e3a; border-radius: 16px; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 24px; color: #e2e8f0; font-size: 13px; line-height: 1.6; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.5); text-align: left;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2e3a; padding-bottom: 12px; margin-bottom: 16px;">
+        <h3 id="policyModalTitle" style="font-size: 18px; font-weight: 700; color: #f0c14b;">Policy</h3>
+        <button type="button" onclick="closePolicyModal()" style="background: none; border: none; color: #8b90a0; font-size: 24px; cursor: pointer; line-height: 1;">&times;</button>
+      </div>
+      <div id="policyModalContent">
+        <!-- Injected via JavaScript -->
+      </div>
+      <div style="margin-top: 20px; text-align: right; border-top: 1px solid #2a2e3a; padding-top: 14px;">
+        <button type="button" onclick="closePolicyModal()" style="background: #2a2e3a; color: #fff; border: none; padding: 8px 20px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openPolicyModal(type) {
+      var modal = document.getElementById('policyModal');
+      var title = document.getElementById('policyModalTitle');
+      var content = document.getElementById('policyModalContent');
+      if (type === 'privacy') {
+        title.innerText = 'Privacy Policy';
+        content.innerHTML = '<p><strong>Last Updated: January 2026</strong></p>' +
+          '<p style="margin-top:8px;">We value your privacy. We collect basic technical session details (such as anonymized browser type, country, and device) to measure campaign reach and ensure seamless redirection to our community.</p>' +
+          '<p style="margin-top:8px;"><strong>Use of Data:</strong> Information gathered is never sold or rented to third-party brokers. Data is processed solely for community onboarding, customer support, and security compliance.</p>' +
+          '<p style="margin-top:8px;"><strong>Cookies & Advertising:</strong> We may utilize first-party tracking identifiers to evaluate landing page performance and attribution with advertising platforms including Meta (Facebook/Instagram).</p>' +
+          '<p style="margin-top:8px;">For privacy inquiries or data removal, please contact the community administrators via Telegram.</p>';
+      } else {
+        title.innerText = 'Terms & Conditions';
+        content.innerHTML = '<p><strong>Community Guidelines & Terms of Access</strong></p>' +
+          '<p style="margin-top:8px;">1. <strong>Educational Nature:</strong> All discussions, technical patterns, and publications shared across this website and associated Telegram channels are solely for educational purposes.</p>' +
+          '<p style="margin-top:8px;">2. <strong>No Financial Advice:</strong> We are not registered financial advisers. We do not provide tips, trade execution calls, or investment management services. Trading in financial markets carries substantial capital risk.</p>' +
+          '<p style="margin-top:8px;">3. <strong>Acceptance:</strong> By clicking to enter the channel, you affirm that you understand market risks and will exercise personal discretion before executing any trades.</p>';
+      }
+      modal.style.display = 'flex';
+    }
+    function closePolicyModal() {
+      document.getElementById('policyModal').style.display = 'none';
+    }
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closePolicyModal();
+    });
+  </script>
 
   <!-- Software-Managed Kirtnix Tracker Client Script -->
   <script src="/api/public/kx.js?lp={{ e($landingPage->tracking_token ?? $landingPage->slug) }}" data-kx-lp="{{ e($landingPage->tracking_token ?? $landingPage->slug) }}"></script>

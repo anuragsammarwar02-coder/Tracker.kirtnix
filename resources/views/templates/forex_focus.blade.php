@@ -395,12 +395,15 @@
     </div>
     @endif
 
-    @if(!empty($landingPage->disclaimer_text))
-    <div class="disclaimer">
-      <strong>Important disclaimer</strong>
-      <p>{!! nl2br(e($landingPage->disclaimer_text)) !!}</p>
+    <div id="disclaimer" class="disclaimer" style="margin-top: 30px; padding: 18px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(240, 193, 75, 0.2); font-size: 11px; line-height: 1.6; color: var(--muted); text-align: left;">
+      <strong style="color: var(--gold); display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px;">⚠️ Regulatory & Risk Disclosure (SEBI & Market Compliance)</strong>
+      <p style="margin-bottom: 8px;">
+        {{ $landingPage->disclaimer_text ?: 'Trading in financial securities, derivatives, and forex involves substantial risk of loss and is not suitable for every investor. We are NOT registered investment advisors or SEBI research analysts. All discussions and technical educational materials provided are strictly for learning purposes. We do not provide profit promises or trade execution recommendations. Consult your financial advisor before trading.' }}
+      </p>
+      <p style="font-size: 10px; opacity: 0.8; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px;">
+        <strong>Meta Compliance Notice:</strong> This website is an independent educational portal and is NOT part of Facebook, Instagram, or Meta Platforms, Inc. This site is NOT endorsed or certified by Meta in any way. FACEBOOK is a trademark of Meta Platforms, Inc.
+      </p>
     </div>
-    @endif
 
     <!-- Secondary CTA -->
     @if(!empty($landingPage->secondary_cta_text))
@@ -416,14 +419,64 @@
     </a>
     @endif
 
-    <footer>
-      <p>{{ $landingPage->footer_text ?? '© 2026 ' . $landingPage->brand_name }}</p>
-      <div class="footer-links">
-        <a href="{{ $primaryCta ? route('public.cta_redirect', $primaryCta->tracking_token) : '#btn-join-telegram' }}" data-kx-cta="1">Telegram</a>
-        <a href="#disclaimer" onclick="document.querySelector('.disclaimer').scrollIntoView({behavior:'smooth'});return false;">Disclaimer</a>
+    <footer style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border); text-align: center;">
+      <p style="font-size: 12px; color: var(--muted);">{{ $landingPage->footer_text ?? '© 2026 ' . $landingPage->brand_name . '. All rights reserved.' }}</p>
+      <div class="footer-links" style="display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12px;">
+        <a href="{{ $primaryCta ? route('public.cta_redirect', $primaryCta->tracking_token) : '#btn-join-telegram' }}" data-kx-cta="1" style="color: var(--gold); text-decoration: none;">Join Telegram</a>
+        <span style="color: var(--border);">•</span>
+        <a href="#privacy-policy" onclick="openPolicyModal('privacy'); return false;" style="color: var(--muted); text-decoration: underline;">Privacy Policy</a>
+        <span style="color: var(--border);">•</span>
+        <a href="#terms-of-service" onclick="openPolicyModal('terms'); return false;" style="color: var(--muted); text-decoration: underline;">Terms & Conditions</a>
+        <span style="color: var(--border);">•</span>
+        <a href="#disclaimer" onclick="document.getElementById('disclaimer').scrollIntoView({behavior:'smooth'}); return false;" style="color: var(--muted); text-decoration: underline;">Risk Disclaimer</a>
       </div>
     </footer>
   </div>
+
+  <!-- Compliance Policy Modal (Passes Meta Destination Policy Crawler) -->
+  <div id="policyModal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #12141a; border: 1px solid #2a2e3a; border-radius: 16px; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto; padding: 24px; color: #e2e8f0; font-size: 13px; line-height: 1.6; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2e3a; padding-bottom: 12px; margin-bottom: 16px;">
+        <h3 id="policyModalTitle" style="font-size: 18px; font-weight: 700; color: #f0c14b;">Policy</h3>
+        <button type="button" onclick="closePolicyModal()" style="background: none; border: none; color: #8b90a0; font-size: 24px; cursor: pointer; line-height: 1;">&times;</button>
+      </div>
+      <div id="policyModalContent">
+        <!-- Injected via JavaScript -->
+      </div>
+      <div style="margin-top: 20px; text-align: right; border-top: 1px solid #2a2e3a; padding-top: 14px;">
+        <button type="button" onclick="closePolicyModal()" style="background: #2a2e3a; color: #fff; border: none; padding: 8px 20px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 600;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function openPolicyModal(type) {
+      var modal = document.getElementById('policyModal');
+      var title = document.getElementById('policyModalTitle');
+      var content = document.getElementById('policyModalContent');
+      if (type === 'privacy') {
+        title.innerText = 'Privacy Policy';
+        content.innerHTML = '<p><strong>Last Updated: January 2026</strong></p>' +
+          '<p style="margin-top:8px;">We value your privacy. We collect basic technical session details (such as anonymized browser type, country, and device) to measure campaign reach and ensure seamless redirection to our community.</p>' +
+          '<p style="margin-top:8px;"><strong>Use of Data:</strong> Information gathered is never sold or rented to third-party brokers. Data is processed solely for community onboarding, customer support, and security compliance.</p>' +
+          '<p style="margin-top:8px;"><strong>Cookies & Advertising:</strong> We may utilize first-party tracking identifiers to evaluate landing page performance and attribution with advertising platforms including Meta (Facebook/Instagram).</p>' +
+          '<p style="margin-top:8px;">For privacy inquiries or data removal, please contact the community administrators via Telegram.</p>';
+      } else {
+        title.innerText = 'Terms & Conditions';
+        content.innerHTML = '<p><strong>Community Guidelines & Terms of Access</strong></p>' +
+          '<p style="margin-top:8px;">1. <strong>Educational Nature:</strong> All discussions, technical patterns, and publications shared across this website and associated Telegram channels are solely for educational purposes.</p>' +
+          '<p style="margin-top:8px;">2. <strong>No Financial Advice:</strong> We are not registered financial advisers. We do not provide tips, trade execution calls, or investment management services. Trading in financial markets carries substantial capital risk.</p>' +
+          '<p style="margin-top:8px;">3. <strong>Acceptance:</strong> By clicking to enter the channel, you affirm that you understand market risks and will exercise personal discretion before executing any trades.</p>';
+      }
+      modal.style.display = 'flex';
+    }
+    function closePolicyModal() {
+      document.getElementById('policyModal').style.display = 'none';
+    }
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closePolicyModal();
+    });
+  </script>
 
   <!-- KirtniX Tracker Client Script -->
   <script src="/api/public/kx.js?lp={{ $landingPage->tracking_token ?? $landingPage->slug }}" data-kx-lp="{{ $landingPage->tracking_token ?? $landingPage->slug }}"></script>
