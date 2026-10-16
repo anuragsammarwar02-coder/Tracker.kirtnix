@@ -16,41 +16,54 @@ class AuthController extends Controller
             return redirect()->route('dashboard');
         }
 
-        $subscribersToday = 348;
-        $todaySpendFormatted = '₹12,480';
-        $costPerSub = '₹35.8';
-        $telegramClicksFormatted = '1,204';
-        $verifiedJoinsFormatted = '311';
-        $conversionQueue = 6;
+        $stats = \Illuminate\Support\Facades\Cache::remember('login_marketing_stats', 300, function () {
+            $data = [
+                'subscribersToday' => 348,
+                'todaySpendFormatted' => '₹12,480',
+                'costPerSub' => '₹35.8',
+                'telegramClicksFormatted' => '1,204',
+                'verifiedJoinsFormatted' => '311',
+                'conversionQueue' => 6,
+            ];
 
-        try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('telegram_events')) {
-                $subscribersCount = \App\Models\TelegramEvent::where('event_type', 'join')->count();
-                if ($subscribersCount > 0) {
-                    $subscribersToday = $subscribersCount;
-                    $verifiedJoinsFormatted = number_format($subscribersCount);
-                }
-            }
-
-            if (\Illuminate\Support\Facades\Schema::hasTable('campaign_insights')) {
-                $totalSpend = \App\Models\CampaignInsight::sum('spend');
-                if ($totalSpend > 0) {
-                    $todaySpendFormatted = '₹' . number_format($totalSpend, 0);
-                    if ($subscribersToday > 0) {
-                        $costPerSub = '₹' . number_format($totalSpend / $subscribersToday, 1);
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('telegram_events')) {
+                    $subscribersCount = \App\Models\TelegramEvent::where('event_type', 'join')->count();
+                    if ($subscribersCount > 0) {
+                        $data['subscribersToday'] = $subscribersCount;
+                        $data['verifiedJoinsFormatted'] = number_format($subscribersCount);
                     }
                 }
+
+                if (\Illuminate\Support\Facades\Schema::hasTable('campaign_insights')) {
+                    $totalSpend = \App\Models\CampaignInsight::sum('spend');
+                    if ($totalSpend > 0) {
+                        $data['todaySpendFormatted'] = '₹' . number_format($totalSpend, 0);
+                        if ($data['subscribersToday'] > 0) {
+                            $data['costPerSub'] = '₹' . number_format($totalSpend / $data['subscribersToday'], 1);
+                        }
+                    }
+                }
+
+                if (\Illuminate\Support\Facades\Schema::hasTable('cta_clicks')) {
+                    $clicksCount = \App\Models\CtaClick::count();
+                    if ($clicksCount > 0) {
+                        $data['telegramClicksFormatted'] = number_format($clicksCount);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Safe fallback to realistic marketing statistics
             }
 
-            if (\Illuminate\Support\Facades\Schema::hasTable('cta_clicks')) {
-                $clicksCount = \App\Models\CtaClick::count();
-                if ($clicksCount > 0) {
-                    $telegramClicksFormatted = number_format($clicksCount);
-                }
-            }
-        } catch (\Throwable $e) {
-            // Safe fallback to realistic marketing statistics
-        }
+            return $data;
+        });
+
+        $subscribersToday = $stats['subscribersToday'];
+        $todaySpendFormatted = $stats['todaySpendFormatted'];
+        $costPerSub = $stats['costPerSub'];
+        $telegramClicksFormatted = $stats['telegramClicksFormatted'];
+        $verifiedJoinsFormatted = $stats['verifiedJoinsFormatted'];
+        $conversionQueue = $stats['conversionQueue'];
 
         $hour = (int) date('G');
         if ($hour < 12) {
@@ -85,7 +98,7 @@ class AuthController extends Controller
 
         if (Auth::attempt(['email' => $email, 'password' => $password], $remember)) {
             $request->session()->regenerate();
-            return redirect()->intended(route('dashboard'))
+            return redirect()->route('dashboard')
                 ->with('success', 'Welcome back to KirtniX TG Tracker!');
         }
 
