@@ -938,6 +938,134 @@ class TelegramJoinSourceOfTruthTest extends TestCase
         $detailRes->assertStatus(200);
         $this->assertEquals(1, substr_count($detailRes->getContent(), '@vipultank'));
     }
+
+    /**
+     * Requirement: Fake members manually added by admin or panel must be classified as manual_add,
+     * must NEVER steal unassigned CTA ad clicks, and must NEVER fire Meta CAPI.
+     */
+    public function test_fake_members_manually_added_by_admin_are_marked_manual_add_and_never_steal_ad_clicks_or_fire_meta_capi(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+        $landingPage = LandingPage::where('client_id', $client->id)->firstOrFail();
+        $cta = Cta::where('landing_page_id', $landingPage->id)->firstOrFail();
+
+        $camp = Campaign::firstOrCreate(
+            ['client_id' => $client->id, 'name' => 'Active Meta Ad Campaign'],
+            ['slug' => 'active-meta-ad-campaign', 'status' => 'active', 'ad_account_id' => $client->ad_account_id]
+        );
+
+        // Simulate an unassigned recent CTA click from Meta Ads
+        $session = TrackingSession::create([
+            'session_id' => (string) Str::uuid(),
+            'visitor_id' => 'vid_real_ad_visitor',
+            'client_id' => $client->id,
+            'landing_page_id' => $landingPage->id,
+            'campaign_id' => $camp->id,
+            'utm_source' => 'meta',
+            'utm_medium' => 'cpc',
+            'utm_campaign' => 'Active Meta Ad Campaign',
+            'fbclid' => 'fb_real_click_123',
+        ]);
+
+        $click = CtaClick::create([
+            'tracking_session_id' => $session->id,
+            'cta_id' => $cta->id,
+            'landing_page_id' => $landingPage->id,
+            'client_id' => $client->id,
+            'campaign_id' => $camp->id,
+            'tracking_token' => $cta->tracking_token,
+            'destination_url' => 'https://t.me/test_channel',
+            'visitor_id' => 'vid_real_ad_visitor',
+            'created_at' => now()->subMinutes(2),
+        ]);
+
+        // Now, an admin or panel manually adds a fake member directly into the channel (actor != target)
+        $adminUserId = 11223344;
+        $fakeMemberId = 99881122;
+
+        $fakeAddPayload = [
+            'update_id' => 9901,
+            'chat_member' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => $adminUserId, // Admin or adder bot
+                    'first_name' => 'Channel Admin',
+                ],
+                'date' => time(),
+                'old_chat_member' => [
+                    'user' => ['id' => $fakeMemberId, 'first_name' => 'Fake', 'last_name' => 'Member'],
+                    'status' => 'left',
+                ],
+                'new_chat_member' => [
+                    'user' => ['id' => $fakeMemberId, 'first_name' => 'Fake', 'last_name' => 'Member', 'username' => 'fakemember99'],
+                    'status' => 'member',
+                ],
+            ]
+        ];
+
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $fakeAddPayload)->assertStatus(200);
+
+        // Verify that the fake member was classified as manual_add, NOT ads!
+        $event = TelegramEvent::where('telegram_channel_id', $channel->id)->where('telegram_user_id', (string) $fakeMemberId)->first();
+        $this->assertNotNull($event);
+        $this->assertEquals('manual_add', $event->source);
+        $this->assertNull($event->campaign_id, 'Fake member should NEVER have an ad campaign assigned');
+        $this->assertNull($event->cta_click_id, 'Fake member should NEVER steal an ad CTA click');
+
+        // Verify conversion record is NOT verified and NOT sent to Meta CAPI
+        $conv = Conversion::where('telegram_channel_id', $channel->id)->where('telegram_user_id', (string) $fakeMemberId)->first();
+        if ($conv) {
+            $this->assertNotEquals('ads', $conv->source);
+            $this->assertNotEquals('sent', $conv->meta_capi_status);
+        }
+
+        // Verify the real ad click remains unassigned and ready for the real visitor
+        $this->assertDatabaseMissing('telegram_events', [
+            'cta_click_id' => $click->id,
+        ]);
+    }
+
+    /**
+     * Requirement: Bots added to the channel must be classified as bot and never fire Meta CAPI.
+     */
+    public function test_bot_members_are_marked_bot_and_never_steal_ad_clicks_or_fire_meta_capi(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+
+        $botUserId = 88442211;
+
+        $botAddPayload = [
+            'update_id' => 9902,
+            'chat_member' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => [
+                    'id' => $botUserId,
+                    'first_name' => 'Helper',
+                    'is_bot' => true,
+                ],
+                'date' => time(),
+                'old_chat_member' => [
+                    'user' => ['id' => $botUserId, 'first_name' => 'Helper', 'is_bot' => true],
+                    'status' => 'left',
+                ],
+                'new_chat_member' => [
+                    'user' => ['id' => $botUserId, 'first_name' => 'Helper', 'is_bot' => true, 'username' => 'helper_bot'],
+                    'status' => 'member',
+                ],
+            ]
+        ];
+
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $botAddPayload)->assertStatus(200);
+
+        $event = TelegramEvent::where('telegram_channel_id', $channel->id)->where('telegram_user_id', (string) $botUserId)->first();
+        $this->assertNotNull($event);
+        $this->assertEquals('bot', $event->source);
+        $this->assertNull($event->campaign_id);
+    }
 }
 
 

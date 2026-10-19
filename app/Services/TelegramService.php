@@ -699,6 +699,8 @@ class TelegramService
         // In chat_join_request, the user requesting to join is in chat_join_request.from.
         if ($updateType === 'chat_join_request') {
             $user = $chatMemberUpdate['from'] ?? $chatMemberUpdate['user'] ?? [];
+            $targetUser = $user;
+            $actorUser = $user;
         } else {
             $targetUser = $chatMemberUpdate['new_chat_member']['user'] 
                 ?? $chatMemberUpdate['old_chat_member']['user'] 
@@ -727,18 +729,51 @@ class TelegramService
         $rawInvite = $chatMemberUpdate['invite_link'] ?? null;
         $payloadInviteLink = is_array($rawInvite) ? ($rawInvite['invite_link'] ?? null) : (is_string($rawInvite) ? $rawInvite : null);
 
+        // Detect bot account
+        $isBot = !empty($user['is_bot']) || !empty($targetUser['is_bot']);
+
+        // Check if actor who performed action is different from target user
+        $actorId = (string) ($actorUser['id'] ?? '');
+        $targetId = (string) ($targetUser['id'] ?? '');
+        $isActorDifferent = (!empty($actorId) && !empty($targetId) && $actorId !== $targetId);
+
+        // Check if there is an existing pending join request in the channel for this user
+        $existingPendingEvent = null;
+        if ($channel && in_array($updateType, ['chat_member', 'my_chat_member', 'chat_join_request'])) {
+            $existingPendingEvent = TelegramEvent::where('telegram_channel_id', $channel->id)
+                ->where('telegram_user_id', $telegramUserId)
+                ->where(function ($q) {
+                    $q->whereIn('event_type', ['join_request', 'join'])
+                      ->orWhereIn('status_after', ['join_request', 'pending', 'restricted', 'approved', 'member']);
+                })
+                ->latest('id')
+                ->first();
+        }
+
+        // An action is an admin approval if there was an existing join request or old status was restricted/pending
+        $isApprovalOfRequest = false;
+        if ($isActorDifferent) {
+            $hasPendingRequest = ($existingPendingEvent !== null && in_array($existingPendingEvent->event_type, ['join_request', 'pending']));
+            if ($hasPendingRequest || in_array($oldStatus, ['restricted', 'pending'])) {
+                $isApprovalOfRequest = true;
+            }
+        }
+
+        // It is a manual / panel add if someone else added this user directly without a join request
+        $isManualAdd = ($isActorDifferent && !$isApprovalOfRequest && in_array($newStatus, ['member', 'administrator', 'creator', 'approved']));
+
         // Determine event type: join, leave, join_request
         $eventType = 'join';
         $isVerified = true;
         if ($updateType === 'chat_join_request') {
             $eventType = 'join_request';
-            $isVerified = true;
+            $isVerified = false; // Join request is pending until admin approves! Never verified before approval.
             $oldStatus = ($oldStatus === 'unknown' || empty($oldStatus)) ? 'none' : $oldStatus;
             $newStatus = 'pending';
         } elseif (in_array($newStatus, ['member', 'administrator', 'creator', 'approved']) && in_array($oldStatus, ['left', 'kicked', 'restricted', 'unknown', 'none', 'pending', 'join_request'])) {
             $eventType = 'join';
             $newStatus = 'approved';
-            $isVerified = true;
+            $isVerified = (!$isBot && !$isManualAdd);
         } elseif (in_array($newStatus, ['left', 'kicked', 'banned']) && in_array($oldStatus, ['member', 'administrator', 'restricted', 'unknown', 'approved'])) {
             $eventType = 'leave';
             $newStatus = 'left';
@@ -779,19 +814,6 @@ class TelegramService
             }
         } else {
             // 2. Join / Join Request Event:
-            // Check if there is already an existing event for this user (approval transition or duplicate join request)
-            $existingPendingEvent = null;
-            if ($channel && in_array($eventType, ['join', 'join_request'])) {
-                $existingPendingEvent = TelegramEvent::where('telegram_channel_id', $channel->id)
-                    ->where('telegram_user_id', $telegramUserId)
-                    ->where(function ($q) {
-                        $q->whereIn('event_type', ['join_request', 'join'])
-                          ->orWhereIn('status_after', ['join_request', 'pending', 'restricted', 'approved', 'member']);
-                    })
-                    ->latest('id')
-                    ->first();
-            }
-
             if ($existingPendingEvent) {
                 $source = $existingPendingEvent->source ?: 'direct';
                 $resolvedCampaignId = $existingPendingEvent->campaign_id;
@@ -800,8 +822,26 @@ class TelegramService
                 $country = $existingPendingEvent->country ?? 'IN';
                 $device = $existingPendingEvent->device ?? 'Mobile';
                 $visitorId = $existingPendingEvent->visitor_id ?? (string) Str::uuid();
+            } elseif ($isBot) {
+                // Bots never steal ad clicks or campaigns
+                $source = 'bot';
+                $resolvedCampaignId = null;
+                $matchedClick = null;
+                $matchedSession = null;
+                $country = 'IN';
+                $device = 'Bot';
+                $visitorId = (string) Str::uuid();
+            } elseif ($isManualAdd) {
+                // Client / panel manually added members never steal ad clicks or campaigns
+                $source = 'manual_add';
+                $resolvedCampaignId = null;
+                $matchedClick = null;
+                $matchedSession = null;
+                $country = 'IN';
+                $device = 'Mobile';
+                $visitorId = (string) Str::uuid();
             } else {
-                // New Join / Join Request:
+                // New Join / Join Request from Real User:
                 // Primary: Tracked / Unique Invite Link
                 if ($payloadInviteLink) {
                     $matchedInvite = TelegramInvite::where('invite_link', $payloadInviteLink)->first();
@@ -811,10 +851,10 @@ class TelegramService
                     }
                 }
 
-                // Secondary: Recent UNASSIGNED CTA Click for this client (within 30 minutes)
+                // Secondary: Recent UNASSIGNED CTA Click for this client (within 15 minutes) - only for real self-joins
                 if (!$matchedSession) {
                     $matchedClick = CtaClick::where('client_id', $clientId)
-                        ->where('created_at', '>=', now()->subMinutes(30))
+                        ->where('created_at', '>=', now()->subMinutes(15))
                         ->whereNotExists(function ($q) {
                             $q->select(\Illuminate\Support\Facades\DB::raw(1))
                               ->from('telegram_events')
@@ -956,6 +996,8 @@ class TelegramService
                 ->where('telegram_user_id', $telegramUserId)
                 ->first();
 
+            $convStatus = ($eventType === 'join' && $isVerified) ? 'verified' : ($eventType === 'join_request' ? 'pending' : 'unverified');
+
             if (!$existingConversion) {
                 $metaEventId = 'conv_' . Str::random(16) . '_' . time();
 
@@ -976,7 +1018,7 @@ class TelegramService
                     'first_name' => $user['first_name'] ?? 'Trader',
                     'last_name' => $user['last_name'] ?? null,
                     'event_type' => $eventType,
-                    'status' => $isVerified ? 'verified' : 'pending',
+                    'status' => $convStatus,
                     'source' => $source,
                     'utm_source' => $matchedSession?->utm_source,
                     'utm_medium' => $matchedSession?->utm_medium,
@@ -996,8 +1038,8 @@ class TelegramService
                     'event_time' => now(),
                 ]);
 
-                // Dispatch Meta CAPI for verified conversion (Subscribe optimization event - ONLY on actual Telegram join)
-                if ($isVerified) {
+                // Dispatch Meta CAPI for verified conversion (Subscribe optimization event - ONLY on actual Telegram join from Paid Ads!)
+                if ($convStatus === 'verified' && $source === 'ads') {
                     $this->metaCapiService->sendConversionEvent($conversion, 'Subscribe');
                 }
             } else {
@@ -1009,8 +1051,8 @@ class TelegramService
                         'campaign_id' => $existingConversion->campaign_id ?: $resolvedCampaignId,
                     ]);
 
-                    // Dispatch Meta CAPI event when join request is accepted/approved by admin
-                    if ($existingConversion->meta_capi_status !== 'sent') {
+                    // Dispatch Meta CAPI event when join request is accepted/approved by admin - ONLY for real Ads joins!
+                    if ($existingConversion->source === 'ads' && $existingConversion->meta_capi_status !== 'sent') {
                         $this->metaCapiService->sendConversionEvent($existingConversion, 'Subscribe');
                     }
                 }
