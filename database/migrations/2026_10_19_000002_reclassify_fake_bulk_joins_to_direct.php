@@ -45,6 +45,7 @@ return new class extends Migration
             $ln = $parts[1] ?? null;
 
             $events = DB::table('telegram_events')
+                ->where('event_time', '>=', now()->subDays(2))
                 ->where(function ($q) use ($name, $fn, $ln) {
                     $q->where('first_name', $name)
                       ->orWhere('first_name', 'like', "%{$name}%")
@@ -82,8 +83,9 @@ return new class extends Migration
             }
         }
 
-        // 2. Reclassify any duplicate telegram_events claiming the SAME cta_click_id
+        // 2. Reclassify any duplicate telegram_events claiming the SAME cta_click_id from recent events
         $events = DB::table('telegram_events')
+            ->where('event_time', '>=', now()->subDays(2))
             ->whereNotNull('cta_click_id')
             ->orderBy('id', 'asc')
             ->get();
@@ -111,8 +113,9 @@ return new class extends Migration
             }
         }
 
-        // 3. Reclassify any duplicate telegram_events sharing the SAME invite_link in the same channel (only the 1st event keeps attribution)
+        // 3. Reclassify any duplicate telegram_events sharing the SAME invite_link in the same channel from recent events
         $eventsWithLink = DB::table('telegram_events')
+            ->where('event_time', '>=', now()->subDays(2))
             ->whereNotNull('invite_link')
             ->where('invite_link', '!=', '')
             ->where('source', 'ads')
