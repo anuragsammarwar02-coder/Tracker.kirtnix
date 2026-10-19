@@ -1066,6 +1066,113 @@ class TelegramJoinSourceOfTruthTest extends TestCase
         $this->assertEquals('bot', $event->source);
         $this->assertNull($event->campaign_id);
     }
+
+    /**
+     * Requirement: If an invite link is shared or reused by multiple accounts (e.g. SMM panel),
+     * only the first join event can be attributed to ads; all subsequent joins on that link must be direct.
+     */
+    public function test_reused_invite_link_by_bulk_accounts_only_attributes_first_to_ads_subsequent_to_direct(): void
+    {
+        $client = Client::firstOrFail();
+        $bot = TelegramBot::where('client_id', $client->id)->firstOrFail();
+        $channel = TelegramChannel::where('telegram_bot_id', $bot->id)->firstOrFail();
+        $lp = LandingPage::where('client_id', $client->id)->firstOrFail();
+        $campaign = Campaign::firstOrCreate(
+            ['client_id' => $client->id, 'utm_campaign' => 'panel-test-camp'],
+            ['name' => 'Panel Test Campaign', 'slug' => 'panel-test-camp', 'status' => 'active']
+        );
+
+        $session = TrackingSession::create([
+            'session_id' => 'sess_panel_test_' . Str::random(8),
+            'client_id' => $client->id,
+            'landing_page_id' => $lp->id,
+            'campaign_id' => $campaign->id,
+            'utm_source' => 'meta',
+            'utm_medium' => 'cpc',
+            'utm_campaign' => 'panel-test-camp',
+            'fbclid' => 'fb.1.123456789.panel',
+            'visitor_id' => (string) Str::uuid(),
+            'session_token' => Str::random(32),
+            'ip_address' => '1.2.3.4',
+            'user_agent' => 'Mozilla/5.0',
+            'device_type' => 'Mobile',
+            'started_at' => now(),
+            'last_activity' => now(),
+        ]);
+
+        $cta = Cta::where('landing_page_id', $lp->id)->first() ?? Cta::create([
+            'client_id' => $client->id,
+            'landing_page_id' => $lp->id,
+            'button_text' => 'Join Telegram',
+            'button_type' => 'primary',
+            'tracking_token' => 'kx_panel_cta',
+            'telegram_destination' => 'https://t.me/panel_channel',
+            'is_active' => true,
+        ]);
+
+        $click = CtaClick::create([
+            'client_id' => $client->id,
+            'landing_page_id' => $lp->id,
+            'cta_id' => $cta->id,
+            'campaign_id' => $campaign->id,
+            'tracking_session_id' => $session->id,
+            'destination_url' => 'https://t.me/panel_channel',
+            'visitor_id' => $session->visitor_id,
+            'tracking_token' => Str::random(32),
+            'clicked_at' => now(),
+        ]);
+
+        $sharedInviteLink = 'https://t.me/+SharedLink123';
+        \App\Models\TelegramInvite::create([
+            'telegram_channel_id' => $channel->id,
+            'tracking_session_id' => $session->id,
+            'visitor_id' => $session->visitor_id,
+            'invite_link' => $sharedInviteLink,
+            'status' => 'active',
+            'expires_at' => now()->addDays(1),
+        ]);
+
+        // 1st account joins using this link
+        $user1Id = 55112233;
+        $payload1 = [
+            'update_id' => 9910,
+            'chat_member' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => ['id' => $user1Id, 'first_name' => 'Real', 'last_name' => 'User', 'is_bot' => false],
+                'date' => time(),
+                'old_chat_member' => ['user' => ['id' => $user1Id, 'first_name' => 'Real'], 'status' => 'left'],
+                'new_chat_member' => ['user' => ['id' => $user1Id, 'first_name' => 'Real'], 'status' => 'member'],
+                'invite_link' => ['invite_link' => $sharedInviteLink],
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $payload1)->assertStatus(200);
+
+        $event1 = TelegramEvent::where('telegram_channel_id', $channel->id)->where('telegram_user_id', (string) $user1Id)->first();
+        $this->assertNotNull($event1);
+        $this->assertEquals('ads', $event1->source);
+        $this->assertEquals($campaign->id, $event1->campaign_id);
+
+        // 2nd account (panel fake account) tries joining using the EXACT same invite link
+        $user2Id = 55112244;
+        $payload2 = [
+            'update_id' => 9911,
+            'chat_member' => [
+                'chat' => ['id' => (int) $channel->telegram_chat_id, 'title' => $channel->title, 'type' => 'channel'],
+                'from' => ['id' => $user2Id, 'first_name' => 'Fake', 'last_name' => 'Panel', 'is_bot' => false],
+                'date' => time(),
+                'old_chat_member' => ['user' => ['id' => $user2Id, 'first_name' => 'Fake'], 'status' => 'left'],
+                'new_chat_member' => ['user' => ['id' => $user2Id, 'first_name' => 'Fake'], 'status' => 'member'],
+                'invite_link' => ['invite_link' => $sharedInviteLink],
+            ]
+        ];
+        $this->postJson(route('api.telegram.webhook', $bot->webhook_secret), $payload2)->assertStatus(200);
+
+        $event2 = TelegramEvent::where('telegram_channel_id', $channel->id)->where('telegram_user_id', (string) $user2Id)->first();
+        $this->assertNotNull($event2);
+        $this->assertEquals('direct', $event2->source, 'Second user on same invite link MUST be direct, not ads');
+        $this->assertNull($event2->campaign_id, 'Second user must have null campaign_id');
+        $this->assertNull($event2->cta_click_id, 'Second user must not steal cta_click_id');
+    }
 }
 
 

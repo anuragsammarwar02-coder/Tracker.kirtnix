@@ -767,7 +767,7 @@ class TelegramService
         $isVerified = true;
         if ($updateType === 'chat_join_request') {
             $eventType = 'join_request';
-            $isVerified = false; // Join request is pending until admin approves! Never verified before approval.
+            $isVerified = (!$isBot && !$isManualAdd);
             $oldStatus = ($oldStatus === 'unknown' || empty($oldStatus)) ? 'none' : $oldStatus;
             $newStatus = 'pending';
         } elseif (in_array($newStatus, ['member', 'administrator', 'creator', 'approved']) && in_array($oldStatus, ['left', 'kicked', 'restricted', 'unknown', 'none', 'pending', 'join_request'])) {
@@ -844,15 +844,39 @@ class TelegramService
                 // New Join / Join Request from Real User:
                 // Primary: Tracked / Unique Invite Link
                 if ($payloadInviteLink) {
-                    $matchedInvite = TelegramInvite::where('invite_link', $payloadInviteLink)->first();
-                    if ($matchedInvite) {
-                        $matchedSession = $matchedInvite->trackingSession;
-                        $matchedClick = CtaClick::where('tracking_session_id', $matchedInvite->tracking_session_id)->latest('id')->first();
+                    // Check if this invite link has ALREADY been claimed by an earlier join event in this channel
+                    $isLinkAlreadyClaimed = $channel ? TelegramEvent::where('telegram_channel_id', $channel->id)
+                        ->where('invite_link', $payloadInviteLink)
+                        ->exists() : false;
+
+                    if (!$isLinkAlreadyClaimed) {
+                        $matchedInvite = TelegramInvite::where('invite_link', $payloadInviteLink)
+                            ->where('status', 'active')
+                            ->first();
+
+                        if ($matchedInvite) {
+                            $matchedSession = $matchedInvite->trackingSession;
+                            $matchedClick = CtaClick::where('tracking_session_id', $matchedInvite->tracking_session_id)
+                                ->whereNotExists(function ($q) {
+                                    $q->select(\Illuminate\Support\Facades\DB::raw(1))
+                                      ->from('telegram_events')
+                                      ->whereColumn('telegram_events.cta_click_id', 'cta_clicks.id');
+                                })
+                                ->latest('id')
+                                ->first();
+
+                            $matchedInvite->update(['status' => 'used']);
+                        }
+                    } else {
+                        // Reused / shared link by panel or forward: strictly organic/direct
+                        $matchedInvite = null;
+                        $matchedSession = null;
+                        $matchedClick = null;
                     }
                 }
 
                 // Secondary: Recent UNASSIGNED CTA Click for this client (within 15 minutes) - only for real self-joins
-                if (!$matchedSession) {
+                if (!$payloadInviteLink && !$matchedSession) {
                     $matchedClick = CtaClick::where('client_id', $clientId)
                         ->where('created_at', '>=', now()->subMinutes(15))
                         ->whereNotExists(function ($q) {
@@ -996,7 +1020,7 @@ class TelegramService
                 ->where('telegram_user_id', $telegramUserId)
                 ->first();
 
-            $convStatus = ($eventType === 'join' && $isVerified) ? 'verified' : ($eventType === 'join_request' ? 'pending' : 'unverified');
+            $convStatus = ($isVerified && in_array($eventType, ['join', 'join_request'])) ? 'verified' : 'unverified';
 
             if (!$existingConversion) {
                 $metaEventId = 'conv_' . Str::random(16) . '_' . time();
