@@ -12,6 +12,12 @@ return new class extends Migration
             return;
         }
 
+        try {
+            DB::statement('PRAGMA busy_timeout = 30000;');
+        } catch (\Throwable $e) {}
+
+        $reclassifyEventIds = [];
+
         // 1. Specific known panel/fake accounts from recent bulk additions
         $fakeNames = [
             'Moiga Else',
@@ -44,8 +50,11 @@ return new class extends Migration
             $fn = $parts[0] ?? $name;
             $ln = $parts[1] ?? null;
 
-            $events = DB::table('telegram_events')
-                ->where('event_time', '>=', now()->subDays(2))
+            $ids = DB::table('telegram_events')
+                ->where(function ($q) {
+                    $q->where('id', '>=', 470000)
+                      ->orWhere('created_at', '>=', now()->subDays(1));
+                })
                 ->where(function ($q) use ($name, $fn, $ln) {
                     $q->where('first_name', $name)
                       ->orWhere('first_name', 'like', "%{$name}%")
@@ -62,52 +71,28 @@ return new class extends Migration
                         });
                     }
                 })
-                ->get();
+                ->pluck('id')
+                ->toArray();
 
-            foreach ($events as $ev) {
-                DB::table('telegram_events')
-                    ->where('id', $ev->id)
-                    ->update([
-                        'source' => 'direct',
-                        'campaign_id' => null,
-                        'cta_click_id' => null,
-                    ]);
-
-                DB::table('conversions')
-                    ->where('telegram_event_id', $ev->id)
-                    ->update([
-                        'source' => 'direct',
-                        'campaign_id' => null,
-                        'status' => 'unverified',
-                    ]);
+            foreach ($ids as $id) {
+                $reclassifyEventIds[] = $id;
             }
         }
 
         // 2. Reclassify any duplicate telegram_events claiming the SAME cta_click_id from recent events
         $events = DB::table('telegram_events')
-            ->where('event_time', '>=', now()->subDays(2))
+            ->where(function ($q) {
+                $q->where('id', '>=', 470000)
+                  ->orWhere('created_at', '>=', now()->subDays(1));
+            })
             ->whereNotNull('cta_click_id')
             ->orderBy('id', 'asc')
-            ->get();
+            ->get(['id', 'cta_click_id']);
 
         $seenClicks = [];
         foreach ($events as $ev) {
             if (isset($seenClicks[$ev->cta_click_id])) {
-                DB::table('telegram_events')
-                    ->where('id', $ev->id)
-                    ->update([
-                        'source' => 'direct',
-                        'campaign_id' => null,
-                        'cta_click_id' => null,
-                    ]);
-
-                DB::table('conversions')
-                    ->where('telegram_event_id', $ev->id)
-                    ->update([
-                        'source' => 'direct',
-                        'campaign_id' => null,
-                        'status' => 'unverified',
-                    ]);
+                $reclassifyEventIds[] = $ev->id;
             } else {
                 $seenClicks[$ev->cta_click_id] = $ev->id;
             }
@@ -115,35 +100,45 @@ return new class extends Migration
 
         // 3. Reclassify any duplicate telegram_events sharing the SAME invite_link in the same channel from recent events
         $eventsWithLink = DB::table('telegram_events')
-            ->where('event_time', '>=', now()->subDays(2))
+            ->where(function ($q) {
+                $q->where('id', '>=', 470000)
+                  ->orWhere('created_at', '>=', now()->subDays(1));
+            })
             ->whereNotNull('invite_link')
             ->where('invite_link', '!=', '')
             ->where('source', 'ads')
             ->orderBy('id', 'asc')
-            ->get();
+            ->get(['id', 'telegram_channel_id', 'invite_link']);
 
         $seenLinks = [];
         foreach ($eventsWithLink as $ev) {
             $key = $ev->telegram_channel_id . '_' . $ev->invite_link;
             if (isset($seenLinks[$key])) {
-                DB::table('telegram_events')
-                    ->where('id', $ev->id)
-                    ->update([
-                        'source' => 'direct',
-                        'campaign_id' => null,
-                        'cta_click_id' => null,
-                    ]);
-
-                DB::table('conversions')
-                    ->where('telegram_event_id', $ev->id)
-                    ->update([
-                        'source' => 'direct',
-                        'campaign_id' => null,
-                        'status' => 'unverified',
-                    ]);
+                $reclassifyEventIds[] = $ev->id;
             } else {
                 $seenLinks[$key] = $ev->id;
             }
+        }
+
+        // Perform batch updates once
+        if (!empty($reclassifyEventIds)) {
+            $uniqueIds = array_values(array_unique($reclassifyEventIds));
+
+            DB::table('telegram_events')
+                ->whereIn('id', $uniqueIds)
+                ->update([
+                    'source' => 'direct',
+                    'campaign_id' => null,
+                    'cta_click_id' => null,
+                ]);
+
+            DB::table('conversions')
+                ->whereIn('telegram_event_id', $uniqueIds)
+                ->update([
+                    'source' => 'direct',
+                    'campaign_id' => null,
+                    'status' => 'unverified',
+                ]);
         }
     }
 
