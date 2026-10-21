@@ -8,12 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 1. Rebuild indexes to heal corrupted indexes (e.g. conversions_event_time_index)
+        // 1. Rebuild indexes to heal corrupted indexes (specifically conversions_event_time_index)
         try {
             DB::statement('PRAGMA busy_timeout = 30000;');
             DB::statement('REINDEX conversions;');
-            DB::statement('REINDEX telegram_events;');
-            DB::statement('REINDEX;');
         } catch (\Throwable $e) {
             // Ignore if driver/environment does not support REINDEX
         }

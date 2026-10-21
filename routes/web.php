@@ -49,24 +49,33 @@ Route::get('/healthz', function () {
         $gitPullResult = null;
         $reindexResult = null;
         if (request()->query('reindex')) {
+            $t0 = microtime(true);
             try {
                 \Illuminate\Support\Facades\DB::statement('PRAGMA busy_timeout = 30000;');
                 \Illuminate\Support\Facades\DB::statement('REINDEX conversions;');
-                \Illuminate\Support\Facades\DB::statement('REINDEX telegram_events;');
-                \Illuminate\Support\Facades\DB::statement('REINDEX;');
-                $integrity = \Illuminate\Support\Facades\DB::select('PRAGMA integrity_check;');
-                $reindexResult = 'REINDEX completed. Integrity check: ' . json_encode($integrity);
+                $integrity = \Illuminate\Support\Facades\DB::select('PRAGMA quick_check;');
+                $elapsed = round(microtime(true) - $t0, 2);
+                $reindexResult = "REINDEX conversions completed in {$elapsed}s. Quick Check: " . json_encode($integrity);
             } catch (\Throwable $e) {
                 $reindexResult = 'Reindex Error: ' . $e->getMessage();
             }
         }
         if (request()->query('migrate')) {
+            $t0 = microtime(true);
             try {
                 \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
                 $migrateResult = \Illuminate\Support\Facades\Artisan::output();
             } catch (\Throwable $e) {
                 $migrateResult = 'Migrate Error: ' . $e->getMessage();
             }
+        }
+        if (request()->query('quick')) {
+            return response()->json([
+                'status' => 'ok',
+                'reindex_result' => $reindexResult,
+                'migrate_result' => $migrateResult,
+                'git_pull_result' => $gitPullResult,
+            ]);
         }
 
         if (request()->query('inspect_campaigns')) {
@@ -293,11 +302,14 @@ Route::get('/healthz', function () {
 
                                     // Integrity check
                                     if (!empty($tables)) {
-                                        $stmt = $pdo->query('PRAGMA integrity_check;');
+                                        $stmt = $pdo->query('PRAGMA quick_check;');
                                         $integrity = $stmt ? (string) $stmt->fetchColumn() : 'unknown';
 
                                         // Row counts for key tables
-                                        foreach ($tables as $t) {
+                                        $tablesToCount = ($size > 50000000)
+                                            ? array_intersect($tables, ['users', 'clients', 'landing_pages', 'telegram_bots', 'meta_connections'])
+                                            : $tables;
+                                        foreach ($tablesToCount as $t) {
                                             try {
                                                 $cStmt = $pdo->query("SELECT COUNT(*) FROM \"{$t}\";");
                                                 $tableCounts[$t] = $cStmt ? (int) $cStmt->fetchColumn() : 0;
