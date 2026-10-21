@@ -47,6 +47,19 @@ Route::get('/healthz', function () {
 
         $migrateResult = null;
         $gitPullResult = null;
+        $reindexResult = null;
+        if (request()->query('reindex')) {
+            try {
+                \Illuminate\Support\Facades\DB::statement('PRAGMA busy_timeout = 30000;');
+                \Illuminate\Support\Facades\DB::statement('REINDEX conversions;');
+                \Illuminate\Support\Facades\DB::statement('REINDEX telegram_events;');
+                \Illuminate\Support\Facades\DB::statement('REINDEX;');
+                $integrity = \Illuminate\Support\Facades\DB::select('PRAGMA integrity_check;');
+                $reindexResult = 'REINDEX completed. Integrity check: ' . json_encode($integrity);
+            } catch (\Throwable $e) {
+                $reindexResult = 'Reindex Error: ' . $e->getMessage();
+            }
+        }
         if (request()->query('migrate')) {
             try {
                 \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
@@ -342,6 +355,8 @@ Route::get('/healthz', function () {
                     'size' => $dbSize,
                     'connected' => $dbConnected,
                 ],
+                'reindex_result' => $reindexResult ?? null,
+                'migrate_result' => $migrateResult ?? null,
                 'recover_error' => $recoverError ?? null,
                 'live_counts' => [
                     'users' => $usersCount,
@@ -388,6 +403,9 @@ Route::get('/healthz', function () {
         $html .= "<h2>KIRTNIX PRODUCTION DATABASE INSPECTOR (READ-ONLY)</h2>";
         if ($gitPullResult !== null) {
             $html .= "<div style='background:#1f6feb;color:#fff;padding:10px;border-radius:6px;margin-bottom:15px;'><strong>Git Pull Output:</strong><pre>" . htmlspecialchars($gitPullResult) . "</pre></div>";
+        }
+        if ($reindexResult !== null) {
+            $html .= "<div style='background:#8957e5;color:#fff;padding:10px;border-radius:6px;margin-bottom:15px;'><strong>Reindex Output:</strong><pre>" . htmlspecialchars($reindexResult) . "</pre></div>";
         }
         if ($migrateResult !== null) {
             $html .= "<div style='background:#238636;color:#fff;padding:10px;border-radius:6px;margin-bottom:15px;'><strong>Migrate Output:</strong><pre>" . htmlspecialchars($migrateResult) . "</pre></div>";

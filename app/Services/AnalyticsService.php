@@ -160,30 +160,40 @@ class AnalyticsService
         $clicksData = [];
         $joinsData = [];
 
+        // High-Speed Aggregations: 3 grouped queries across the date range instead of 21 queries
+        $viewsByDate = LandingPageView::whereBetween('viewed_at', [$range['start'], $range['end']])
+            ->when($clientId, fn($q) => $q->where('client_id', $clientId))
+            ->when($campaignId, fn($q) => $q->where('campaign_id', $campaignId))
+            ->select(DB::raw("date(viewed_at) as d"), DB::raw('count(*) as total'))
+            ->groupBy('d')
+            ->pluck('total', 'd')
+            ->toArray();
+
+        $clicksByDate = CtaClick::whereBetween('clicked_at', [$range['start'], $range['end']])
+            ->when($clientId, fn($q) => $q->where('client_id', $clientId))
+            ->when($campaignId, fn($q) => $q->where('campaign_id', $campaignId))
+            ->select(DB::raw("date(clicked_at) as d"), DB::raw('count(*) as total'))
+            ->groupBy('d')
+            ->pluck('total', 'd')
+            ->toArray();
+
+        $joinsByDate = TelegramEvent::where('event_type', 'join')
+            ->whereBetween('event_time', [$range['start'], $range['end']])
+            ->when($clientId, fn($q) => $q->where('client_id', $clientId))
+            ->when($campaignId, fn($q) => $q->where('campaign_id', $campaignId))
+            ->select(DB::raw("date(event_time) as d"), DB::raw('count(*) as total'))
+            ->groupBy('d')
+            ->pluck('total', 'd')
+            ->toArray();
+
         $current = $range['start']->copy();
         while ($current <= $range['end']) {
-            $dayStart = $current->copy()->startOfDay();
-            $dayEnd = $current->copy()->endOfDay();
+            $dateStr = $current->format('Y-m-d');
             $labels[] = $current->format('M d');
 
-            $vQuery = LandingPageView::whereBetween('viewed_at', [$dayStart, $dayEnd]);
-            $cQuery = CtaClick::whereBetween('clicked_at', [$dayStart, $dayEnd]);
-            $jQuery = TelegramEvent::where('event_type', 'join')->whereBetween('event_time', [$dayStart, $dayEnd]);
-
-            if ($clientId) {
-                $vQuery->where('client_id', $clientId);
-                $cQuery->where('client_id', $clientId);
-                $jQuery->where('client_id', $clientId);
-            }
-            if ($campaignId) {
-                $vQuery->where('campaign_id', $campaignId);
-                $cQuery->where('campaign_id', $campaignId);
-                $jQuery->where('campaign_id', $campaignId);
-            }
-
-            $viewsData[] = $vQuery->count();
-            $clicksData[] = $cQuery->count();
-            $joinsData[] = $jQuery->count();
+            $viewsData[] = (int) ($viewsByDate[$dateStr] ?? 0);
+            $clicksData[] = (int) ($clicksByDate[$dateStr] ?? 0);
+            $joinsData[] = (int) ($joinsByDate[$dateStr] ?? 0);
 
             $current->addDay();
         }

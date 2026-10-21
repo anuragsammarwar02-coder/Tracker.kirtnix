@@ -90,49 +90,82 @@ class DashboardController extends Controller
         $totalJoins = $metrics['joins'];
         $totalExits = $metrics['leaves'];
 
-        $joinRequests = (int) (Conversion::when($clientId, fn($q) => $q->where('client_id', $clientId))
+        $joinRequests = (int) Conversion::when($clientId, fn($q) => $q->where('client_id', $clientId))
             ->where('event_type', 'join_request')
-            ->count())
-            + (int) (TelegramEvent::when($clientId, fn($q) => $q->where('client_id', $clientId))
-            ->where('event_type', 'pending')
-            ->count());
+            ->whereBetween('event_time', [$metrics['date_range']['start'], $metrics['date_range']['end']])
+            ->count();
 
         $costPerJoin = $totalJoins > 0 ? round($totalSpend / $totalJoins, 2) : 0.00;
         $conversionRate = $totalViews > 0 ? round(($totalJoins / $totalViews) * 100, 1) : 0.0;
         $ctr = $totalViews > 0 ? round(($totalClicks / $totalViews) * 100, 2) : 0.0;
         $joinRequestRate = $totalClicks > 0 ? round(($joinRequests / $totalClicks) * 100, 2) : 0.0;
 
-        // Client Performance Breakdown
+        // Client Performance Breakdown (Optimized: replaces 64 correlated subqueries and N+1 loop queries)
         $allClients = Client::with('adAccount')->get();
         $clientsQuery = Client::with([
             'adAccount',
             'campaigns' => fn($q) => $q->select('id', 'client_id', 'ad_account_id', 'spend', 'reach', 'status'),
-        ])->withCount([
-            'views',
-            'clicks',
-            'conversions as verified_conversions_count' => fn($q) => $q->where('status', 'verified'),
-            'telegramEvents as joins_count' => fn($q) => $q->where('event_type', 'join'),
         ]);
         if ($clientId) {
             $clientsQuery->where('id', $clientId);
         }
         $clients = $clientsQuery->get();
 
-        $clientPerformance = $clients->map(function ($c) {
+        $clientIds = $clients->pluck('id')->all();
+
+        // High-Speed Aggregated Counts (4 single indexed grouped queries across clients)
+        $viewsByClient = LandingPageView::whereIn('client_id', $clientIds)
+            ->selectRaw('client_id, count(*) as total')
+            ->groupBy('client_id')
+            ->pluck('total', 'client_id')
+            ->toArray();
+
+        $clicksByClient = CtaClick::whereIn('client_id', $clientIds)
+            ->selectRaw('client_id, count(*) as total')
+            ->groupBy('client_id')
+            ->pluck('total', 'client_id')
+            ->toArray();
+
+        $verifiedByClient = Conversion::where('status', 'verified')
+            ->whereIn('client_id', $clientIds)
+            ->selectRaw('client_id, count(*) as total')
+            ->groupBy('client_id')
+            ->pluck('total', 'client_id')
+            ->toArray();
+
+        $joinsByClient = TelegramEvent::where('event_type', 'join')
+            ->whereIn('client_id', $clientIds)
+            ->selectRaw('client_id, count(*) as total')
+            ->groupBy('client_id')
+            ->pluck('total', 'client_id')
+            ->toArray();
+
+        // Pre-fetch active campaigns to avoid N+1 queries in map
+        $allActiveCampaigns = Campaign::whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])->get();
+        $campaignsByClient = $allActiveCampaigns->groupBy('client_id');
+        $campaignsByAdAccount = $allActiveCampaigns->whereNotNull('ad_account_id')->groupBy('ad_account_id');
+
+        $clientPerformance = $clients->map(function ($c) use (
+            $viewsByClient,
+            $clicksByClient,
+            $verifiedByClient,
+            $joinsByClient,
+            $campaignsByClient,
+            $campaignsByAdAccount
+        ) {
             $adAccount = $c->adAccount;
-            $cCampaigns = Campaign::where('client_id', $c->id)
-                ->when($adAccount, fn($q) => $q->orWhere('ad_account_id', $adAccount->id))
-                ->whereNotIn('status', ['archived', 'ARCHIVED', 'Archived', 'deleted', 'DELETED'])
-                ->get();
+            $cCampaigns = ($campaignsByClient->get($c->id) ?? collect())->merge(
+                $adAccount ? ($campaignsByAdAccount->get($adAccount->id) ?? collect()) : collect()
+            )->unique('id');
 
             $spend = (float) $cCampaigns->sum('spend');
             if ($spend <= 0 && $adAccount && $adAccount->lifetime_spend > 0) {
                 $spend = (float) $adAccount->lifetime_spend;
             }
             $reach = (int) $cCampaigns->sum('reach');
-            $views = (int) ($c->views_count ?? $c->views()->count());
-            $clicks = (int) ($c->clicks_count ?? $c->clicks()->count());
-            $joins = (int) ($c->verified_conversions_count ?: ($c->joins_count ?? $c->telegramEvents()->where('event_type', 'join')->count()));
+            $views = (int) ($viewsByClient[$c->id] ?? 0);
+            $clicks = (int) ($clicksByClient[$c->id] ?? 0);
+            $joins = (int) ($verifiedByClient[$c->id] ?? ($joinsByClient[$c->id] ?? 0));
             $cpj = $joins > 0 ? round($spend / $joins, 2) : 0.00;
 
             return [
