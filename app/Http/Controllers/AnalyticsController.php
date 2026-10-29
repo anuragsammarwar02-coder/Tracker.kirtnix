@@ -630,15 +630,29 @@ class AnalyticsController extends Controller
                        ->orWhereIn('status_after', ['pending', 'join_request', 'restricted']);
                 })->whereNotIn('status_after', ['approved', 'member', 'administrator', 'creator', 'left', 'kicked', 'banned']);
             });
+        } elseif (in_array($statusFilter, ['paid_ads_left', 'ads_left', 'left_ads'])) {
+            $joinHistoryQuery->where(function ($q) {
+                $q->where('source', 'ads')
+                  ->orWhereNotNull('campaign_id');
+            })->where(function ($q) {
+                $q->where('event_type', 'leave')
+                  ->orWhereIn('status_after', ['left', 'kicked', 'banned']);
+            });
         } elseif ($statusFilter === 'left') {
             $joinHistoryQuery->where(function ($q) {
                 $q->where('event_type', 'leave')
                   ->orWhereIn('status_after', ['left', 'kicked', 'banned']);
             });
         } elseif (in_array($statusFilter, ['paid_ads', 'ads', 'paid'])) {
+            // Strictly Paid Ads subscribers who are approved or pending (excludes channel leaves)
             $joinHistoryQuery->where(function ($q) {
                 $q->where('source', 'ads')
                   ->orWhereNotNull('campaign_id');
+            })
+            ->whereNotIn('event_type', ['leave'])
+            ->where(function ($q) {
+                $q->whereNull('status_after')
+                  ->orWhereNotIn('status_after', ['left', 'kicked', 'banned']);
             });
         }
 
@@ -811,15 +825,29 @@ class AnalyticsController extends Controller
                        ->orWhereIn('status_after', ['pending', 'join_request', 'restricted']);
                 })->whereNotIn('status_after', ['approved', 'member', 'administrator', 'creator', 'left', 'kicked', 'banned']);
             });
+        } elseif (in_array($statusFilter, ['paid_ads_left', 'ads_left', 'left_ads'])) {
+            $latestEventsQuery->where(function ($q) {
+                $q->where('source', 'ads')
+                  ->orWhereNotNull('campaign_id');
+            })->where(function ($q) {
+                $q->where('event_type', 'leave')
+                  ->orWhereIn('status_after', ['left', 'kicked', 'banned']);
+            });
         } elseif ($statusFilter === 'left') {
             $latestEventsQuery->where(function ($q) {
                 $q->where('event_type', 'leave')
                   ->orWhereIn('status_after', ['left', 'kicked', 'banned']);
             });
         } elseif (in_array($statusFilter, ['paid_ads', 'ads', 'paid'])) {
+            // Strictly Paid Ads subscribers who are approved or pending (excludes channel leaves)
             $latestEventsQuery->where(function ($q) {
                 $q->where('source', 'ads')
                   ->orWhereNotNull('campaign_id');
+            })
+            ->whereNotIn('event_type', ['leave'])
+            ->where(function ($q) {
+                $q->whereNull('status_after')
+                  ->orWhereNotIn('status_after', ['left', 'kicked', 'banned']);
             });
         }
 

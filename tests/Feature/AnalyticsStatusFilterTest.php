@@ -52,7 +52,7 @@ class AnalyticsStatusFilterTest extends TestCase
             'event_time' => now()->subMinute(),
         ]);
 
-        // Event 3: Left member
+        // Event 3: Left member (direct)
         TelegramEvent::create([
             'client_id' => $client->id,
             'telegram_user_id' => '1003',
@@ -64,12 +64,25 @@ class AnalyticsStatusFilterTest extends TestCase
             'event_time' => now()->subMinutes(2),
         ]);
 
+        // Event 4: Left member (from paid ads)
+        TelegramEvent::create([
+            'client_id' => $client->id,
+            'telegram_user_id' => '1004',
+            'telegram_username' => 'paid_ads_left_user',
+            'first_name' => 'AdsLeft',
+            'event_type' => 'leave',
+            'status_after' => 'left',
+            'source' => 'ads',
+            'event_time' => now()->subMinutes(3),
+        ]);
+
         // 1. Filter: Approved
         $responseApproved = $this->get('/analytics/detail/mynkgujarati?status=approved');
         $responseApproved->assertStatus(200);
         $responseApproved->assertSee('@approved_user');
         $responseApproved->assertDontSee('@pending_user');
         $responseApproved->assertDontSee('@left_user');
+        $responseApproved->assertDontSee('@paid_ads_left_user');
 
         // 2. Filter: Pending
         $responsePending = $this->get('/analytics/detail/mynkgujarati?status=pending');
@@ -77,29 +90,41 @@ class AnalyticsStatusFilterTest extends TestCase
         $responsePending->assertSee('@pending_user');
         $responsePending->assertDontSee('@approved_user');
         $responsePending->assertDontSee('@left_user');
+        $responsePending->assertDontSee('@paid_ads_left_user');
 
-        // 3. Filter: Left
+        // 3. Filter: Left (All leaves)
         $responseLeft = $this->get('/analytics/detail/mynkgujarati?status=left');
         $responseLeft->assertStatus(200);
         $responseLeft->assertSee('@left_user');
+        $responseLeft->assertSee('@paid_ads_left_user');
         $responseLeft->assertDontSee('@approved_user');
         $responseLeft->assertDontSee('@pending_user');
 
-        // 4. Filter: Paid Ads
+        // 4. Filter: Paid Ads (ONLY approved and pending, strictly NO leaves)
         $responsePaidAds = $this->get('/analytics/detail/mynkgujarati?status=paid_ads');
         $responsePaidAds->assertStatus(200);
         $responsePaidAds->assertSee('@approved_user');
         $responsePaidAds->assertDontSee('@pending_user');
         $responsePaidAds->assertDontSee('@left_user');
+        $responsePaidAds->assertDontSee('@paid_ads_left_user');
 
-        // 5. No filter: All events
+        // 5. Filter: Paid Ads Left (ONLY paid ads members who left)
+        $responsePaidAdsLeft = $this->get('/analytics/detail/mynkgujarati?status=paid_ads_left');
+        $responsePaidAdsLeft->assertStatus(200);
+        $responsePaidAdsLeft->assertSee('@paid_ads_left_user');
+        $responsePaidAdsLeft->assertDontSee('@approved_user');
+        $responsePaidAdsLeft->assertDontSee('@pending_user');
+        $responsePaidAdsLeft->assertDontSee('@left_user');
+
+        // 6. No filter: All events
         $responseAll = $this->get('/analytics/detail/mynkgujarati');
         $responseAll->assertStatus(200);
         $responseAll->assertSee('@approved_user');
         $responseAll->assertSee('@pending_user');
         $responseAll->assertSee('@left_user');
+        $responseAll->assertSee('@paid_ads_left_user');
 
-        // 6. Live Metrics API with status filter
+        // 7. Live Metrics API with status filter
         $liveApproved = $this->getJson('/analytics/detail/mynkgujarati/live-metrics?status=approved');
         $liveApproved->assertStatus(200)
             ->assertJson(['ok' => true])
@@ -115,14 +140,19 @@ class AnalyticsStatusFilterTest extends TestCase
         $liveLeft = $this->getJson('/analytics/detail/mynkgujarati/live-metrics?status=left');
         $liveLeft->assertStatus(200)
             ->assertJson(['ok' => true])
-            ->assertJsonPath('total_events', 1)
-            ->assertJsonPath('events.0.username', 'left_user');
+            ->assertJsonPath('total_events', 2);
 
         $livePaidAds = $this->getJson('/analytics/detail/mynkgujarati/live-metrics?status=paid_ads');
         $livePaidAds->assertStatus(200)
             ->assertJson(['ok' => true])
             ->assertJsonPath('total_events', 1)
             ->assertJsonPath('events.0.username', 'approved_user');
+
+        $livePaidAdsLeft = $this->getJson('/analytics/detail/mynkgujarati/live-metrics?status=paid_ads_left');
+        $livePaidAdsLeft->assertStatus(200)
+            ->assertJson(['ok' => true])
+            ->assertJsonPath('total_events', 1)
+            ->assertJsonPath('events.0.username', 'paid_ads_left_user');
     }
 
     public function test_all_subscribers_and_join_history_events_render_without_suppression()
