@@ -72,6 +72,8 @@ Route::get('/healthz', function () {
         if (request()->query('quick')) {
             return response()->json([
                 'status' => 'ok',
+                'meta_app_id' => \App\Models\Setting::get('meta_app_id'),
+                'meta_app_secret_prefix' => substr((string)\App\Models\Setting::get('meta_app_secret'), 0, 8),
                 'reindex_result' => $reindexResult,
                 'migrate_result' => $migrateResult,
                 'git_pull_result' => $gitPullResult,
