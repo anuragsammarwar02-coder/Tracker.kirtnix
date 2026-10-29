@@ -32,8 +32,8 @@ return [
     ],
 
     'meta' => [
-        'app_id' => env('META_APP_ID', '1812606023369831'),
-        'app_secret' => env('META_APP_SECRET', '12f7da9cb5e45f880f1e77bbb4ed2c66'),
+        'app_id' => env('META_APP_ID', '1665222874974029'),
+        'app_secret' => env('META_APP_SECRET', 'bc31b883e90c3a75c31f9f2a8a5dceae'),
         'api_version' => env('META_API_VERSION', 'v20.0'),
         'redirect_uri' => env('META_REDIRECT_URI', 'https://tracker.kirtnix.in/meta/oauth/callback'),
     ],
