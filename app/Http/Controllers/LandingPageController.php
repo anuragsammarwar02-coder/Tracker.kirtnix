@@ -399,7 +399,7 @@ class LandingPageController extends Controller
         $clients = Client::orderBy('company_name')->get();
         $campaigns = Campaign::where('client_id', $landingPage->client_id)->orderBy('name')->get();
 
-        if ($landingPage->page_source === 'native') {
+        if ($landingPage->page_source === 'native' || $landingPage->template_type === 'visual_builder' || !empty($landingPage->blocks_json)) {
             return view('landing_pages.builder', compact('landingPage', 'clients', 'campaigns'));
         }
 

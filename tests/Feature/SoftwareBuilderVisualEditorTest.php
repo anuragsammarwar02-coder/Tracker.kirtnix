@@ -806,4 +806,57 @@ class SoftwareBuilderVisualEditorTest extends TestCase
         $this->assertStringContainsString('bg-[#F8FAFC]', $html);
         $this->assertStringContainsString('cta-pill-glow', $html);
     }
+
+    public function test_disclaimer_block_mini_brand_and_logo_are_fully_editable(): void
+    {
+        $blocks = [
+            [
+                'id' => 'hero_custom',
+                'type' => 'hero',
+                'heading' => 'Trading King',
+                'button_text' => 'Join Telegram',
+                'logo_url' => 'https://example.com/hero-avatar.jpg',
+            ],
+            [
+                'id' => 'disclaimer_custom',
+                'type' => 'disclaimer',
+                'show_mini_brand' => true,
+                'brand_name' => 'Custom Channel Title 123',
+                'logo_url' => 'https://example.com/custom-mini-avatar.jpg',
+                'title' => 'Disclaimer Heading',
+                'text' => 'Educational purposes disclaimer text.',
+            ],
+        ];
+
+        $response = $this->actingAs($this->user)->post(route('landing-pages.store'), [
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Custom Disclaimer Page',
+            'slug' => 'custom-disclaimer-brand-page',
+            'brand_name' => 'Default Brand',
+            'template_type' => 'visual_builder',
+            'theme' => 'midnight_blue',
+            'telegram_destination' => 'https://t.me/kirtnix',
+            'blocks_json' => json_encode($blocks),
+            'is_active' => '1',
+        ]);
+
+        $response->assertRedirect();
+
+        $page = LandingPage::where('slug', 'custom-disclaimer-brand-page')->first();
+        $this->assertNotNull($page);
+
+        // Verify public page renders custom brand name and logo in disclaimer
+        $publicRes = $this->get(route('public.landing_page', $page->slug));
+        $publicRes->assertStatus(200);
+        $publicRes->assertSee('Custom Channel Title 123');
+        $publicRes->assertSee('https://example.com/custom-mini-avatar.jpg');
+
+        // Now test builder UI renders the editable fields for disclaimer
+        $builderRes = $this->actingAs($this->user)->get(route('landing-pages.edit', $page));
+        $builderRes->assertStatus(200);
+        $builderRes->assertSee('Mini Brand / Channel Name');
+        $builderRes->assertSee('Mini Avatar / Logo URL (optional)');
+        $builderRes->assertSee('Show Mini Avatar', false);
+    }
 }

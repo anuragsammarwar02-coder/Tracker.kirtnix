@@ -129,6 +129,14 @@
     $ctaToken = $primaryCta?->tracking_token ?? ($landingPage->tracking_token ?? $landingPage->slug);
     $brand = $landingPage->brand_name ?: 'VIP Trading';
     $logo = !empty($landingPage->brand_logo_url) ? $landingPage->brand_logo_url : null;
+    if (!$logo && is_array($blocks)) {
+        foreach ($blocks as $b) {
+            if (($b['type'] ?? '') === 'hero' && !empty($b['logo_url'])) {
+                $logo = $b['logo_url'];
+                break;
+            }
+        }
+    }
   @endphp
 
   <!-- Main Scrollable Content Wrapper (Natural Height) -->
@@ -387,11 +395,15 @@
       @elseif($type === 'disclaimer')
         <section class="space-y-2.5 pt-2 text-center text-xs leading-relaxed {{ $isLight ? 'text-slate-500' : 'text-slate-400' }}">
           @if(!empty($block['show_mini_brand']))
+            @php
+              $miniLogo = !empty($block['logo_url']) ? $block['logo_url'] : $logo;
+              $miniBrand = !empty($block['brand_name']) ? $block['brand_name'] : $brand;
+            @endphp
             <div class="flex items-center justify-center gap-2 font-bold text-xs {{ $isLight ? 'text-slate-800' : 'text-slate-200' }}">
-              @if($logo || !empty($block['logo_url']))
-                <img src="{{ e($block['logo_url'] ?? $logo) }}" alt="{{ e($brand) }}" class="w-6 h-6 rounded-full object-cover">
+              @if($miniLogo)
+                <img src="{{ e($miniLogo) }}" alt="{{ e($miniBrand) }}" class="w-6 h-6 rounded-full object-cover">
               @endif
-              <span>{{ e($block['brand_name'] ?? $brand) }}</span>
+              <span>{{ e($miniBrand) }}</span>
             </div>
           @endif
           @if(!empty($block['title']))

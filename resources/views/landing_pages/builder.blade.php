@@ -491,10 +491,10 @@
                 <div class="space-y-2 pt-2 text-center text-xs leading-relaxed" :class="isLight() ? 'text-slate-500' : 'text-slate-400'">
                   <template x-if="block.show_mini_brand">
                     <div class="flex items-center justify-center gap-2 font-bold text-xs" :class="isLight() ? 'text-slate-800' : 'text-slate-200'">
-                      <template x-if="brandLogoUrl || block.logo_url">
-                        <img :src="block.logo_url || brandLogoUrl" :alt="brandName" class="w-5 h-5 rounded-full object-cover">
+                      <template x-if="getDisclaimerLogo(block)">
+                        <img :src="getDisclaimerLogo(block)" :alt="block.brand_name || brandName" class="w-5 h-5 rounded-full object-cover">
                       </template>
-                      <span x-text="block.brand_name || brandName"></span>
+                      <span x-text="block.brand_name || brandName || 'VIP Trading'"></span>
                     </div>
                   </template>
                   <template x-if="block.title">
@@ -1010,10 +1010,43 @@
               <!-- DISCLAIMER INSPECTOR -->
               <template x-if="blocks[selectedBlockIndex].type === 'disclaimer'">
                 <div class="space-y-3">
-                  <div class="flex items-center gap-2 pb-1 border-b border-slate-800">
-                    <input type="checkbox" id="disc_mini_brand" x-model="blocks[selectedBlockIndex].show_mini_brand" class="rounded bg-slate-900 border-slate-700 text-blue-500">
-                    <label for="disc_mini_brand" class="text-[11px] font-semibold text-slate-300 cursor-pointer">Show Mini Avatar & Brand Name above disclaimer</label>
+                  <div class="p-3 bg-slate-900/80 rounded-lg border border-slate-800 space-y-3">
+                    <div class="flex items-center gap-2">
+                      <input type="checkbox" id="disc_mini_brand" x-model="blocks[selectedBlockIndex].show_mini_brand" class="rounded bg-slate-900 border-slate-700 text-blue-500">
+                      <label for="disc_mini_brand" class="text-[11px] font-semibold text-slate-200 cursor-pointer">Show Mini Avatar & Brand Name above disclaimer</label>
+                    </div>
+
+                    <div x-show="blocks[selectedBlockIndex].show_mini_brand" class="space-y-2.5 pt-2 border-t border-slate-800">
+                      <div>
+                        <div class="flex items-center justify-between mb-1">
+                          <label class="block text-[11px] font-semibold text-yellow-400">Mini Brand / Channel Name</label>
+                          <span class="text-[9.5px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-300 font-mono">Editable</span>
+                        </div>
+                        <input 
+                          type="text" 
+                          x-model="blocks[selectedBlockIndex].brand_name" 
+                          :placeholder="brandName || 'मराठी : TRADER ABHI'" 
+                          class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none text-xs font-medium"
+                        >
+                        <p class="text-[10px] text-slate-400 mt-1">Disclaimer ke upar avatar ke sath aane wala channel name yahan se edit karein.</p>
+                      </div>
+
+                      <div>
+                        <div class="flex items-center justify-between mb-1">
+                          <label class="block text-[11px] font-semibold text-slate-300">Mini Avatar / Logo URL (optional)</label>
+                          <span class="text-[9.5px] text-slate-500 font-mono">Image URL</span>
+                        </div>
+                        <input 
+                          type="text" 
+                          x-model="blocks[selectedBlockIndex].logo_url" 
+                          :placeholder="brandLogoUrl || (blocks.find(b => b.type === 'hero')?.logo_url || 'https://.../avatar.jpg')" 
+                          class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono text-[11px] focus:border-yellow-400 outline-none"
+                        >
+                        <p class="text-[10px] text-slate-500 mt-1">Khali chhodne par main hero avatar automatically use hoga.</p>
+                      </div>
+                    </div>
                   </div>
+
                   <div>
                     <label class="block text-[11px] font-semibold text-slate-300 mb-1">Disclaimer Title (optional)</label>
                     <input type="text" x-model="blocks[selectedBlockIndex].title" placeholder="Important Risk Disclaimer (leave empty to hide)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
@@ -1274,6 +1307,14 @@ function visualBuilder(config) {
       return this.theme === 'midnight_blue';
     },
 
+    getDisclaimerLogo(block) {
+      if (block && block.logo_url) return block.logo_url;
+      if (this.brandLogoUrl) return this.brandLogoUrl;
+      const hero = this.blocks.find(b => b.type === 'hero');
+      if (hero && hero.logo_url) return hero.logo_url;
+      return '';
+    },
+
     loadPreset(presetName) {
       if (presetName === 'trader_pro') {
         this.theme = 'midnight_blue';
@@ -1335,6 +1376,8 @@ function visualBuilder(config) {
             id: 'block_' + Math.random().toString(36).substr(2, 8),
             type: 'disclaimer',
             show_mini_brand: true,
+            brand_name: this.brandName || 'मराठी : TRADER ABHI',
+            logo_url: this.brandLogoUrl || '',
             title: '',
             text: "For educational purposes only. Trading and investing in financial markets involves risk, including possible loss of capital. Past performance is not indicative of future results. This is not financial advice.\n\nNexgroww Agency is an independent advertising-technology provider — not affiliated with, endorsing, or responsible for this channel, its operator, or any content, offers, or outcomes shown. This site is also not affiliated with, endorsed by, or part of Meta Platforms, Inc. / Facebook™, or Telegram."
           },
