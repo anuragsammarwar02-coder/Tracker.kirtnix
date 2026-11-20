@@ -720,4 +720,90 @@ class SoftwareBuilderVisualEditorTest extends TestCase
         $resBuilder->assertStatus(200);
         $resBuilder->assertSee('Managed By Link / Trigger URL');
     }
+
+    public function test_can_store_and_render_midnight_blue_trader_pro_landing_page(): void
+    {
+        $blocks = LandingPage::getTraderProBlocks('मराठी : TRADER ABHI', 'https://t.me/traderabhi');
+
+        $response = $this->actingAs($this->user)->post(route('landing-pages.store'), [
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Trader Abhi Marathi',
+            'slug' => 'trader-abhi-marathi',
+            'brand_name' => 'मराठी : TRADER ABHI',
+            'template_type' => 'visual_builder',
+            'theme' => 'midnight_blue',
+            'telegram_destination' => 'https://t.me/traderabhi',
+            'blocks_json' => json_encode($blocks),
+            'is_active' => '1',
+        ]);
+
+        $response->assertRedirect();
+
+        $page = LandingPage::where('slug', 'trader-abhi-marathi')->first();
+        $this->assertNotNull($page);
+        $this->assertEquals('midnight_blue', $page->theme);
+
+        // Render public page
+        $publicRes = $this->get(route('public.landing_page', $page->slug));
+        $publicRes->assertStatus(200);
+        $publicRes->assertViewIs('templates.visual_builder');
+
+        $html = $publicRes->getContent();
+        $publicRes->assertSee('मराठी : TRADER ABHI');
+        $publicRes->assertSee('Get exclusive updates, tips, and community access.');
+        $publicRes->assertSee('Join Free on Telegram');
+        $publicRes->assertSee('100% Free · No card required · Leave anytime');
+        $publicRes->assertSee('By continuing, you agree your information may be used for marketing purposes.');
+        $publicRes->assertSee('11K+');
+        $publicRes->assertSee('MEMBERS');
+        $publicRes->assertSee('Daily');
+        $publicRes->assertSee('MARKET UPDATES');
+        $publicRes->assertSee('What you get inside');
+        $publicRes->assertSee('Daily market analysis');
+        $publicRes->assertSee('Price-action setups');
+        $publicRes->assertSee('Risk-management lessons');
+        $publicRes->assertSee('Beginner friendly');
+        $publicRes->assertSee('Nexgroww Agency is an independent advertising-technology provider');
+        $publicRes->assertSee('Ads managed by Nexgroww Agency');
+        $this->assertStringContainsString('cta-pill-glow', $html);
+        $this->assertStringContainsString('from-[#09152b]', $html);
+    }
+
+    public function test_can_store_and_render_clean_white_trader_pro_landing_page(): void
+    {
+        $blocks = LandingPage::getTraderProBlocks('Trader VIP White', 'https://t.me/traderwhite');
+
+        $response = $this->actingAs($this->user)->post(route('landing-pages.store'), [
+            'client_id' => $this->client->id,
+            'campaign_id' => $this->campaign->id,
+            'title' => 'Trader VIP White Mode',
+            'slug' => 'trader-vip-white-mode',
+            'brand_name' => 'Trader VIP White',
+            'template_type' => 'visual_builder',
+            'theme' => 'clean_white',
+            'telegram_destination' => 'https://t.me/traderwhite',
+            'blocks_json' => json_encode($blocks),
+            'is_active' => '1',
+        ]);
+
+        $response->assertRedirect();
+
+        $page = LandingPage::where('slug', 'trader-vip-white-mode')->first();
+        $this->assertNotNull($page);
+        $this->assertEquals('clean_white', $page->theme);
+
+        // Render public page
+        $publicRes = $this->get(route('public.landing_page', $page->slug));
+        $publicRes->assertStatus(200);
+        $publicRes->assertViewIs('templates.visual_builder');
+
+        $html = $publicRes->getContent();
+        $publicRes->assertSee('Trader VIP White');
+        $publicRes->assertSee('Join Free on Telegram');
+        $publicRes->assertSee('11K+');
+        $publicRes->assertSee('What you get inside');
+        $this->assertStringContainsString('bg-[#F8FAFC]', $html);
+        $this->assertStringContainsString('cta-pill-glow', $html);
+    }
 }

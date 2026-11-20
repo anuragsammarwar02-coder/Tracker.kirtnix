@@ -61,8 +61,9 @@ class LandingPageController extends Controller
         $clients = Client::where('status', 'active')->orderBy('company_name')->get();
         $campaigns = Campaign::where('status', 'active')->orderBy('name')->get();
         $selectedClientId = $request->query('client_id');
+        $preset = $request->query('preset', 'trader_pro');
 
-        return view('landing_pages.builder', compact('clients', 'campaigns', 'selectedClientId'));
+        return view('landing_pages.builder', compact('clients', 'campaigns', 'selectedClientId', 'preset'));
     }
 
     public function store(Request $request)
@@ -109,7 +110,7 @@ class LandingPageController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255'],
             'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom,visual_builder'],
-            'theme' => ['nullable', 'string', 'in:premium_dark,minimal_light'],
+            'theme' => ['nullable', 'string', 'in:premium_dark,minimal_light,midnight_blue,clean_white'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
             'brand_logo_url' => ['nullable', 'string'],
@@ -441,7 +442,7 @@ class LandingPageController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255'],
             'template_type' => ['required', 'in:forex_focus,gujarati_trader,custom,visual_builder'],
-            'theme' => ['nullable', 'string', 'in:premium_dark,minimal_light'],
+            'theme' => ['nullable', 'string', 'in:premium_dark,minimal_light,midnight_blue,clean_white'],
             'brand_name' => ['required', 'string', 'max:255'],
             'brand_tagline' => ['nullable', 'string', 'max:255'],
             'brand_logo_url' => ['nullable', 'string'],

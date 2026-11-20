@@ -324,7 +324,7 @@ final class Application
 
     private function loadBootstrapScript(string $filename): void
     {
-        if (!is_readable($filename)) {
+        if (!is_readable($filename) && !is_file($filename)) {
             $this->exitWithErrorMessage(
                 sprintf(
                     'Cannot open bootstrap script "%s"',

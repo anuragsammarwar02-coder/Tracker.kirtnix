@@ -32,8 +32,8 @@
   $formAction = $isEdit ? route('landing-pages.update', $landingPage) : route('landing-pages.store');
   $defaultBlocks = $isEdit && !empty($landingPage->blocks_json) 
       ? $landingPage->blocks_json 
-      : \App\Models\LandingPage::getDefaultBlocks($landingPage->brand_name ?? 'VIP TRADING', $landingPage->telegram_destination ?? 'https://t.me/kirtnix');
-  $initialTheme = $isEdit ? ($landingPage->theme ?? 'premium_dark') : 'premium_dark';
+      : \App\Models\LandingPage::getTraderProBlocks($landingPage->brand_name ?? 'मराठी : TRADER ABHI', $landingPage->telegram_destination ?? 'https://t.me/kirtnix');
+  $initialTheme = $isEdit ? ($landingPage->theme ?? 'midnight_blue') : 'midnight_blue';
 @endphp
 
 <div 
@@ -110,7 +110,27 @@
       </div>
 
       <!-- Quick Theme Switcher Pill -->
-      <div class="hidden xl:flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+      <div class="hidden lg:flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 gap-1">
+        <button 
+          type="button" 
+          @click="theme = 'midnight_blue'" 
+          :class="theme === 'midnight_blue' ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+          class="px-2.5 py-1 rounded text-[11px] transition flex items-center gap-1"
+          title="Switch to Midnight Navy Dark (Screenshot Color)"
+        >
+          <span>🌌</span>
+          <span>Navy Dark</span>
+        </button>
+        <button 
+          type="button" 
+          @click="theme = 'clean_white'" 
+          :class="theme === 'clean_white' ? 'bg-slate-200 text-blue-700 font-bold shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+          class="px-2.5 py-1 rounded text-[11px] transition flex items-center gap-1"
+          title="Switch to Clean White Mode"
+        >
+          <span>☀️</span>
+          <span>White Mode</span>
+        </button>
         <button 
           type="button" 
           @click="theme = 'premium_dark'" 
@@ -119,7 +139,7 @@
           title="Switch to Premium Dark Theme"
         >
           <span>🌙</span>
-          <span>Dark</span>
+          <span class="hidden xl:inline">Gold Dark</span>
         </button>
         <button 
           type="button" 
@@ -128,9 +148,56 @@
           class="px-2.5 py-1 rounded text-[11px] transition flex items-center gap-1"
           title="Switch to Minimal Light (Trading Community) Theme"
         >
-          <span>☀️</span>
-          <span>Clean Light</span>
+          <span>📄</span>
+          <span class="hidden xl:inline">Clean Light</span>
         </button>
+      </div>
+
+      <!-- Presets Dropdown -->
+      <div class="relative" x-data="{ openPresets: false }">
+        <button 
+          type="button" 
+          @click="openPresets = !openPresets" 
+          class="px-2.5 py-1 text-xs font-bold text-slate-300 hover:text-white bg-slate-950 hover:bg-slate-800 rounded-lg border border-slate-800 transition flex items-center gap-1"
+          title="Load Pre-built Design Layouts"
+        >
+          <span>📋</span>
+          <span class="hidden sm:inline">Layouts</span>
+          <span class="text-[9px]">▼</span>
+        </button>
+        <div 
+          x-show="openPresets" 
+          @click.away="openPresets = false" 
+          class="absolute left-0 mt-1.5 w-60 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 z-50 space-y-1 text-xs"
+          style="display: none;"
+        >
+          <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Select Design Layout</div>
+          <button 
+            type="button" 
+            @click="loadPreset('trader_pro'); openPresets = false;" 
+            class="w-full text-left p-2 rounded-lg hover:bg-slate-800 transition flex items-start gap-2"
+          >
+            <span class="text-base">⚡</span>
+            <div>
+              <div class="font-bold text-white flex items-center gap-1.5">
+                <span>Trader Pro Lander</span>
+                <span class="text-[9px] bg-blue-500/20 text-blue-400 px-1 py-0.2 rounded font-bold">Screenshot</span>
+              </div>
+              <div class="text-[10px] text-slate-400">Pill CTA, 3 stats, 2x2 features, full disclaimers.</div>
+            </div>
+          </button>
+          <button 
+            type="button" 
+            @click="loadPreset('classic_vip'); openPresets = false;" 
+            class="w-full text-left p-2 rounded-lg hover:bg-slate-800 transition flex items-start gap-2"
+          >
+            <span class="text-base">👑</span>
+            <div>
+              <div class="font-bold text-white">Classic VIP Signals</div>
+              <div class="text-[10px] text-slate-400">Full community lander with ratings & FAQ.</div>
+            </div>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -190,6 +257,8 @@
           'max-w-[540px]': viewport === 'tablet',
           'max-w-[390px]': viewport === 'mobile',
           'bg-[#F4F6F9] text-slate-900 border-slate-700/60': theme === 'minimal_light',
+          'bg-[#F8FAFC] text-slate-900 border-slate-300': theme === 'clean_white',
+          'bg-gradient-to-b from-[#09152b] via-[#060e1d] to-[#03070f] text-slate-100 border-blue-900/40': theme === 'midnight_blue',
           'bg-[#0A0B0D] text-slate-100 border-slate-800/80': theme === 'premium_dark'
         }"
       >
@@ -201,8 +270,8 @@
               @click="selectBlock(index)"
               class="relative group rounded-2xl transition-all duration-150 cursor-pointer"
               :class="selectedBlockIndex === index 
-                ? (theme === 'minimal_light' ? 'ring-2 ring-blue-600 ring-offset-2 ring-offset-[#F4F6F9] bg-blue-50/50 p-2 -m-2' : 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-[#0A0B0D] bg-slate-900/60 p-2 -m-2')
-                : (theme === 'minimal_light' ? 'hover:ring-1 hover:ring-slate-300 p-1 -m-1' : 'hover:ring-1 hover:ring-slate-700/80 p-1 -m-1')"
+                ? (isLight() ? 'ring-2 ring-blue-600 ring-offset-2 ring-offset-[#F4F6F9] bg-blue-50/50 p-2 -m-2' : 'ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-950 bg-slate-900/60 p-2 -m-2')
+                : (isLight() ? 'hover:ring-1 hover:ring-slate-300 p-1 -m-1' : 'hover:ring-1 hover:ring-slate-700/80 p-1 -m-1')"
             >
               <!-- Mini Block Action Toolbar (Hover/Selected) -->
               <div 
@@ -222,11 +291,11 @@
                 <div class="text-center space-y-3 pt-2 pb-1">
                   
                   <!-- Live Traders Online Badge -->
-                  <template x-if="block.live_traders_badge || theme === 'minimal_light'">
+                  <template x-if="block.live_traders_badge">
                     <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold"
-                         :class="theme === 'minimal_light' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'">
+                         :class="isLight() ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'">
                       <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span x-text="block.live_traders_badge || '6,547 Traders Online Now'"></span>
+                      <span x-text="block.live_traders_badge"></span>
                     </div>
                   </template>
 
@@ -236,78 +305,95 @@
                       <img 
                         :src="block.logo_url || brandLogoUrl" 
                         :alt="brandName" 
-                        class="w-20 h-20 rounded-full object-cover shadow-md"
-                        :class="theme === 'minimal_light' ? 'border-4 border-white ring-1 ring-slate-200 bg-white' : 'border-2 border-yellow-400/40 shadow-yellow-500/10'"
+                        class="w-24 h-24 rounded-full object-cover shadow-xl"
+                        :class="isLight() ? 'border-4 border-white ring-1 ring-slate-200 bg-white' : (isMidnight() ? 'border-2 border-blue-400/40 shadow-blue-500/20 ring-2 ring-blue-500/30' : 'border-2 border-yellow-400/40 shadow-yellow-500/10')"
                       >
                     </div>
                   </template>
 
                   <!-- Brand Heading & Tagline -->
-                  <div>
-                    <h2 class="text-lg font-black tracking-tight" :class="theme === 'minimal_light' ? 'text-slate-900' : 'text-white'" x-text="brandName || 'VIP TRADING'"></h2>
-                    <template x-if="brandTagline || block.tagline">
-                      <p class="text-xs font-semibold" :class="theme === 'minimal_light' ? 'text-blue-600' : 'text-yellow-400'" x-text="block.tagline || brandTagline"></p>
+                  <div class="space-y-0.5">
+                    <h1 class="text-2xl font-black tracking-tight" :class="isLight() ? 'text-slate-900' : 'text-white'" x-text="block.heading || brandName || 'VIP TRADING'"></h1>
+                    <template x-if="block.subheading || brandTagline">
+                      <p class="text-xs sm:text-sm max-w-md mx-auto leading-relaxed" :class="isLight() ? 'text-slate-600' : 'text-slate-300'" x-text="block.subheading || brandTagline"></p>
                     </template>
                   </div>
 
                   <!-- Rating Stars -->
-                  <template x-if="block.rating_text || theme === 'minimal_light'">
+                  <template x-if="block.rating_text">
                     <div class="flex items-center justify-center gap-1.5 text-xs font-bold text-amber-500">
                       <span>⭐⭐⭐⭐⭐</span>
-                      <span class="text-[11px] font-semibold" :class="theme === 'minimal_light' ? 'text-slate-600' : 'text-slate-400'" x-text="block.rating_text || '4.9/5 (2,340 Reviews)'"></span>
+                      <span class="text-[11px] font-semibold" :class="isLight() ? 'text-slate-600' : 'text-slate-400'" x-text="block.rating_text"></span>
                     </div>
                   </template>
 
                   <!-- Status / Redirect Pill -->
                   <template x-if="block.badge">
                     <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-xl text-xs font-semibold"
-                         :class="theme === 'minimal_light' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/30'">
+                         :class="isLight() ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/30'">
                       <span>⚡</span>
                       <span x-text="block.badge"></span>
                     </div>
                   </template>
 
-                  <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight" :class="theme === 'minimal_light' ? 'text-slate-900' : 'text-white'" x-text="block.heading || 'Join VIP Community'"></h1>
-                  <p class="text-xs sm:text-sm max-w-md mx-auto leading-relaxed" :class="theme === 'minimal_light' ? 'text-slate-600' : 'text-slate-400'" x-text="block.subheading"></p>
-
                   <!-- Primary CTA Button Preview -->
                   <div class="pt-2">
-                    <div class="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl font-bold text-sm sm:text-base text-white shadow-md"
-                         :class="theme === 'minimal_light' ? 'bg-blue-600' : 'bg-gradient-to-r from-blue-500 to-blue-600 shadow-blue-500/25'">
-                      <span>➤</span>
-                      <span x-text="block.button_text || 'Join Free Telegram Channel →'"></span>
+                    <div class="w-full flex items-center justify-center gap-2 px-6 py-4 font-bold text-sm sm:text-base text-white shadow-md transition"
+                         :class="block.button_style === 'pill' || isMidnight() || theme === 'clean_white'
+                            ? (isLight() ? 'rounded-full bg-blue-600 shadow-[0_8px_20px_rgba(37,99,235,0.3)]' : 'rounded-full bg-gradient-to-r from-blue-600 to-blue-500 shadow-[0_0_25px_rgba(37,99,235,0.6)]')
+                            : (isLight() ? 'rounded-xl bg-blue-600' : 'rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 shadow-blue-500/25')">
+                      <span>✈</span>
+                      <span x-text="block.button_text || 'Join Free on Telegram'"></span>
                     </div>
-                    <p class="text-[11px] mt-1.5" :class="theme === 'minimal_light' ? 'text-slate-500' : 'text-slate-500'" x-text="block.button_subtitle || 'Free instant access • No payment required'"></p>
+                    <template x-if="block.button_subtitle">
+                      <p class="text-[11px] mt-1.5" :class="isLight() ? 'text-slate-500' : 'text-slate-400'" x-text="block.button_subtitle"></p>
+                    </template>
+                    <template x-if="block.consent_text">
+                      <p class="text-[10px] italic mt-1" :class="isLight() ? 'text-slate-400' : 'text-slate-500'" x-text="block.consent_text"></p>
+                    </template>
                   </div>
                 </div>
               </template>
 
               <!-- ================= 2. STATS BLOCK CANVAS RENDER ================= -->
               <template x-if="block.type === 'stats'">
-                <div class="grid grid-cols-3 gap-2 py-1">
-                  <template x-for="(st, stIdx) in (block.stats || [{value:'50K+', label:'Members'}, {value:'5+ Years', label:'Experience'}, {value:'95%', label:'Accuracy'}])" :key="stIdx">
-                    <div class="text-center p-2.5 rounded-xl" :class="theme === 'minimal_light' ? 'bg-white border border-slate-200/90 shadow-sm' : 'bg-[#12141A] border border-[#2A2E3A]'">
-                      <div class="text-sm sm:text-base font-black" :class="theme === 'minimal_light' ? 'text-blue-600' : 'text-yellow-400'" x-text="st.value"></div>
-                      <div class="text-[10px] sm:text-xs font-semibold" :class="theme === 'minimal_light' ? 'text-slate-600' : 'text-slate-400'" x-text="st.label"></div>
-                    </div>
-                  </template>
+                <div class="p-3.5 rounded-2xl" :class="isLight() ? 'bg-white border border-slate-200/90 shadow-sm' : (isMidnight() ? 'bg-[#0c1626]/85 border border-[#1e2f4d]/70 shadow-lg' : 'bg-[#12141A] border border-[#2A2E3A]')">
+                  <div class="grid grid-cols-3 gap-2 text-center divide-x" :class="isLight() ? 'divide-slate-200' : 'divide-slate-800'">
+                    <template x-for="(st, stIdx) in (block.stats || [{value:'11K+', label:'MEMBERS'}, {value:'Daily', label:'MARKET UPDATES'}, {value:'Free', label:'ALWAYS'}])" :key="stIdx">
+                      <div class="px-2">
+                        <div class="text-base sm:text-xl font-black" :class="isLight() ? 'text-slate-900' : 'text-white'" x-text="st.value"></div>
+                        <div class="text-[9.5px] sm:text-[11px] font-bold uppercase tracking-wider" :class="isLight() ? 'text-slate-500' : 'text-slate-400'" x-text="st.label"></div>
+                      </div>
+                    </template>
+                  </div>
                 </div>
               </template>
 
               <!-- ================= 3. FEATURES GRID CANVAS RENDER ================= -->
               <template x-if="block.type === 'features_grid'">
-                <div class="space-y-2 pt-1">
+                <div class="space-y-2.5 pt-1">
                   <template x-if="block.title">
-                    <h2 class="text-xs font-extrabold uppercase tracking-wider text-center" :class="theme === 'minimal_light' ? 'text-slate-700' : 'text-slate-400'" x-text="block.title"></h2>
+                    <h2 class="text-sm font-extrabold text-center" :class="isLight() ? 'text-slate-900' : 'text-white'" x-text="block.title"></h2>
                   </template>
-                  <div class="space-y-2">
+                  <template x-if="block.subtitle">
+                    <p class="text-xs text-center -mt-1 mb-1.5" :class="isLight() ? 'text-slate-500' : 'text-slate-400'" x-text="block.subtitle"></p>
+                  </template>
+                  <div :class="block.grid_columns == 2 || (block.cards && block.cards.length >= 4) || isMidnight() || theme === 'clean_white' ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5' : 'space-y-2'">
                     <template x-for="(card, cardIdx) in (block.cards || [])" :key="cardIdx">
-                      <div class="flex items-center gap-3 p-3 rounded-xl transition"
-                           :class="theme === 'minimal_light' ? 'bg-white border border-slate-200/80 shadow-sm' : 'bg-[#12141A] border border-[#2A2E3A]'">
-                        <div class="text-xl p-2 rounded-lg shrink-0" :class="theme === 'minimal_light' ? 'bg-blue-50 text-blue-600' : 'bg-[#1A1D26] border border-[#2A2E3A]'" x-text="card.icon || '📊'"></div>
+                      <div class="flex items-start gap-3 p-3 rounded-2xl transition"
+                           :class="isLight() ? 'bg-white border border-slate-200/90 shadow-sm' : (isMidnight() ? 'bg-[#0c1626]/85 border border-[#1e2f4d]/70 shadow-md' : 'bg-[#12141A] border border-[#2A2E3A]')">
+                        <template x-if="card.icon === '✓' || card.icon === 'check'">
+                          <div class="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5"
+                               :class="isLight() ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'">
+                            ✓
+                          </div>
+                        </template>
+                        <template x-if="card.icon !== '✓' && card.icon !== 'check'">
+                          <div class="text-lg p-1.5 rounded-lg shrink-0" :class="isLight() ? 'bg-blue-50 text-blue-600' : 'bg-[#1A1D26] border border-[#2A2E3A]'" x-text="card.icon || '📊'"></div>
+                        </template>
                         <div class="space-y-0.5 min-w-0 flex-1">
-                          <h3 class="text-xs sm:text-sm font-bold truncate" :class="theme === 'minimal_light' ? 'text-slate-900' : 'text-white'" x-text="card.title"></h3>
-                          <p class="text-[11px] leading-relaxed" :class="theme === 'minimal_light' ? 'text-slate-500' : 'text-slate-400'" x-text="card.desc"></p>
+                          <h3 class="text-xs sm:text-sm font-bold truncate" :class="isLight() ? 'text-slate-900' : 'text-white'" x-text="card.title"></h3>
+                          <p class="text-[11px] leading-relaxed" :class="isLight() ? 'text-slate-500' : 'text-slate-400'" x-text="card.desc"></p>
                         </div>
                       </div>
                     </template>
@@ -344,20 +430,23 @@
 
               <!-- ================= 6. STANDALONE CTA BUTTON CANVAS RENDER ================= -->
               <template x-if="block.type === 'cta_button'">
-                <div class="text-center p-4 rounded-xl space-y-2" :class="theme === 'minimal_light' ? 'bg-white border border-slate-200/80 shadow-sm' : 'bg-[#12141A] border border-[#2A2E3A]'">
+                <div class="text-center py-2">
                   <template x-if="block.heading">
-                    <h2 class="text-sm sm:text-base font-extrabold" :class="theme === 'minimal_light' ? 'text-slate-900' : 'text-white'" x-text="block.heading"></h2>
+                    <h2 class="text-sm sm:text-base font-extrabold mb-1" :class="isLight() ? 'text-slate-900' : 'text-white'" x-text="block.heading"></h2>
                   </template>
                   <template x-if="block.subheading">
-                    <p class="text-xs" :class="theme === 'minimal_light' ? 'text-slate-600' : 'text-slate-400'" x-text="block.subheading"></p>
+                    <p class="text-xs mb-2 max-w-md mx-auto" :class="isLight() ? 'text-slate-600' : 'text-slate-400'" x-text="block.subheading"></p>
                   </template>
                   <div class="pt-1">
-                    <div class="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-xs sm:text-sm text-white"
-                         :class="theme === 'minimal_light' ? 'bg-blue-600' : 'bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 font-black'">
-                      <span x-text="block.button_text || 'Join Free Telegram Channel →'"></span>
+                    <div class="w-full flex items-center justify-center gap-2 px-6 py-4 font-bold text-sm sm:text-base text-white shadow-md transition"
+                         :class="block.button_style === 'pill' || isMidnight() || theme === 'clean_white'
+                            ? (isLight() ? 'rounded-full bg-blue-600 shadow-[0_8px_20px_rgba(37,99,235,0.3)]' : 'rounded-full bg-gradient-to-r from-blue-600 to-blue-500 shadow-[0_0_25px_rgba(37,99,235,0.6)]')
+                            : (isLight() ? 'rounded-xl bg-blue-600' : 'rounded-xl bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 font-black')">
+                      <span>✈</span>
+                      <span x-text="block.button_text || 'Join Free on Telegram'"></span>
                     </div>
                     <template x-if="block.button_subtitle">
-                      <p class="text-[10px] mt-1" :class="theme === 'minimal_light' ? 'text-slate-500' : 'text-slate-500'" x-text="block.button_subtitle"></p>
+                      <p class="text-[11px] mt-1.5" :class="isLight() ? 'text-slate-500' : 'text-slate-400'" x-text="block.button_subtitle"></p>
                     </template>
                   </div>
                 </div>
@@ -399,29 +488,42 @@
 
               <!-- ================= 9. DISCLAIMER CANVAS RENDER ================= -->
               <template x-if="block.type === 'disclaimer'">
-                <div class="p-3.5 rounded-xl text-[10px] space-y-1" :class="theme === 'minimal_light' ? 'bg-slate-100 border border-slate-200 text-slate-500' : 'bg-[#12141A]/60 border border-amber-500/20 text-slate-400'">
-                  <strong class="uppercase tracking-wider block font-bold text-[9px]" :class="theme === 'minimal_light' ? 'text-slate-700' : 'text-amber-400'" x-text="block.title || 'Risk Disclaimer'"></strong>
-                  <p class="leading-relaxed whitespace-pre-wrap" x-text="block.text"></p>
+                <div class="space-y-2 pt-2 text-center text-xs leading-relaxed" :class="isLight() ? 'text-slate-500' : 'text-slate-400'">
+                  <template x-if="block.show_mini_brand">
+                    <div class="flex items-center justify-center gap-2 font-bold text-xs" :class="isLight() ? 'text-slate-800' : 'text-slate-200'">
+                      <template x-if="brandLogoUrl || block.logo_url">
+                        <img :src="block.logo_url || brandLogoUrl" :alt="brandName" class="w-5 h-5 rounded-full object-cover">
+                      </template>
+                      <span x-text="block.brand_name || brandName"></span>
+                    </div>
+                  </template>
+                  <template x-if="block.title">
+                    <strong class="uppercase tracking-wider block font-bold text-[9.5px]" :class="isLight() ? 'text-slate-700' : 'text-amber-400'" x-text="block.title"></strong>
+                  </template>
+                  <p class="leading-relaxed whitespace-pre-wrap text-[10px] opacity-80 max-w-xl mx-auto" x-text="block.text"></p>
                 </div>
               </template>
 
               <!-- ================= 10. FOOTER CANVAS RENDER ================= -->
               <template x-if="block.type === 'footer'">
-                <div class="pt-3 pb-1 text-center text-[11px] space-y-1" :class="theme === 'minimal_light' ? 'text-slate-500 border-t border-slate-200' : 'text-slate-500 border-t border-slate-800/80'">
-                  <p x-text="block.copyright || ('© ' + (brandName || 'VIP Trading') + '. All rights reserved.')"></p>
-                  <p class="text-[10px] font-medium" :class="theme === 'minimal_light' ? 'text-slate-400' : 'text-slate-500'">
-                    <template x-if="block.managed_by_url">
-                      <a :href="block.managed_by_url" target="_blank" class="hover:underline hover:text-blue-400 cursor-pointer inline-flex items-center gap-1 transition" x-text="block.managed_by || '⚡ Ads Managed by AK GrowthX Media'"></a>
-                    </template>
-                    <template x-if="!block.managed_by_url">
-                      <span x-text="block.managed_by || '⚡ Ads Managed by AK GrowthX Media'"></span>
-                    </template>
-                  </p>
-                  <div class="flex justify-center gap-3 text-[10px] pt-0.5" :class="theme === 'minimal_light' ? 'text-slate-500' : 'text-slate-400'">
-                    <span>Telegram</span>
-                    <span>•</span>
-                    <span>Disclaimer</span>
-                  </div>
+                <div class="pt-3 pb-3 text-center text-xs space-y-2" :class="isLight() ? 'text-slate-500' : 'text-slate-500'">
+                  <template x-if="block.managed_by">
+                    <div class="text-xs font-semibold" :class="isLight() ? 'text-slate-600' : 'text-slate-400'">
+                      <span x-text="block.managed_by"></span>
+                    </div>
+                  </template>
+                  <template x-if="!block.hide_links">
+                    <div class="flex justify-center gap-3 text-[10px] pt-0.5" :class="isLight() ? 'text-slate-500' : 'text-slate-400'">
+                      <span>Telegram</span>
+                      <span>•</span>
+                      <span>Privacy Policy</span>
+                      <span>•</span>
+                      <span>Disclaimer</span>
+                    </div>
+                  </template>
+                  <template x-if="block.copyright">
+                    <p class="text-[10px] opacity-70" x-text="block.copyright"></p>
+                  </template>
                 </div>
               </template>
 
@@ -609,7 +711,47 @@
             </h3>
 
             <div class="space-y-3">
-              <!-- Theme Option 1: Premium Dark -->
+              <!-- Theme Option 1: Midnight Navy Dark (Screenshot Color) -->
+              <div 
+                @click="theme = 'midnight_blue'" 
+                class="p-3.5 rounded-xl border cursor-pointer transition flex items-start gap-3"
+                :class="theme === 'midnight_blue' ? 'border-blue-500 bg-slate-800/90 ring-1 ring-blue-500' : 'border-slate-800 bg-slate-950 hover:border-slate-700'"
+              >
+                <div class="w-8 h-8 rounded-lg bg-[#070D18] border border-blue-900 flex items-center justify-center text-lg shrink-0">
+                  🌌
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-white">Midnight Navy Dark</span>
+                    <template x-if="theme === 'midnight_blue'">
+                      <span class="text-[10px] font-bold text-blue-400">ACTIVE</span>
+                    </template>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Deep navy blue gradient, electric glowing blue pill buttons (matches screenshot).</p>
+                </div>
+              </div>
+
+              <!-- Theme Option 2: Clean White Mode -->
+              <div 
+                @click="theme = 'clean_white'" 
+                class="p-3.5 rounded-xl border cursor-pointer transition flex items-start gap-3"
+                :class="theme === 'clean_white' ? 'border-blue-500 bg-slate-800/90 ring-1 ring-blue-500' : 'border-slate-800 bg-slate-950 hover:border-slate-700'"
+              >
+                <div class="w-8 h-8 rounded-lg bg-white border border-slate-300 flex items-center justify-center text-lg shrink-0">
+                  ☀️
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-white">Clean White Mode</span>
+                    <template x-if="theme === 'clean_white'">
+                      <span class="text-[10px] font-bold text-blue-400">ACTIVE</span>
+                    </template>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Crisp white background, royal blue pill buttons, clean white cards (white mode).</p>
+                </div>
+              </div>
+
+              <!-- Theme Option 3: Premium Dark -->
               <div 
                 @click="theme = 'premium_dark'" 
                 class="p-3.5 rounded-xl border cursor-pointer transition flex items-start gap-3"
@@ -629,23 +771,23 @@
                 </div>
               </div>
 
-              <!-- Theme Option 2: Minimal Light (Trading Community) -->
+              <!-- Theme Option 4: Minimal Light (Trading Community) -->
               <div 
                 @click="theme = 'minimal_light'" 
                 class="p-3.5 rounded-xl border cursor-pointer transition flex items-start gap-3"
                 :class="theme === 'minimal_light' ? 'border-blue-500 bg-slate-800/90 ring-1 ring-blue-500' : 'border-slate-800 bg-slate-950 hover:border-slate-700'"
               >
-                <div class="w-8 h-8 rounded-lg bg-white border border-slate-300 flex items-center justify-center text-lg shrink-0">
-                  ☀️
+                <div class="w-8 h-8 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-center text-lg shrink-0">
+                  📄
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-white">Minimal Light (Trading)</span>
+                    <span class="text-xs font-bold text-white">Minimal Light (Classic)</span>
                     <template x-if="theme === 'minimal_light'">
                       <span class="text-[10px] font-bold text-blue-400">ACTIVE</span>
                     </template>
                   </div>
-                  <p class="text-[11px] text-slate-400 mt-0.5">Clean light theme with rating stars, live counter pill, stat boxes, and blue CTA buttons.</p>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Classic light theme with rating stars, live counter pill, stat boxes, and blue CTA buttons.</p>
                 </div>
               </div>
             </div>
@@ -686,32 +828,52 @@
               <template x-if="blocks[selectedBlockIndex].type === 'hero'">
                 <div class="space-y-3">
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Live Traders Online Badge</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].live_traders_badge" placeholder="🟢 6,547 Traders Online Now" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Avatar / Profile Picture URL</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].logo_url" placeholder="https://.../avatar.jpg" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono text-[11px] focus:border-yellow-400 outline-none">
                   </div>
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Star Rating Text</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].rating_text" placeholder="4.9/5 (2,340 Reviews)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Main Heading (Channel Name) *</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].heading" placeholder="मराठी : TRADER ABHI" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
                   </div>
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Badge / Status Pill</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].badge" placeholder="⚡ 100% FREE VIP ACCESS" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
-                  </div>
-                  <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Main Heading *</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].heading" placeholder="Join VIP Trading On Telegram" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
-                  </div>
-                  <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Subheading</label>
-                    <textarea x-model="blocks[selectedBlockIndex].subheading" rows="2" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none"></textarea>
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Subheading / Tagline</label>
+                    <textarea x-model="blocks[selectedBlockIndex].subheading" rows="2" placeholder="Get exclusive updates, tips, and community access." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none"></textarea>
                   </div>
                   <div>
                     <label class="block text-[11px] font-semibold text-slate-300 mb-1">Button Text *</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].button_text" placeholder="Join Free Telegram Channel →" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
+                    <input type="text" x-model="blocks[selectedBlockIndex].button_text" placeholder="Join Free on Telegram" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
                   </div>
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Button Subtitle</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].button_subtitle" placeholder="Free instant access • No payment required" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Button Subtitle (Microcopy)</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].button_subtitle" placeholder="100% Free · No card required · Leave anytime" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Consent / Marketing Notice (under button)</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].consent_text" placeholder="By continuing, you agree your information may be used for marketing purposes." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 focus:border-yellow-400 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Button Style</label>
+                    <select x-model="blocks[selectedBlockIndex].button_style" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                      <option value="pill">Pill Rounded (Screenshot Glow Style)</option>
+                      <option value="rounded">Standard Rounded Box</option>
+                    </select>
+                  </div>
+                  <div class="pt-2 border-t border-slate-800">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block mb-2">Optional Badges</span>
+                    <div class="space-y-2">
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-0.5">Live Traders Online Badge (leave blank to hide)</label>
+                        <input type="text" x-model="blocks[selectedBlockIndex].live_traders_badge" placeholder="🟢 6,547 Traders Online Now" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-100 outline-none">
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-0.5">Rating Text (leave blank to hide)</label>
+                        <input type="text" x-model="blocks[selectedBlockIndex].rating_text" placeholder="4.9/5 (2,340 Reviews)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-100 outline-none">
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-0.5">Top Status Pill (leave blank to hide)</label>
+                        <input type="text" x-model="blocks[selectedBlockIndex].badge" placeholder="⚡ 100% FREE VIP ACCESS" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-100 outline-none">
+                      </div>
+                    </div>
                   </div>
                 </div>
               </template>
@@ -736,20 +898,27 @@
                 <div class="space-y-3">
                   <div>
                     <label class="block text-[11px] font-semibold text-slate-300 mb-1">Section Title</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].title" placeholder="Why Join Our Community?" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                    <input type="text" x-model="blocks[selectedBlockIndex].title" placeholder="What you get inside" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
                   </div>
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Section Subtitle</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].subtitle" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Section Subtitle (optional)</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].subtitle" placeholder="Subtitle..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Grid Columns</label>
+                    <select x-model="blocks[selectedBlockIndex].grid_columns" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                      <option value="2">2 Columns Grid (2x2 Screenshot Style)</option>
+                      <option value="1">1 Column Vertical Stack</option>
+                    </select>
                   </div>
                   <div class="space-y-2 pt-1">
-                    <label class="block text-[11px] font-semibold text-slate-300">Feature Items</label>
+                    <label class="block text-[11px] font-semibold text-slate-300">Feature Items (Use ✓ for green checkmark)</label>
                     <template x-for="(card, cardIdx) in (blocks[selectedBlockIndex].cards || [])" :key="cardIdx">
                       <div class="p-2.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1.5 relative group">
                         <button type="button" @click="blocks[selectedBlockIndex].cards.splice(cardIdx, 1)" class="absolute top-2 right-2 text-red-400 hover:text-red-300 text-xs">✕</button>
                         <div class="flex gap-2">
-                          <input type="text" x-model="card.icon" placeholder="📊" class="w-12 bg-slate-900 border border-slate-700 rounded p-1.5 text-slate-100 text-center outline-none">
-                          <input type="text" x-model="card.title" placeholder="Daily Market Setups" class="flex-1 bg-slate-900 border border-slate-700 rounded p-1.5 text-slate-100 outline-none">
+                          <input type="text" x-model="card.icon" placeholder="✓" class="w-12 bg-slate-900 border border-slate-700 rounded p-1.5 text-slate-100 text-center outline-none">
+                          <input type="text" x-model="card.title" placeholder="Daily market analysis" class="flex-1 bg-slate-900 border border-slate-700 rounded p-1.5 text-slate-100 outline-none">
                         </div>
                         <textarea x-model="card.desc" rows="2" placeholder="Description..." class="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-slate-100 text-[11px] outline-none"></textarea>
                       </div>
@@ -841,13 +1010,17 @@
               <!-- DISCLAIMER INSPECTOR -->
               <template x-if="blocks[selectedBlockIndex].type === 'disclaimer'">
                 <div class="space-y-3">
+                  <div class="flex items-center gap-2 pb-1 border-b border-slate-800">
+                    <input type="checkbox" id="disc_mini_brand" x-model="blocks[selectedBlockIndex].show_mini_brand" class="rounded bg-slate-900 border-slate-700 text-blue-500">
+                    <label for="disc_mini_brand" class="text-[11px] font-semibold text-slate-300 cursor-pointer">Show Mini Avatar & Brand Name above disclaimer</label>
+                  </div>
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Disclaimer Title</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].title" placeholder="Important Risk Disclaimer" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Disclaimer Title (optional)</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].title" placeholder="Important Risk Disclaimer (leave empty to hide)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
                   </div>
                   <div>
                     <label class="block text-[11px] font-semibold text-slate-300 mb-1">Disclaimer Text</label>
-                    <textarea x-model="blocks[selectedBlockIndex].text" rows="4" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none"></textarea>
+                    <textarea x-model="blocks[selectedBlockIndex].text" rows="5" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none"></textarea>
                   </div>
                 </div>
               </template>
@@ -856,17 +1029,20 @@
               <template x-if="blocks[selectedBlockIndex].type === 'footer'">
                 <div class="space-y-3">
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Copyright Text</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].copyright" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Managed By Branding Text</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].managed_by" placeholder="✈ Ads managed by Nexgroww Agency" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
                   </div>
                   <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Managed By Branding</label>
-                    <input type="text" x-model="blocks[selectedBlockIndex].managed_by" placeholder="⚡ Ads Managed by AK GrowthX Media" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
-                  </div>
-                  <div>
-                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Managed By Link / Trigger URL</label>
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Managed By Link / Trigger URL (optional)</label>
                     <input type="text" x-model="blocks[selectedBlockIndex].managed_by_url" placeholder="https://akgrowthx.com or https://..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 font-mono text-[11px] focus:border-yellow-400 outline-none">
-                    <p class="text-[10px] text-slate-400 mt-1">When clicked on the landing page, opens this URL in a new tab.</p>
+                  </div>
+                  <div class="flex items-center gap-2 pt-1 border-t border-slate-800">
+                    <input type="checkbox" id="footer_hide_links" x-model="blocks[selectedBlockIndex].hide_links" class="rounded bg-slate-900 border-slate-700 text-blue-500">
+                    <label for="footer_hide_links" class="text-[11px] font-semibold text-slate-300 cursor-pointer">Hide extra policy links (Clean Single Agency Footer)</label>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-300 mb-1">Copyright Text (optional)</label>
+                    <input type="text" x-model="blocks[selectedBlockIndex].copyright" placeholder="© 2026. All rights reserved. (leave empty to hide)" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-slate-100 outline-none">
                   </div>
                 </div>
               </template>
@@ -1064,8 +1240,8 @@ function visualBuilder(config) {
     blocks: config.blocks || [],
     title: config.title || 'New Landing Page',
     slug: config.slug || '',
-    theme: config.theme || 'premium_dark',
-    brandName: config.brandName || 'VIP TRADING',
+    theme: config.theme || 'midnight_blue',
+    brandName: config.brandName || 'मराठी : TRADER ABHI',
     brandTagline: config.brandTagline || 'Official Stock Market & VIP Trading Channel',
     brandLogoUrl: config.brandLogoUrl || '',
     telegramDestination: config.telegramDestination || 'https://t.me/kirtnix',
@@ -1089,6 +1265,157 @@ function visualBuilder(config) {
     aiLanguage: 'English',
     aiLoading: false,
     aiError: '',
+
+    isLight() {
+      return this.theme === 'minimal_light' || this.theme === 'clean_white';
+    },
+
+    isMidnight() {
+      return this.theme === 'midnight_blue';
+    },
+
+    loadPreset(presetName) {
+      if (presetName === 'trader_pro') {
+        this.theme = 'midnight_blue';
+        if (!this.brandName || this.brandName === 'VIP TRADING' || this.brandName === 'VIP Trading') {
+          this.brandName = 'मराठी : TRADER ABHI';
+        }
+        if (!this.brandLogoUrl) {
+          this.brandLogoUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+        }
+        this.blocks = [
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'hero',
+            logo_url: this.brandLogoUrl,
+            avatar_style: 'circle',
+            heading: this.brandName || 'मराठी : TRADER ABHI',
+            subheading: 'Get exclusive updates, tips, and community access.',
+            button_text: 'Join Free on Telegram',
+            button_subtitle: '100% Free · No card required · Leave anytime',
+            consent_text: 'By continuing, you agree your information may be used for marketing purposes.',
+            button_style: 'pill',
+            live_traders_badge: '',
+            rating_text: '',
+            badge: ''
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'stats',
+            layout_style: 'compact_card',
+            stats: [
+              { value: '11K+', label: 'MEMBERS' },
+              { value: 'Daily', label: 'MARKET UPDATES' },
+              { value: 'Free', label: 'ALWAYS' }
+            ]
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'features_grid',
+            title: 'What you get inside',
+            subtitle: '',
+            grid_columns: 2,
+            cards: [
+              { icon: '✓', title: 'Daily market analysis', desc: 'Clear, jargon-free breakdowns every day.' },
+              { icon: '✓', title: 'Price-action setups', desc: 'Educational chart studies and key levels.' },
+              { icon: '✓', title: 'Risk-management lessons', desc: 'Learn position sizing and protecting capital.' },
+              { icon: '✓', title: 'Beginner friendly', desc: 'Start from basics, ask questions, learn at your pace.' }
+            ]
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'cta_button',
+            heading: '',
+            subheading: '',
+            button_text: 'Join Free on Telegram',
+            button_subtitle: '',
+            button_style: 'pill'
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'disclaimer',
+            show_mini_brand: true,
+            title: '',
+            text: "For educational purposes only. Trading and investing in financial markets involves risk, including possible loss of capital. Past performance is not indicative of future results. This is not financial advice.\n\nNexgroww Agency is an independent advertising-technology provider — not affiliated with, endorsing, or responsible for this channel, its operator, or any content, offers, or outcomes shown. This site is also not affiliated with, endorsed by, or part of Meta Platforms, Inc. / Facebook™, or Telegram."
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'footer',
+            managed_by: '✈ Ads managed by Nexgroww Agency',
+            managed_by_url: '',
+            hide_links: true
+          }
+        ];
+        this.selectedBlockIndex = 0;
+        this.activeTab = 'block';
+      } else if (presetName === 'classic_vip') {
+        this.theme = 'premium_dark';
+        this.blocks = [
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'hero',
+            live_traders_badge: '🟢 6,547 Traders Online Now',
+            rating_text: '4.9/5 (2,340 Reviews)',
+            badge: '⚡ 100% FREE VIP ACCESS',
+            heading: 'Join ' + (this.brandName || 'VIP Trading') + ' On Telegram',
+            subheading: 'Get daily high-accuracy trading signals, educational market setups, and real-time community updates.',
+            button_text: 'Join Free Telegram Channel →',
+            button_subtitle: 'Free instant access • No payment required'
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'stats',
+            stats: [
+              { value: '50K+', label: 'Members' },
+              { value: '5+ Years', label: 'Experience' },
+              { value: '95%', label: 'Accuracy' }
+            ]
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'features_grid',
+            title: 'Why Join Our Community?',
+            subtitle: 'Everything you need to trade smarter with professional guidance.',
+            cards: [
+              { icon: '📊', title: 'Daily Market Setups', desc: 'High-probability setups analyzed with strict risk management.' },
+              { icon: '🎯', title: 'Clear Entry & Targets', desc: 'Every signal includes exact entry point, stop loss, and multiple targets.' },
+              { icon: '⚡', title: 'Real-Time Telegram Alerts', desc: 'Instant push notifications directly to your phone so you never miss a move.' }
+            ]
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'cta_button',
+            heading: 'Ready to Level Up Your Trading?',
+            subheading: 'Tap below to gain instant access to our official Telegram channel.',
+            button_text: 'Join Free Telegram Channel →',
+            button_subtitle: 'Available on Telegram App & Web'
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'faq',
+            title: 'Frequently Asked Questions',
+            faqs: [
+              { q: 'Is this Telegram channel really free?', a: 'Yes! The main educational setups and community discussions are completely free to join.' },
+              { q: 'How do I join after clicking the button?', a: 'Clicking the button will open the Telegram app directly to our official channel where you tap "Join".' },
+              { q: 'Do I need prior trading experience?', a: 'Not at all. We provide comprehensive breakdowns suitable for both beginners and experienced traders.' }
+            ]
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'disclaimer',
+            title: 'Important Risk Disclaimer',
+            text: 'Trading financial markets involves substantial risk of loss and is not suitable for all investors. All setups, analysis, and information shared are for educational purposes only and do not constitute financial advice.'
+          },
+          {
+            id: 'block_' + Math.random().toString(36).substr(2, 8),
+            type: 'footer',
+            managed_by: '⚡ Ads Managed by AK GrowthX Media'
+          }
+        ];
+        this.selectedBlockIndex = 0;
+        this.activeTab = 'block';
+      }
+    },
 
     selectBlock(index) {
       this.selectedBlockIndex = index;

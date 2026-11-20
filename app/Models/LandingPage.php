@@ -61,10 +61,14 @@ class LandingPage extends Model
     }
 
     /**
-     * Generate default high-converting visual blocks for new Software Builder pages
+     * Generate default visual blocks for new Software Builder pages
      */
-    public static function getDefaultBlocks(?string $brandName = null, ?string $telegramUrl = null): array
+    public static function getDefaultBlocks(?string $brandName = null, ?string $telegramUrl = null, string $preset = 'classic_vip'): array
     {
+        if ($preset === 'trader_pro') {
+            return self::getTraderProBlocks($brandName, $telegramUrl);
+        }
+
         $brand = $brandName ?: 'VIP TRADING COMMUNITY';
         $tg = $telegramUrl ?: 'https://t.me/kirtnix';
 
@@ -168,9 +172,140 @@ class LandingPage extends Model
         ];
     }
 
-    public static function getThemeConfig(?string $themeId = 'premium_dark'): array
+    /**
+     * Generate high-converting Trader Pro visual blocks (Matches Screenshot Design)
+     */
+    public static function getTraderProBlocks(?string $brandName = null, ?string $telegramUrl = null, ?string $logoUrl = null): array
     {
-        $themeId = $themeId ?: 'premium_dark';
+        $brand = $brandName ?: 'मराठी : TRADER ABHI';
+        $tg = $telegramUrl ?: 'https://t.me/kirtnix';
+        $logo = $logoUrl ?: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+
+        return [
+            [
+                'id' => 'block_' . substr(md5(uniqid()), 0, 8),
+                'type' => 'hero',
+                'logo_url' => $logo,
+                'avatar_style' => 'circle',
+                'brand_name' => $brand,
+                'heading' => $brand,
+                'subheading' => 'Get exclusive updates, tips, and community access.',
+                'button_text' => 'Join Free on Telegram',
+                'button_subtitle' => '100% Free · No card required · Leave anytime',
+                'consent_text' => 'By continuing, you agree your information may be used for marketing purposes.',
+                'button_style' => 'pill',
+                'live_traders_badge' => '',
+                'rating_text' => '',
+                'badge' => '',
+                'telegram_url' => $tg,
+                'alignment' => 'center',
+            ],
+            [
+                'id' => 'block_' . substr(md5(uniqid()), 0, 8),
+                'type' => 'stats',
+                'layout_style' => 'compact_card',
+                'stats' => [
+                    ['value' => '11K+', 'label' => 'MEMBERS'],
+                    ['value' => 'Daily', 'label' => 'MARKET UPDATES'],
+                    ['value' => 'Free', 'label' => 'ALWAYS'],
+                ],
+                'padding' => 'py-2',
+            ],
+            [
+                'id' => 'block_' . substr(md5(uniqid()), 0, 8),
+                'type' => 'features_grid',
+                'title' => 'What you get inside',
+                'subtitle' => '',
+                'grid_columns' => 2,
+                'cards' => [
+                    [
+                        'icon' => '✓',
+                        'title' => 'Daily market analysis',
+                        'desc' => 'Clear, jargon-free breakdowns every day.',
+                    ],
+                    [
+                        'icon' => '✓',
+                        'title' => 'Price-action setups',
+                        'desc' => 'Educational chart studies and key levels.',
+                    ],
+                    [
+                        'icon' => '✓',
+                        'title' => 'Risk-management lessons',
+                        'desc' => 'Learn position sizing and protecting capital.',
+                    ],
+                    [
+                        'icon' => '✓',
+                        'title' => 'Beginner friendly',
+                        'desc' => 'Start from basics, ask questions, learn at your pace.',
+                    ],
+                ],
+                'padding' => 'py-4',
+            ],
+            [
+                'id' => 'block_' . substr(md5(uniqid()), 0, 8),
+                'type' => 'cta_button',
+                'heading' => '',
+                'subheading' => '',
+                'button_text' => 'Join Free on Telegram',
+                'button_subtitle' => '',
+                'button_style' => 'pill',
+                'telegram_url' => $tg,
+                'padding' => 'py-4',
+                'alignment' => 'center',
+            ],
+            [
+                'id' => 'block_' . substr(md5(uniqid()), 0, 8),
+                'type' => 'disclaimer',
+                'show_mini_brand' => true,
+                'brand_name' => $brand,
+                'title' => '',
+                'text' => "For educational purposes only. Trading and investing in financial markets involves risk, including possible loss of capital. Past performance is not indicative of future results. This is not financial advice.\n\nNexgroww Agency is an independent advertising-technology provider — not affiliated with, endorsing, or responsible for this channel, its operator, or any content, offers, or outcomes shown. This site is also not affiliated with, endorsed by, or part of Meta Platforms, Inc. / Facebook™, or Telegram.",
+                'padding' => 'py-2',
+            ],
+            [
+                'id' => 'block_' . substr(md5(uniqid()), 0, 8),
+                'type' => 'footer',
+                'brand_name' => $brand,
+                'copyright' => '',
+                'managed_by' => '✈ Ads managed by Nexgroww Agency',
+                'managed_by_url' => '',
+                'hide_links' => true,
+                'padding' => 'py-3',
+            ]
+        ];
+    }
+
+    public static function getThemeConfig(?string $themeId = 'midnight_blue'): array
+    {
+        $themeId = $themeId ?: 'midnight_blue';
+        if ($themeId === 'midnight_blue') {
+            return [
+                'id' => 'midnight_blue',
+                'name' => 'Midnight Navy (Trader Pro Dark)',
+                'bg_body' => '#060B14',
+                'bg_card' => '#0C1626',
+                'border_color' => '#1E2F4D',
+                'text_main' => '#FFFFFF',
+                'text_muted' => '#94A3B8',
+                'cta_bg' => 'from-blue-600 to-blue-500',
+                'cta_text' => '#FFFFFF',
+            ];
+        }
+
+        if ($themeId === 'clean_white') {
+            return [
+                'id' => 'clean_white',
+                'name' => 'Clean White (Trader Pro White)',
+                'bg_body' => '#F8FAFC',
+                'bg_card' => '#FFFFFF',
+                'border_color' => '#E2E8F0',
+                'text_main' => '#0F172A',
+                'text_muted' => '#64748B',
+                'cta_bg' => 'from-blue-600 to-blue-700',
+                'cta_text' => '#FFFFFF',
+            ];
+        }
+
         if ($themeId === 'minimal_light') {
             return [
                 'id' => 'minimal_light',

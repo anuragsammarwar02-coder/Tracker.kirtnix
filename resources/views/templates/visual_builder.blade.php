@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   @php
-    $theme = $landingPage->theme ?? 'premium_dark';
-    $isLight = ($theme === 'minimal_light');
+    $theme = $landingPage->theme ?? 'midnight_blue';
+    $isLight = in_array($theme, ['minimal_light', 'clean_white']);
+    $isMidnight = ($theme === 'midnight_blue');
   @endphp
-  <meta name="theme-color" content="{{ $isLight ? '#F8FAFC' : '#0B0F19' }}" />
+  <meta name="theme-color" content="{{ $isLight ? '#F8FAFC' : ($isMidnight ? '#070D18' : '#0B0F19') }}" />
   <meta name="description" content="{{ e($landingPage->hero_subheading ?? $landingPage->title) }}" />
   <title>{{ e($landingPage->title) }}</title>
   <link rel="icon" type="image/svg+xml" href="{{ asset('assets/branding/favicon.svg') }}">
@@ -91,6 +92,18 @@
     .cta-btn-glow:active {
       transform: translateY(0);
     }
+    .cta-pill-glow {
+      box-shadow: 0 0 28px rgba(37, 99, 235, 0.58), 0 4px 14px rgba(0, 0, 0, 0.35);
+      transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+    }
+    .cta-pill-glow:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.08);
+      box-shadow: 0 0 36px rgba(37, 99, 235, 0.72), 0 6px 18px rgba(0, 0, 0, 0.4);
+    }
+    .cta-pill-glow:active {
+      transform: translateY(0);
+    }
   </style>
 
   @if(!empty($landingPage->custom_css))
@@ -101,7 +114,7 @@
 
   @include('templates.partials.anti_inspection')
 </head>
-<body class="{{ $isLight ? 'bg-[#F4F6F9] text-slate-900' : 'bg-[#0A0B0D] text-slate-100' }} min-h-screen flex flex-col justify-between">
+<body class="{{ $theme === 'clean_white' ? 'bg-[#F8FAFC] text-slate-900' : ($theme === 'minimal_light' ? 'bg-[#F4F6F9] text-slate-900' : ($isMidnight ? 'bg-gradient-to-b from-[#09152b] via-[#060e1d] to-[#03070f] text-slate-100' : 'bg-[#0A0B0D] text-slate-100')) }} min-h-screen flex flex-col justify-between">
 
   @if(!empty($landingPage->gtm_id))
   <!-- Google Tag Manager (noscript) -->
@@ -131,10 +144,10 @@
         <section class="text-center space-y-3.5 pt-2 pb-1">
 
           {{-- Live Traders Status Pill --}}
-          @if(!empty($block['live_traders_badge']) || $isLight)
+          @if(!empty($block['live_traders_badge']))
             <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold {{ $isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' }}">
               <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>{{ e($block['live_traders_badge'] ?? '6,547 Traders Online Now') }}</span>
+              <span>{{ e($block['live_traders_badge']) }}</span>
             </div>
           @endif
 
@@ -144,29 +157,29 @@
               <img 
                 src="{{ e($block['logo_url'] ?? $logo) }}" 
                 alt="{{ e($brand) }}" 
-                class="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover {{ $isLight ? 'border-4 border-white shadow-lg bg-white ring-1 ring-slate-200' : 'border-2 border-yellow-400/40 shadow-xl shadow-yellow-500/10' }}"
+                class="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover {{ $isLight ? 'border-4 border-white shadow-lg bg-white ring-1 ring-slate-200' : ($isMidnight ? 'border-2 border-blue-400/40 shadow-xl shadow-blue-500/20 ring-2 ring-blue-500/30' : 'border-2 border-yellow-400/40 shadow-xl shadow-yellow-500/10') }}"
               >
             </div>
           @endif
 
           {{-- Brand Name / Channel Subheading --}}
-          <div class="space-y-0.5">
-            <h2 class="text-lg sm:text-xl font-black tracking-tight {{ $isLight ? 'text-slate-900' : 'text-white' }}">
-              {{ e($brand) }}
-            </h2>
-            @if(!empty($landingPage->brand_tagline) || !empty($block['tagline']))
-              <p class="text-xs font-semibold {{ $isLight ? 'text-blue-600' : 'text-yellow-400/90' }}">
-                {{ e($block['tagline'] ?? $landingPage->brand_tagline ?? 'Official Stock Market & VIP Trading Channel') }}
+          <div class="space-y-1">
+            <h1 class="text-2xl sm:text-3xl font-black tracking-tight {{ $isLight ? 'text-slate-900' : 'text-white' }}">
+              {{ e($block['heading'] ?? $brand) }}
+            </h1>
+            @if(!empty($block['subheading']) || !empty($landingPage->hero_subheading))
+              <p class="text-xs sm:text-sm {{ $isLight ? 'text-slate-600' : 'text-slate-300' }} max-w-md mx-auto leading-relaxed">
+                {{ e($block['subheading'] ?? $landingPage->hero_subheading) }}
               </p>
             @endif
           </div>
 
           {{-- Rating Stars & Reviews --}}
-          @if(!empty($block['rating_text']) || $isLight)
+          @if(!empty($block['rating_text']))
             <div class="flex items-center justify-center gap-1.5 text-xs font-bold text-amber-500">
               <span>⭐⭐⭐⭐⭐</span>
               <span class="{{ $isLight ? 'text-slate-600' : 'text-slate-300' }} font-semibold text-[11px]">
-                {{ e($block['rating_text'] ?? '4.9/5 (2,340 Reviews)') }}
+                {{ e($block['rating_text']) }}
               </span>
             </div>
           @endif
@@ -179,19 +192,9 @@
             </div>
           @endif
 
-          {{-- Main Hero Headline --}}
-          @if(!empty($block['heading']))
-            <h1 class="text-xl sm:text-3xl font-extrabold tracking-tight leading-snug {{ $isLight ? 'text-slate-900' : 'text-white' }}">
-              {{ e($block['heading']) }}
-            </h1>
-          @endif
-
-          {{-- Subheading Text --}}
-          @if(!empty($block['subheading']))
-            <p class="text-xs sm:text-sm {{ $isLight ? 'text-slate-600' : 'text-slate-400' }} max-w-md mx-auto leading-relaxed">
-              {{ e($block['subheading']) }}
-            </p>
-          @endif
+          @php
+            $isPill = (($block['button_style'] ?? '') === 'pill') || $isMidnight || ($theme === 'clean_white');
+          @endphp
 
           {{-- Primary CTA Button --}}
           <div class="pt-2">
@@ -201,14 +204,19 @@
               data-kx-cta="1"
               data-kx-token="{{ $ctaToken }}"
               data-kx-fallback="{{ e($landingPage->telegram_destination) }}"
-              class="cta-btn-glow w-full flex items-center justify-center gap-2.5 px-6 py-3.5 sm:py-4 rounded-xl font-extrabold text-sm sm:text-base text-white {{ $isLight ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' }} transition"
+              class="{{ $isPill ? 'cta-pill-glow rounded-full' : 'cta-btn-glow rounded-xl' }} w-full flex items-center justify-center gap-2.5 px-6 py-4 font-extrabold text-sm sm:text-base text-white {{ $isLight ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-600' }} transition"
             >
               <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
-              <span>{{ e($block['button_text'] ?? 'Join Free Telegram Channel →') }}</span>
+              <span>{{ e($block['button_text'] ?? 'Join Free on Telegram') }}</span>
             </a>
             @if(!empty($block['button_subtitle']))
-              <p class="text-[11px] {{ $isLight ? 'text-slate-500' : 'text-slate-500' }} mt-1.5 font-medium">
+              <p class="text-[11px] {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} mt-1.5 font-medium">
                 {{ e($block['button_subtitle']) }}
+              </p>
+            @endif
+            @if(!empty($block['consent_text']))
+              <p class="text-[10px] {{ $isLight ? 'text-slate-400' : 'text-slate-500' }} mt-1 italic">
+                {{ e($block['consent_text']) }}
               </p>
             @endif
           </div>
@@ -216,41 +224,53 @@
 
       {{-- ================= 2. STATS BLOCK ================= --}}
       @elseif($type === 'stats')
-        <section class="grid grid-cols-3 gap-2 sm:gap-3">
-          @foreach(($block['stats'] ?? [['value' => '50K+', 'label' => 'Members'], ['value' => '5+ Years', 'label' => 'Experience'], ['value' => '95%', 'label' => 'Accuracy']]) as $stat)
-            <div class="text-center p-3 sm:p-3.5 rounded-xl {{ $isLight ? 'bg-white border border-slate-200/80 shadow-sm' : 'bg-[#12141A] border border-[#2A2E3A]' }}">
-              <div class="text-sm sm:text-base font-black {{ $isLight ? 'text-blue-600' : 'text-yellow-400' }}">
-                {{ e($stat['value'] ?? '') }}
+        <section class="p-3.5 sm:p-4 rounded-2xl {{ $isLight ? 'bg-white border border-slate-200/90 shadow-sm' : ($isMidnight ? 'bg-[#0c1626]/85 border border-[#1e2f4d]/70 shadow-lg' : 'bg-[#12141A] border border-[#2A2E3A]') }}">
+          <div class="grid grid-cols-3 gap-2 text-center divide-x {{ $isLight ? 'divide-slate-200' : ($isMidnight ? 'divide-slate-800' : 'divide-slate-800') }}">
+            @foreach(($block['stats'] ?? [['value' => '11K+', 'label' => 'MEMBERS'], ['value' => 'Daily', 'label' => 'MARKET UPDATES'], ['value' => 'Free', 'label' => 'ALWAYS']]) as $stat)
+              <div class="px-2">
+                <div class="text-base sm:text-xl font-black {{ $isLight ? 'text-slate-900' : 'text-white' }}">
+                  {{ e($stat['value'] ?? '') }}
+                </div>
+                <div class="text-[9.5px] sm:text-[11px] font-bold uppercase tracking-wider {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} mt-0.5">
+                  {{ e($stat['label'] ?? '') }}
+                </div>
               </div>
-              <div class="text-[10px] sm:text-xs font-semibold {{ $isLight ? 'text-slate-600' : 'text-slate-400' }} mt-0.5">
-                {{ e($stat['label'] ?? '') }}
-              </div>
-            </div>
-          @endforeach
+            @endforeach
+          </div>
         </section>
 
       {{-- ================= 3. FEATURES / BENEFITS GRID ================= --}}
       @elseif($type === 'features_grid')
-        <section class="space-y-2.5 pt-1">
+        <section class="space-y-3 pt-2">
           @if(!empty($block['title']))
-            <h2 class="text-xs font-extrabold uppercase tracking-wider text-center {{ $isLight ? 'text-slate-700' : 'text-slate-400' }}">
+            <h2 class="text-sm sm:text-base font-extrabold text-center {{ $isLight ? 'text-slate-900' : 'text-white' }}">
               {{ e($block['title']) }}
             </h2>
           @endif
           @if(!empty($block['subtitle']))
-            <p class="text-[11px] text-center {{ $isLight ? 'text-slate-500' : 'text-slate-500' }} -mt-1 mb-2">
+            <p class="text-xs text-center {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} -mt-1.5 mb-2">
               {{ e($block['subtitle']) }}
             </p>
           @endif
 
-          <div class="space-y-2">
+          @php
+            $is2Col = (($block['grid_columns'] ?? null) == 2) || (count($block['cards'] ?? []) >= 4) || $isMidnight || ($theme === 'clean_white');
+          @endphp
+
+          <div class="{{ $is2Col ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-2.5' }}">
             @foreach(($block['cards'] ?? []) as $card)
-              <div class="flex items-center gap-3.5 p-3.5 rounded-xl {{ $isLight ? 'bg-white border border-slate-200/80 shadow-sm hover:border-blue-300' : 'bg-[#12141A] border border-[#2A2E3A] hover:border-yellow-400/30' }} transition">
-                <div class="text-xl p-2 rounded-lg {{ $isLight ? 'bg-blue-50 text-blue-600' : 'bg-[#1A1D26] border border-[#2A2E3A]' }} shrink-0 flex items-center justify-center">
-                  {{ $card['icon'] ?? '📊' }}
-                </div>
+              <div class="flex items-start gap-3 p-3.5 rounded-2xl {{ $isLight ? 'bg-white border border-slate-200/90 shadow-sm' : ($isMidnight ? 'bg-[#0c1626]/85 border border-[#1e2f4d]/70 shadow-md' : 'bg-[#12141A] border border-[#2A2E3A]') }} transition">
+                @if(($card['icon'] ?? '') === '✓' || ($card['icon'] ?? '') === 'check')
+                  <div class="w-5 h-5 rounded-full {{ $isLight ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' }} flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5">
+                    ✓
+                  </div>
+                @else
+                  <div class="text-lg p-1.5 rounded-lg {{ $isLight ? 'bg-blue-50 text-blue-600' : 'bg-[#1A1D26] border border-[#2A2E3A]' }} shrink-0 flex items-center justify-center">
+                    {{ $card['icon'] ?? '📊' }}
+                  </div>
+                @endif
                 <div class="space-y-0.5 min-w-0 flex-1">
-                  <h3 class="text-xs sm:text-sm font-bold {{ $isLight ? 'text-slate-900' : 'text-white' }} truncate">
+                  <h3 class="text-xs sm:text-sm font-bold {{ $isLight ? 'text-slate-900' : 'text-white' }}">
                     {{ e($card['title'] ?? '') }}
                   </h3>
                   @if(!empty($card['desc']))
@@ -290,29 +310,33 @@
 
       {{-- ================= 6. STANDALONE CTA BUTTON ================= --}}
       @elseif($type === 'cta_button')
-        <section class="text-center p-4 sm:p-5 rounded-xl {{ $isLight ? 'bg-white border border-slate-200/80 shadow-sm' : 'bg-[#12141A] border border-[#2A2E3A]' }} space-y-2.5">
+        @php
+          $isPillBtn = (($block['button_style'] ?? '') === 'pill') || $isMidnight || ($theme === 'clean_white');
+        @endphp
+        <section class="text-center py-2">
           @if(!empty($block['heading']))
-            <h2 class="text-sm sm:text-base font-extrabold {{ $isLight ? 'text-slate-900' : 'text-white' }}">
+            <h2 class="text-sm sm:text-base font-extrabold {{ $isLight ? 'text-slate-900' : 'text-white' }} mb-1">
               {{ e($block['heading']) }}
             </h2>
           @endif
           @if(!empty($block['subheading']))
-            <p class="text-xs {{ $isLight ? 'text-slate-600' : 'text-slate-400' }} max-w-md mx-auto">
+            <p class="text-xs {{ $isLight ? 'text-slate-600' : 'text-slate-400' }} max-w-md mx-auto mb-2">
               {{ e($block['subheading']) }}
             </p>
           @endif
-          <div class="pt-1">
+          <div>
             <a
               href="{{ $ctaUrl }}"
               data-kx-cta="1"
               data-kx-token="{{ $ctaToken }}"
               data-kx-fallback="{{ e($landingPage->telegram_destination) }}"
-              class="cta-btn-glow w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-extrabold text-sm text-white {{ $isLight ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 font-black hover:brightness-105' }} transition"
+              class="{{ $isPillBtn ? 'cta-pill-glow rounded-full' : 'cta-btn-glow rounded-xl' }} w-full flex items-center justify-center gap-2.5 px-6 py-4 font-extrabold text-sm sm:text-base text-white {{ $isLight ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-600' }} transition"
             >
-              <span>{{ e($block['button_text'] ?? 'Join Free Telegram Channel →') }}</span>
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+              <span>{{ e($block['button_text'] ?? 'Join Free on Telegram') }}</span>
             </a>
             @if(!empty($block['button_subtitle']))
-              <p class="text-[11px] {{ $isLight ? 'text-slate-500' : 'text-slate-500' }} mt-1.5">
+              <p class="text-[11px] {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} mt-1.5">
                 {{ e($block['button_subtitle']) }}
               </p>
             @endif
@@ -361,42 +385,51 @@
 
       {{-- ================= 9. DISCLAIMER BLOCK ================= --}}
       @elseif($type === 'disclaimer')
-        <section class="p-3.5 rounded-xl {{ $isLight ? 'bg-slate-100/80 border border-slate-200 text-slate-500' : 'bg-[#12141A]/60 border border-amber-500/20 text-slate-400' }} text-[10px] space-y-1">
-          <strong class="{{ $isLight ? 'text-slate-700' : 'text-amber-400' }} uppercase tracking-wider block font-bold text-[9.5px]">
-            {{ e($block['title'] ?? 'Important Risk Disclaimer') }}
-          </strong>
-          <p class="leading-relaxed">
+        <section class="space-y-2.5 pt-2 text-center text-xs leading-relaxed {{ $isLight ? 'text-slate-500' : 'text-slate-400' }}">
+          @if(!empty($block['show_mini_brand']))
+            <div class="flex items-center justify-center gap-2 font-bold text-xs {{ $isLight ? 'text-slate-800' : 'text-slate-200' }}">
+              @if($logo || !empty($block['logo_url']))
+                <img src="{{ e($block['logo_url'] ?? $logo) }}" alt="{{ e($brand) }}" class="w-6 h-6 rounded-full object-cover">
+              @endif
+              <span>{{ e($block['brand_name'] ?? $brand) }}</span>
+            </div>
+          @endif
+          @if(!empty($block['title']))
+            <strong class="{{ $isLight ? 'text-slate-700' : 'text-amber-400' }} uppercase tracking-wider block font-bold text-[10px]">
+              {{ e($block['title']) }}
+            </strong>
+          @endif
+          <div class="text-[10px] sm:text-[10.5px] leading-relaxed max-w-xl mx-auto opacity-80 space-y-2">
             {!! nl2br(e($block['text'] ?? '')) !!}
-          </p>
+          </div>
         </section>
 
       {{-- ================= 10. FOOTER BLOCK ================= --}}
       @elseif($type === 'footer')
-        <footer class="pt-4 pb-2 text-center text-xs {{ $isLight ? 'text-slate-500 border-t border-slate-200' : 'text-slate-500 border-t border-slate-800/80' }} space-y-1.5">
-          <p>{{ e($block['copyright'] ?? '© ' . date('Y') . ' ' . $brand . '. All rights reserved.') }}</p>
-          @if(!empty($block['managed_by']) || $isLight)
-            <div class="text-[11px] font-medium {{ $isLight ? 'text-slate-400' : 'text-slate-500' }}">
+        <footer class="pt-3 pb-6 text-center text-xs {{ $isLight ? 'text-slate-500' : 'text-slate-500' }} space-y-2">
+          @if(!empty($block['managed_by']))
+            <div class="text-xs font-semibold {{ $isLight ? 'text-slate-600' : 'text-slate-400' }}">
               @if(!empty($block['managed_by_url']))
-                <a href="{{ $block['managed_by_url'] }}" target="_blank" rel="noopener noreferrer" class="hover:underline hover:text-blue-400 transition inline-flex items-center gap-1">
-                  {{ e($block['managed_by'] ?? '⚡ Ads Managed by AK GrowthX Media') }}
+                <a href="{{ $block['managed_by_url'] }}" target="_blank" rel="noopener noreferrer" class="hover:underline hover:text-blue-400 transition inline-flex items-center gap-1.5">
+                  {{ e($block['managed_by']) }}
                 </a>
               @else
-                <span>{{ e($block['managed_by'] ?? '⚡ Ads Managed by AK GrowthX Media') }}</span>
+                <span class="inline-flex items-center gap-1.5">{{ e($block['managed_by']) }}</span>
               @endif
             </div>
           @endif
-          <div class="flex justify-center flex-wrap gap-2.5 text-[11px] font-medium {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} pt-1">
-            <a href="{{ $ctaUrl }}" class="{{ $isLight ? 'hover:text-blue-600' : 'hover:text-yellow-400' }} transition" data-kx-cta="1">Telegram</a>
-            <span>•</span>
-            <a href="#privacy" class="hover:underline transition" onclick="openPolicyModal('privacy'); return false;">Privacy Policy</a>
-            <span>•</span>
-            <a href="#terms" class="hover:underline transition" onclick="openPolicyModal('terms'); return false;">Terms & Conditions</a>
-            <span>•</span>
-            <a href="#disclaimer" class="hover:underline transition" onclick="window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}); return false;">Risk Disclaimer</a>
-          </div>
-          <p class="text-[9.5px] opacity-70 max-w-sm mx-auto pt-2 leading-relaxed">
-            Meta Notice: This site is independent and not affiliated with Facebook, Instagram, or Meta Platforms, Inc.
-          </p>
+          @if(empty($block['hide_links']))
+            <div class="flex justify-center flex-wrap gap-2.5 text-[11px] font-medium {{ $isLight ? 'text-slate-500' : 'text-slate-400' }} pt-1">
+              <a href="{{ $ctaUrl }}" class="{{ $isLight ? 'hover:text-blue-600' : 'hover:text-yellow-400' }} transition" data-kx-cta="1">Telegram</a>
+              <span>•</span>
+              <a href="#privacy" class="hover:underline transition" onclick="openPolicyModal('privacy'); return false;">Privacy Policy</a>
+              <span>•</span>
+              <a href="#terms" class="hover:underline transition" onclick="openPolicyModal('terms'); return false;">Terms & Conditions</a>
+            </div>
+          @endif
+          @if(!empty($block['copyright']))
+            <p class="text-[10px] opacity-70">{{ e($block['copyright']) }}</p>
+          @endif
         </footer>
       @endif
 
