@@ -384,4 +384,63 @@ class TelegramChannelDiscoveryTest extends TestCase
         $clickResponse->assertViewHas('deepLink', 'tg://join?invite=SalmanMemonPrivate123');
         $clickResponse->assertViewHas('webUrl', 'https://t.me/+SalmanMemonPrivate123');
     }
+
+    public function test_switching_bot_with_large_event_volume_does_not_exhaust_memory(): void
+    {
+        $bot = TelegramBot::first();
+        $bot2 = TelegramBot::create([
+            'name' => 'Ak GrowthX TG Tracker',
+            'bot_id' => '8788203648',
+            'username' => 'Akgrowthxtracker_bot',
+            'bot_token' => '8788203648:AAFakeTokenForTestingOnly',
+            'webhook_secret' => 'whsec_akgrowthx123',
+            'is_global' => true,
+            'is_active' => true,
+        ]);
+
+        // Create a tracked channel for bot 2
+        TelegramChannel::create([
+            'telegram_bot_id' => $bot2->id,
+            'telegram_chat_id' => '-1003472028222',
+            'title' => 'Writing Work Home Jobs',
+            'username' => null,
+            'type' => 'channel',
+            'member_count' => 500,
+            'is_bot_admin' => true,
+            'bot_status' => 'administrator',
+            'is_active' => true,
+        ]);
+
+        // Seed 1,500 TelegramEvent records with raw_payload for bot 2
+        $eventsData = [];
+        for ($i = 0; $i < 1500; $i++) {
+            $eventsData[] = [
+                'telegram_bot_id' => $bot2->id,
+                'event_type' => 'join',
+                'telegram_user_id' => '1000' . $i,
+                'first_name' => 'User ' . $i,
+                'event_time' => now()->subMinutes($i),
+                'raw_payload' => json_encode([
+                    'update_id' => 100000 + $i,
+                    'chat_member' => [
+                        'chat' => ['id' => -1003472028222, 'title' => 'Writing Work Home Jobs', 'type' => 'channel'],
+                        'from' => ['id' => 1000 + $i, 'first_name' => 'User ' . $i],
+                    ],
+                ]),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+        foreach (array_chunk($eventsData, 300) as $chunk) {
+            TelegramEvent::insert($chunk);
+        }
+
+        $user = \App\Models\User::first();
+
+        // Switch to bot 2 via ?bot_id=
+        $response = $this->actingAs($user)->get(route('telegram.index', ['bot_id' => $bot2->id]));
+        $response->assertStatus(200);
+        $response->assertSee('Akgrowthxtracker_bot');
+        $response->assertSee('Writing Work Home Jobs');
+    }
 }

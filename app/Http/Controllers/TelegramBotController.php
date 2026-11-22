@@ -29,13 +29,19 @@ class TelegramBotController extends Controller
         $selectedBotId = $request->input('bot_id');
         $selectedBot = $selectedBotId ? TelegramBot::find($selectedBotId) : $bots->first();
 
-        if ($selectedBot) {
+        if ($selectedBot && ($selectedBot->channels_count === 0 || $request->has('sync'))) {
             $this->telegramService->syncAndPersistAccessibleChannels($selectedBot);
         }
 
         $trackedChannels = $selectedBot
-            ? TelegramChannel::where('telegram_bot_id', $selectedBot->id)->orWhereNull('telegram_bot_id')->latest('id')->get()
-            : TelegramChannel::latest('id')->get();
+            ? TelegramChannel::with('client')
+                ->where(function ($q) use ($selectedBot) {
+                    $q->where('telegram_bot_id', $selectedBot->id)
+                      ->orWhereNull('telegram_bot_id');
+                })
+                ->latest('id')
+                ->get()
+            : TelegramChannel::with('client')->latest('id')->get();
 
         $liveMembers = $selectedBot
             ? TelegramEvent::with(['channel', 'campaign', 'click'])

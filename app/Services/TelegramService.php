@@ -280,14 +280,17 @@ class TelegramService
             }
         }
 
-        // 2. Discover any additional channels from raw payloads in TelegramEvent
-        $events = TelegramEvent::where('telegram_bot_id', $bot->id)
-            ->orWhereNull('telegram_bot_id')
+        // 2. Discover any additional channels from recent raw payloads in TelegramEvent
+        $recentPayloads = TelegramEvent::where(function ($q) use ($bot) {
+                $q->where('telegram_bot_id', $bot->id)
+                  ->orWhereNull('telegram_bot_id');
+            })
             ->whereNotNull('raw_payload')
-            ->get();
+            ->latest('id')
+            ->limit(100)
+            ->pluck('raw_payload');
 
-        foreach ($events as $event) {
-            $payload = $event->raw_payload;
+        foreach ($recentPayloads as $payload) {
             if (!is_array($payload)) continue;
 
             $chat = $payload['channel_post']['chat']
@@ -368,25 +371,31 @@ class TelegramService
                     'last_synced_at' => now(),
                 ]);
             } else {
-                $updates = [
-                    'is_bot_admin' => true,
-                    'bot_status' => 'administrator',
-                    'is_active' => true,
-                    'last_synced_at' => now(),
-                ];
+                $needsUpdate = false;
+                $updates = [];
                 if (empty($channel->telegram_bot_id)) {
                     $updates['telegram_bot_id'] = $bot->id;
+                    $needsUpdate = true;
                 }
                 if (!empty($chData['title']) && $channel->title !== $chData['title']) {
                     $updates['title'] = $chData['title'];
+                    $needsUpdate = true;
                 }
-                if (isset($chData['username'])) {
+                if (isset($chData['username']) && $channel->username !== $chData['username']) {
                     $updates['username'] = $chData['username'];
+                    $needsUpdate = true;
                 }
-                if (!empty($chData['member_count'])) {
+                if (!empty($chData['member_count']) && (int) $channel->member_count !== (int) $chData['member_count']) {
                     $updates['member_count'] = $chData['member_count'];
+                    $needsUpdate = true;
                 }
-                $channel->update($updates);
+                if ($needsUpdate) {
+                    $updates['is_bot_admin'] = true;
+                    $updates['bot_status'] = 'administrator';
+                    $updates['is_active'] = true;
+                    $updates['last_synced_at'] = now();
+                    $channel->update($updates);
+                }
             }
         }
 
